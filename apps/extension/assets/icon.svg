@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title id="title">LingoBridge</title>
+  <rect width="128" height="128" rx="28" fill="#315ea8" />
+  <path
+    d="M28 38c0-7.7 6.3-14 14-14h37c7.7 0 14 6.3 14 14v25c0 7.7-6.3 14-14 14H56L39 91V77c-6.2-1.4-11-7-11-14V38Z"
+    fill="#fff"
+  />
+  <path d="M48 50h28M48 61h19" fill="none" stroke="#315ea8" stroke-linecap="round" stroke-width="8" />
+  <path d="m91 77 3.4 7.6L102 88l-7.6 3.4L91 99l-3.4-7.6L80 88l7.6-3.4L91 77Z" fill="#d6e5ff" />
+</svg>
