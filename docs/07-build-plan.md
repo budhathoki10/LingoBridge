@@ -1,6 +1,6 @@
 # Small phase-by-phase build plan
 
-Status: **Phase 0 and Phase 1 completed on 6 September 2026. Phase 2.1 is next.**
+Status: **Phase 0, Phase 1, and Phase 2 completed. Phase 3.1 is next after explicit authorization.**
 
 Complete these phases serially after the user explicitly authorizes implementation. Keep each phase as one small reviewable change. Do not start the next phase until the current Done when condition passes.
 
@@ -27,6 +27,8 @@ Completed. The pnpm workspaces install cleanly; formatting, lint, type-checking,
 | 1.3 | Define strict request, result, error, provider, consent, and capability contracts. | Invalid, oversized, and unknown data is rejected. |
 
 ## 2 — translator interface with fake data
+
+Completed on 7 September 2026. The production popup now has its idle, loading, success, error, and cancelled states; an abortable deterministic fake provider; stale-response protection; and a fixture-driven searchable language picker with native names, recent languages, favourites, RTL metadata, and separately gated enhancements. The focused unit suite and isolated Chromium interaction, keyboard, 320px, effective 200% zoom, Devanagari, RTL, long-text, and no-network checks pass.
 
 | Phase | Build | Done when |
 | --- | --- | --- |

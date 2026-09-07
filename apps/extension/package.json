@@ -9,6 +9,7 @@
     "typecheck": "wxt prepare && tsc --noEmit"
   },
   "dependencies": {
+    "@lingobridge/contracts": "workspace:*",
     "@wxt-dev/module-react": "1.2.2",
     "react": "19.2.8",
     "react-dom": "19.2.8",
