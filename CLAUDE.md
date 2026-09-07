@@ -2,7 +2,7 @@
 
 Follow `AGENTS.md` as the repository-wide source of truth.
 
-Phase 0 and Phase 1 are complete. Phase 2.1 is next. Follow the serial gates in `docs/07-build-plan.md`; do not jump to cloud integration or add credentials during fake-provider work.
+Phase 0, Phase 1, and Phase 2 are complete. Phase 3.1 is next after explicit authorization. Follow the serial gates in `docs/07-build-plan.md`; Phase 3.1 uses fake adapters, and real provider calls or credentials must wait until the Phase 3.2 security gate passes.
 
 When asked to review the project:
 

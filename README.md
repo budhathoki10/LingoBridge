@@ -1,6 +1,6 @@
 # LingoBridge — Context-Aware Text Translator
 
-Status: **Phase 0 and Phase 1 complete. Phase 2—translator interface with fake data—is next.**
+Status: **Phase 0, Phase 1, and Phase 2 complete. Phase 3.1—gateway routes with fake adapters—is next after explicit authorization.**
 
 LingoBridge is a multilingual product with two user-facing surfaces: a Chrome extension for translation where users browse and a web dashboard for saved phrases, preferences, connected extension sessions, export, and account control. LingoBridge exposes every language currently supported by its primary Google provider. English–Nepali receives deeper evaluation, but it is not the complete product boundary.
 

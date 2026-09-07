@@ -1,21 +1,473 @@
+import {
+  MAX_TRANSLATION_CODE_POINTS,
+  MAX_TRANSLATION_UTF8_BYTES,
+  translationTextSchema,
+} from "@lingobridge/contracts";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  AUTO_LANGUAGE_CODE,
+  getPreviewDirectionCapabilities,
+  getPreviewLanguage,
+  inferPreviewLanguage,
+} from "../../lib/capabilities";
+import {
+  PreviewProviderError,
+  type PreviewTranslationRequest,
+  type PreviewTranslationResult,
+  translateWithPreviewData,
+} from "../../lib/fake-provider";
+import { LatestRequestRunner } from "../../lib/latest-request";
+import {
+  DEFAULT_POPUP_PREFERENCES,
+  addRecentLanguage,
+  loadPopupPreferences,
+  savePopupPreferences,
+} from "../../lib/popup-preferences";
+import { CheckIcon, CloseIcon, SparkIcon, SwapIcon } from "./Icons";
+import { LanguagePicker } from "./LanguagePicker";
+
+type TranslationView =
+  | { kind: "cancelled" }
+  | { kind: "error"; message: string; retryable: boolean }
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "success"; result: PreviewTranslationResult };
+
+const utf8Encoder = new TextEncoder();
+
+function countCodePoints(text: string): number {
+  return Array.from(text).length;
+}
+
+function getSafeSwapTarget(sourceLanguage: string, targetLanguage: string, text: string): string {
+  const inferredSource =
+    sourceLanguage === AUTO_LANGUAGE_CODE ? inferPreviewLanguage(text) : sourceLanguage;
+
+  if (inferredSource !== targetLanguage) return inferredSource;
+  return targetLanguage === "en" ? "ne" : "en";
+}
+
 export function App() {
   const version = chrome.runtime.getManifest().version;
+  const requestRunner = useRef(new LatestRequestRunner());
+  const requestNumber = useRef(0);
+  const [sourceLanguage, setSourceLanguage] = useState(AUTO_LANGUAGE_CODE);
+  const [targetLanguage, setTargetLanguage] = useState(DEFAULT_POPUP_PREFERENCES.targetLanguage);
+  const [text, setText] = useState("");
+  const [view, setView] = useState<TranslationView>({ kind: "idle" });
+  const [lastRequest, setLastRequest] = useState<PreviewTranslationRequest | null>(null);
+  const [favouriteCodes, setFavouriteCodes] = useState(
+    DEFAULT_POPUP_PREFERENCES.favouriteLanguageCodes,
+  );
+  const [recentCodes, setRecentCodes] = useState(DEFAULT_POPUP_PREFERENCES.recentLanguageCodes);
+  const [preferencesReady, setPreferencesReady] = useState(false);
+  const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
+  const [targetPickerOpen, setTargetPickerOpen] = useState(false);
+  const target = getPreviewLanguage(targetLanguage);
+  const capabilities = getPreviewDirectionCapabilities(sourceLanguage, targetLanguage);
+  const codePointCount = countCodePoints(text);
+  const utf8ByteCount = utf8Encoder.encode(text).byteLength;
+  const textIsOverLimit =
+    codePointCount > MAX_TRANSLATION_CODE_POINTS || utf8ByteCount > MAX_TRANSLATION_UTF8_BYTES;
+
+  useEffect(() => {
+    let active = true;
+
+    void loadPopupPreferences()
+      .then((preferences) => {
+        if (!active) return;
+        setFavouriteCodes(preferences.favouriteLanguageCodes);
+        setRecentCodes(preferences.recentLanguageCodes);
+        setTargetLanguage(preferences.targetLanguage);
+        setPreferencesReady(true);
+      })
+      .catch(() => {
+        if (active) setPreferencesReady(true);
+      });
+
+    return () => {
+      active = false;
+      requestRunner.current.cancel();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!preferencesReady) return;
+
+    void savePopupPreferences({
+      favouriteLanguageCodes: favouriteCodes,
+      recentLanguageCodes: recentCodes,
+      targetLanguage,
+    }).catch(() => undefined);
+  }, [favouriteCodes, preferencesReady, recentCodes, targetLanguage]);
+
+  const openSourcePicker = useCallback((open: boolean) => {
+    setSourcePickerOpen(open);
+    if (open) setTargetPickerOpen(false);
+  }, []);
+
+  const openTargetPicker = useCallback((open: boolean) => {
+    setTargetPickerOpen(open);
+    if (open) setSourcePickerOpen(false);
+  }, []);
+
+  function resetResult() {
+    requestRunner.current.cancel();
+    setView({ kind: "idle" });
+    setLastRequest(null);
+  }
+
+  function rememberLanguage(languageCode: string) {
+    if (languageCode !== AUTO_LANGUAGE_CODE) {
+      setRecentCodes((codes) => addRecentLanguage(codes, languageCode));
+    }
+  }
+
+  async function runTranslation(request: PreviewTranslationRequest) {
+    setLastRequest(request);
+    setView({ kind: "loading" });
+
+    const outcome = await requestRunner.current.run((signal) =>
+      translateWithPreviewData(request, signal),
+    );
+
+    if (outcome.status === "stale") return;
+
+    if (outcome.status === "error") {
+      const message =
+        outcome.error instanceof PreviewProviderError
+          ? outcome.error.message
+          : "The preview stopped unexpectedly. Your source text is still here.";
+      setView({
+        kind: "error",
+        message,
+        retryable: outcome.error instanceof PreviewProviderError,
+      });
+      return;
+    }
+
+    setView({ kind: "success", result: outcome.value });
+    rememberLanguage(outcome.value.detectedSourceLanguage);
+    rememberLanguage(outcome.value.targetLanguage);
+  }
+
+  function handleTranslate() {
+    const parsedText = translationTextSchema.safeParse(text);
+
+    if (!parsedText.success) {
+      setView({
+        kind: "error",
+        message: parsedText.error.issues[0]?.message ?? "Check the source text and try again.",
+        retryable: false,
+      });
+      return;
+    }
+
+    if (!target || !capabilities.standardTranslation) {
+      setView({
+        kind: "error",
+        message: "Choose two different supported languages before translating.",
+        retryable: false,
+      });
+      return;
+    }
+
+    requestNumber.current += 1;
+    void runTranslation({
+      attempt: 1,
+      requestId: requestNumber.current,
+      sourceLanguage,
+      targetLanguage,
+      targetLanguageName: target.nativeName,
+      targetTextDirection: target.textDirection,
+      text,
+    });
+  }
+
+  function handleRetry() {
+    if (!lastRequest) {
+      handleTranslate();
+      return;
+    }
+
+    requestNumber.current += 1;
+    void runTranslation({
+      ...lastRequest,
+      attempt: lastRequest.attempt + 1,
+      requestId: requestNumber.current,
+    });
+  }
+
+  function handleCancel() {
+    requestRunner.current.cancel();
+    setView({ kind: "cancelled" });
+  }
+
+  function handleClear() {
+    requestRunner.current.cancel();
+    setText("");
+    setLastRequest(null);
+    setView({ kind: "idle" });
+  }
+
+  function handleTextChange(nextText: string) {
+    if (view.kind !== "idle") resetResult();
+    setText(nextText);
+  }
+
+  function handleSourceSelect(languageCode: string) {
+    resetResult();
+    setSourceLanguage(languageCode);
+    rememberLanguage(languageCode);
+  }
+
+  function handleTargetSelect(languageCode: string) {
+    resetResult();
+    setTargetLanguage(languageCode);
+    rememberLanguage(languageCode);
+  }
+
+  function handleSwap() {
+    const nextTarget =
+      view.kind === "success"
+        ? view.result.detectedSourceLanguage
+        : getSafeSwapTarget(sourceLanguage, targetLanguage, text);
+    const nextText = view.kind === "success" ? view.result.translatedText : text;
+
+    requestRunner.current.cancel();
+    setSourceLanguage(targetLanguage);
+    setTargetLanguage(
+      nextTarget === targetLanguage
+        ? getSafeSwapTarget(AUTO_LANGUAGE_CODE, targetLanguage, text)
+        : nextTarget,
+    );
+    setText(nextText);
+    setLastRequest(null);
+    setView({ kind: "idle" });
+    rememberLanguage(targetLanguage);
+    rememberLanguage(nextTarget);
+  }
+
+  function toggleFavourite(languageCode: string) {
+    setFavouriteCodes((codes) =>
+      codes.includes(languageCode)
+        ? codes.filter((code) => code !== languageCode)
+        : [languageCode, ...codes],
+    );
+  }
+
+  const detectedLanguageName = useMemo(() => {
+    if (view.kind !== "success") return null;
+    return getPreviewLanguage(view.result.detectedSourceLanguage)?.name ?? "Unknown";
+  }, [view]);
 
   return (
     <main className="popup-shell">
-      <header>
-        <img src="/icon/32.png" alt="" width="32" height="32" />
-        <div>
-          <strong>LingoBridge</strong>
-          <span>Foundation v{version}</span>
+      <header className="app-header">
+        <div className="brand">
+          <img src="/icon/32.png" alt="" width="30" height="30" />
+          <div>
+            <strong>LingoBridge</strong>
+            <span>Translate without leaving the page</span>
+          </div>
         </div>
+        <span className="preview-badge">Phase 2 preview</span>
       </header>
 
-      <section aria-labelledby="foundation-ready">
-        <p className="status">Phase 1</p>
-        <h1 id="foundation-ready">Extension shell ready</h1>
-        <p>The translation interface will be connected to a safe fake provider in Phase 2.</p>
+      <section aria-labelledby="translator-title" className="translator">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Translator</p>
+            <h1 id="translator-title">Understand what you’re reading</h1>
+          </div>
+          <span className="local-note">
+            <span aria-hidden="true" className="local-note__dot" />
+            Local fake data
+          </span>
+        </div>
+
+        <div className="language-row">
+          <LanguagePicker
+            disabledCode={targetLanguage}
+            favouriteCodes={favouriteCodes}
+            includeAuto
+            isOpen={sourcePickerOpen}
+            label="From"
+            onOpenChange={openSourcePicker}
+            onSelect={handleSourceSelect}
+            onToggleFavourite={toggleFavourite}
+            recentCodes={recentCodes}
+            side="source"
+            value={sourceLanguage}
+          />
+
+          <button
+            aria-label="Swap source and target languages"
+            className="swap-button"
+            onClick={handleSwap}
+            type="button"
+          >
+            <SwapIcon />
+          </button>
+
+          <LanguagePicker
+            disabledCode={sourceLanguage === AUTO_LANGUAGE_CODE ? undefined : sourceLanguage}
+            favouriteCodes={favouriteCodes}
+            isOpen={targetPickerOpen}
+            label="To"
+            onOpenChange={openTargetPicker}
+            onSelect={handleTargetSelect}
+            onToggleFavourite={toggleFavourite}
+            recentCodes={recentCodes}
+            side="target"
+            value={targetLanguage}
+          />
+        </div>
+
+        <div aria-live="polite" className="capability-note">
+          <CheckIcon />
+          <span>Text preview ready</span>
+          <span aria-hidden="true">·</span>
+          <span>
+            {capabilities.speech
+              ? "Speech is supported later"
+              : `Speech unavailable for ${target?.name ?? "this language"}`}
+          </span>
+        </div>
+
+        <div className="source-field">
+          <div className="source-field__heading">
+            <label htmlFor="source-text">Text to translate</label>
+            {text ? (
+              <button className="clear-button" onClick={handleClear} type="button">
+                <CloseIcon />
+                Clear
+              </button>
+            ) : null}
+          </div>
+          <textarea
+            aria-describedby="source-help source-count"
+            aria-invalid={textIsOverLimit}
+            dir="auto"
+            id="source-text"
+            onChange={(event) => handleTextChange(event.target.value)}
+            onKeyDown={(event) => {
+              if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+                event.preventDefault();
+                handleTranslate();
+              }
+            }}
+            placeholder="Type or paste a sentence"
+            rows={5}
+            value={text}
+          />
+          <div className="source-field__meta">
+            <span id="source-help">Ctrl + Enter to translate</span>
+            <span className={textIsOverLimit ? "count count--error" : "count"} id="source-count">
+              {codePointCount.toLocaleString()} / {MAX_TRANSLATION_CODE_POINTS.toLocaleString()}
+            </span>
+          </div>
+        </div>
+
+        <button
+          className={
+            view.kind === "loading" ? "translate-button translate-button--stop" : "translate-button"
+          }
+          disabled={view.kind !== "loading" && text.trim().length === 0}
+          onClick={view.kind === "loading" ? handleCancel : handleTranslate}
+          type="button"
+        >
+          {view.kind === "loading" ? (
+            <>
+              <CloseIcon /> Stop translation
+            </>
+          ) : (
+            <>
+              <SparkIcon /> Translate
+            </>
+          )}
+        </button>
+
+        <section
+          aria-busy={view.kind === "loading"}
+          aria-live="polite"
+          className={`result-panel result-panel--${view.kind}`}
+        >
+          {view.kind === "idle" ? (
+            <div className="result-empty">
+              <SparkIcon />
+              <div>
+                <h2>Your translation will appear here</h2>
+                <p>Try “Hello, how are you?” for the English–Nepali preview.</p>
+              </div>
+            </div>
+          ) : null}
+
+          {view.kind === "loading" ? (
+            <div className="result-loading">
+              <div aria-hidden="true" className="spinner" />
+              <div>
+                <h2>Translating preview data</h2>
+                <p>This deterministic provider does not use the network.</p>
+              </div>
+              <div aria-hidden="true" className="loading-lines">
+                <span />
+                <span />
+              </div>
+            </div>
+          ) : null}
+
+          {view.kind === "success" ? (
+            <div className="result-success">
+              <div className="result-heading">
+                <h2>Translation</h2>
+                <span>Preview result</span>
+              </div>
+              <p
+                className="translated-text"
+                dir={view.result.targetTextDirection}
+                lang={view.result.targetLanguage}
+              >
+                {view.result.translatedText}
+              </p>
+              <p className="result-meta">
+                Detected {detectedLanguageName} · Deterministic fake provider
+              </p>
+            </div>
+          ) : null}
+
+          {view.kind === "error" ? (
+            <div className="result-message" role="alert">
+              <div>
+                <h2>Translation unavailable</h2>
+                <p>{view.message}</p>
+              </div>
+              {view.retryable ? (
+                <button className="secondary-button" onClick={handleRetry} type="button">
+                  Retry
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {view.kind === "cancelled" ? (
+            <div className="result-message">
+              <div>
+                <h2>Translation stopped</h2>
+                <p>Your source text is still here and was not saved.</p>
+              </div>
+              <button className="secondary-button" onClick={handleRetry} type="button">
+                Retry
+              </button>
+            </div>
+          ) : null}
+        </section>
       </section>
+
+      <footer>
+        <span>No provider calls in this phase</span>
+        <span>v{version}</span>
+      </footer>
     </main>
   );
 }
