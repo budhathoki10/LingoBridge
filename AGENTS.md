@@ -2,7 +2,7 @@
 
 ## Current phase
 
-Phase 0, Phase 1, and Phase 2 are complete. Phase 3.1, gateway routes with fake adapters, is the next permitted change after explicit authorization. Work serially from `docs/07-build-plan.md`, complete each exit condition, and do not add real provider calls or credentials before the Phase 3.2 security gate passes.
+Phase 0 through Phase 3.1 are complete. Phase 3.2, gateway security controls, is the next permitted change after explicit authorization. Work serially from `docs/07-build-plan.md`, complete each exit condition, and do not add real provider calls or credentials before the Phase 3.2 security gate passes.
 
 ## Required reading
 

@@ -1,6 +1,6 @@
 # LingoBridge — Context-Aware Text Translator
 
-Status: **Phase 0, Phase 1, and Phase 2 complete. Phase 3.1—gateway routes with fake adapters—is next after explicit authorization.**
+Status: **Phase 0 through Phase 3.1 complete. Phase 3.2—gateway security controls—is next after explicit authorization.**
 
 LingoBridge is a multilingual product with two user-facing surfaces: a Chrome extension for translation where users browse and a web dashboard for saved phrases, preferences, connected extension sessions, export, and account control. LingoBridge exposes every language currently supported by its primary Google provider. English–Nepali receives deeper evaluation, but it is not the complete product boundary.
 
@@ -50,7 +50,7 @@ pnpm check
 pnpm build
 ```
 
-Run one surface at a time with `pnpm dev:dashboard`, `pnpm dev:extension`, or `pnpm dev:gateway`. The unpacked production extension is generated at `apps/extension/.output/chrome-mv3`.
+Run one surface with `pnpm dev:dashboard`, `pnpm dev:extension`, or `pnpm dev:gateway`. For the Phase 3.1 translator, keep `pnpm dev:gateway` running in one terminal and `pnpm dev:extension` in another. The fake gateway binds only to `http://127.0.0.1:8787`, and the unpacked production extension is generated at `apps/extension/.output/chrome-mv3`.
 
 ## Agent instructions
 

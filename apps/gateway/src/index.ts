@@ -5,7 +5,8 @@ const port = Number.parseInt(process.env.PORT ?? "8787", 10);
 
 serve({
   fetch: app.fetch,
+  hostname: "127.0.0.1",
   port,
 });
 
-console.info(`[LingoBridge] gateway listening on port ${port}`);
+console.info(`[LingoBridge] fake gateway listening on http://127.0.0.1:${port}`);
