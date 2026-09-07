@@ -2,6 +2,8 @@ import {
   MAX_TRANSLATION_CODE_POINTS,
   MAX_TRANSLATION_UTF8_BYTES,
   translationTextSchema,
+  type TranslationRequest,
+  type TranslationResult,
 } from "@lingobridge/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -10,12 +12,7 @@ import {
   getPreviewLanguage,
   inferPreviewLanguage,
 } from "../../lib/capabilities";
-import {
-  PreviewProviderError,
-  type PreviewTranslationRequest,
-  type PreviewTranslationResult,
-  translateWithPreviewData,
-} from "../../lib/fake-provider";
+import { GatewayClientError, gatewayClient } from "../../lib/gateway-client";
 import { LatestRequestRunner } from "../../lib/latest-request";
 import {
   DEFAULT_POPUP_PREFERENCES,
@@ -31,7 +28,9 @@ type TranslationView =
   | { kind: "error"; message: string; retryable: boolean }
   | { kind: "idle" }
   | { kind: "loading" }
-  | { kind: "success"; result: PreviewTranslationResult };
+  | { kind: "success"; result: TranslationResult };
+
+type GatewayState = "checking" | "ready" | "unavailable";
 
 const utf8Encoder = new TextEncoder();
 
@@ -50,12 +49,12 @@ function getSafeSwapTarget(sourceLanguage: string, targetLanguage: string, text:
 export function App() {
   const version = chrome.runtime.getManifest().version;
   const requestRunner = useRef(new LatestRequestRunner());
-  const requestNumber = useRef(0);
   const [sourceLanguage, setSourceLanguage] = useState(AUTO_LANGUAGE_CODE);
   const [targetLanguage, setTargetLanguage] = useState(DEFAULT_POPUP_PREFERENCES.targetLanguage);
   const [text, setText] = useState("");
   const [view, setView] = useState<TranslationView>({ kind: "idle" });
-  const [lastRequest, setLastRequest] = useState<PreviewTranslationRequest | null>(null);
+  const [lastRequest, setLastRequest] = useState<TranslationRequest | null>(null);
+  const [gatewayState, setGatewayState] = useState<GatewayState>("checking");
   const [favouriteCodes, setFavouriteCodes] = useState(
     DEFAULT_POPUP_PREFERENCES.favouriteLanguageCodes,
   );
@@ -92,6 +91,21 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
+
+    void gatewayClient
+      .inspect(controller.signal)
+      .then((snapshot) => {
+        if (snapshot.version.translationMode === "fake") setGatewayState("ready");
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setGatewayState("unavailable");
+      });
+
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
     if (!preferencesReady) return;
 
     void savePopupPreferences({
@@ -123,31 +137,33 @@ export function App() {
     }
   }
 
-  async function runTranslation(request: PreviewTranslationRequest) {
+  async function runTranslation(request: TranslationRequest) {
     setLastRequest(request);
     setView({ kind: "loading" });
 
     const outcome = await requestRunner.current.run((signal) =>
-      translateWithPreviewData(request, signal),
+      gatewayClient.translate(request, signal),
     );
 
     if (outcome.status === "stale") return;
 
     if (outcome.status === "error") {
       const message =
-        outcome.error instanceof PreviewProviderError
+        outcome.error instanceof GatewayClientError
           ? outcome.error.message
-          : "The preview stopped unexpectedly. Your source text is still here.";
+          : "The gateway stopped unexpectedly. Your source text is still here.";
       setView({
         kind: "error",
         message,
-        retryable: outcome.error instanceof PreviewProviderError,
+        retryable: outcome.error instanceof GatewayClientError && outcome.error.retryable,
       });
       return;
     }
 
     setView({ kind: "success", result: outcome.value });
-    rememberLanguage(outcome.value.detectedSourceLanguage);
+    if (outcome.value.detectedSourceLanguage) {
+      rememberLanguage(outcome.value.detectedSourceLanguage);
+    }
     rememberLanguage(outcome.value.targetLanguage);
   }
 
@@ -172,14 +188,17 @@ export function App() {
       return;
     }
 
-    requestNumber.current += 1;
     void runTranslation({
-      attempt: 1,
-      requestId: requestNumber.current,
+      consent: {
+        acceptedAt: new Date().toISOString(),
+        google: true,
+        nvidiaBackup: false,
+        version: "phase-3.1-fake-gateway",
+      },
+      operation: "translate",
+      requestId: crypto.randomUUID(),
       sourceLanguage,
       targetLanguage,
-      targetLanguageName: target.nativeName,
-      targetTextDirection: target.textDirection,
       text,
     });
   }
@@ -190,11 +209,9 @@ export function App() {
       return;
     }
 
-    requestNumber.current += 1;
     void runTranslation({
       ...lastRequest,
-      attempt: lastRequest.attempt + 1,
-      requestId: requestNumber.current,
+      requestId: crypto.randomUUID(),
     });
   }
 
@@ -230,7 +247,8 @@ export function App() {
   function handleSwap() {
     const nextTarget =
       view.kind === "success"
-        ? view.result.detectedSourceLanguage
+        ? (view.result.detectedSourceLanguage ??
+          getSafeSwapTarget(sourceLanguage, targetLanguage, text))
         : getSafeSwapTarget(sourceLanguage, targetLanguage, text);
     const nextText = view.kind === "success" ? view.result.translatedText : text;
 
@@ -258,6 +276,7 @@ export function App() {
 
   const detectedLanguageName = useMemo(() => {
     if (view.kind !== "success") return null;
+    if (!view.result.detectedSourceLanguage) return "Unknown";
     return getPreviewLanguage(view.result.detectedSourceLanguage)?.name ?? "Unknown";
   }, [view]);
 
@@ -271,7 +290,7 @@ export function App() {
             <span>Translate without leaving the page</span>
           </div>
         </div>
-        <span className="preview-badge">Phase 2 preview</span>
+        <span className="preview-badge">Phase 3.1</span>
       </header>
 
       <section aria-labelledby="translator-title" className="translator">
@@ -281,8 +300,15 @@ export function App() {
             <h1 id="translator-title">Understand what you’re reading</h1>
           </div>
           <span className="local-note">
-            <span aria-hidden="true" className="local-note__dot" />
-            Local fake data
+            <span
+              aria-hidden="true"
+              className={`local-note__dot local-note__dot--${gatewayState}`}
+            />
+            {gatewayState === "ready"
+              ? "Fake gateway ready"
+              : gatewayState === "checking"
+                ? "Checking gateway"
+                : "Gateway offline"}
           </span>
         </div>
 
@@ -326,7 +352,7 @@ export function App() {
 
         <div aria-live="polite" className="capability-note">
           <CheckIcon />
-          <span>Text preview ready</span>
+          <span>Local gateway only</span>
           <span aria-hidden="true">·</span>
           <span>
             {capabilities.speech
@@ -397,8 +423,8 @@ export function App() {
             <div className="result-empty">
               <SparkIcon />
               <div>
-                <h2>Your translation will appear here</h2>
-                <p>Try “Hello, how are you?” for the English–Nepali preview.</p>
+                <h2>Your gateway translation will appear here</h2>
+                <p>Start the gateway, then try “Hello, how are you?” with Nepali.</p>
               </div>
             </div>
           ) : null}
@@ -407,8 +433,8 @@ export function App() {
             <div className="result-loading">
               <div aria-hidden="true" className="spinner" />
               <div>
-                <h2>Translating preview data</h2>
-                <p>This deterministic provider does not use the network.</p>
+                <h2>Calling the local gateway</h2>
+                <p>The deterministic adapter makes no Google or NVIDIA request.</p>
               </div>
               <div aria-hidden="true" className="loading-lines">
                 <span />
@@ -421,17 +447,18 @@ export function App() {
             <div className="result-success">
               <div className="result-heading">
                 <h2>Translation</h2>
-                <span>Preview result</span>
+                <span>Fake adapter</span>
               </div>
               <p
                 className="translated-text"
-                dir={view.result.targetTextDirection}
+                dir={getPreviewLanguage(view.result.targetLanguage)?.textDirection ?? "ltr"}
                 lang={view.result.targetLanguage}
               >
                 {view.result.translatedText}
               </p>
               <p className="result-meta">
-                Detected {detectedLanguageName} · Deterministic fake provider
+                Detected {detectedLanguageName} · Simulated {view.result.provider} route · no
+                external provider call
               </p>
             </div>
           ) : null}
@@ -465,7 +492,7 @@ export function App() {
       </section>
 
       <footer>
-        <span>No provider calls in this phase</span>
+        <span>Local gateway · fake adapter only</span>
         <span>v{version}</span>
       </footer>
     </main>

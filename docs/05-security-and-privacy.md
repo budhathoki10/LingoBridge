@@ -115,6 +115,14 @@ Extension pages should allow scripts from the extension package only. Network co
 
 The dashboard uses its own restrictive policy, permits network access only to approved first-party and authentication origins, and contains no third-party analytics that can observe phrase text.
 
+## Phase 3.1 local gateway review
+
+- The extension adds only `http://127.0.0.1:8787/*` as a host permission so the development popup can reach the LingoBridge gateway. It does not permit direct Google, NVIDIA, arbitrary localhost, or public-web requests.
+- The development server binds to `127.0.0.1`, not every network interface, and its CORS response is limited to `chrome-extension://` origins.
+- The fake adapter contains deterministic local fixtures and makes no outbound provider request. The version endpoint reports `translationMode: fake`, and the popup labels results as simulated.
+- Translation payloads use the strict shared request contract. Invalid requests receive bounded errors that do not reflect source text.
+- Phase 3.2 must replace the development-origin assumptions with deployment-specific origin validation, rate controls, timeouts, redacted operational logs, response-size limits, and reviewed secret storage before any real provider is enabled.
+
 ## Privacy interface requirements
 
 - Display On-device or Online beside every result.

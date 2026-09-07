@@ -1,10 +1,12 @@
 import { defineConfig } from "wxt";
+import { GATEWAY_ORIGIN } from "./lib/gateway-config";
 
 export default defineConfig({
   modules: ["@wxt-dev/module-react"],
   manifest: {
     name: "LingoBridge",
     description: "Translate selected text without leaving the page.",
+    host_permissions: [`${GATEWAY_ORIGIN}/*`],
     permissions: ["storage"],
     action: {
       default_title: "Open LingoBridge",

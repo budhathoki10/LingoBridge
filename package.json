@@ -17,7 +17,7 @@
     "icons": "node scripts/generate-icons.mjs",
     "lint": "biome lint .",
     "test": "pnpm --filter @lingobridge/tests test",
-    "typecheck": "pnpm -r --if-present typecheck"
+    "typecheck": "pnpm --filter @lingobridge/contracts build && pnpm -r --if-present typecheck"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.12",

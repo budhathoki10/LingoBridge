@@ -2,6 +2,13 @@ import { z } from "zod";
 
 export const MAX_TRANSLATION_CODE_POINTS = 5_000;
 export const MAX_TRANSLATION_UTF8_BYTES = 20 * 1_024;
+export const GATEWAY_API_VERSION = "v1" as const;
+export const GATEWAY_ROUTES = {
+  capabilities: "/v1/capabilities",
+  health: "/v1/health",
+  translate: "/v1/translate",
+  version: "/v1/version",
+} as const;
 
 const utf8Encoder = new TextEncoder();
 
@@ -10,6 +17,8 @@ export const languageCodeSchema = z
   .min(2)
   .max(35)
   .regex(/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/, "Expected a BCP 47 language code");
+
+export const requestIdSchema = z.string().uuid();
 
 export const translationTextSchema = z.string().superRefine((text, context) => {
   if (text.trim().length === 0) {
@@ -46,7 +55,7 @@ export const translationRequestSchema = z
   .object({
     consent: onlineConsentSchema,
     operation: z.literal("translate"),
-    requestId: z.string().uuid(),
+    requestId: requestIdSchema,
     sourceLanguage: z.union([languageCodeSchema, z.literal("auto")]),
     targetLanguage: languageCodeSchema,
     text: translationTextSchema,
@@ -76,7 +85,7 @@ export const translationResultSchema = z
   .object({
     detectedSourceLanguage: languageCodeSchema.nullable(),
     provider: providerSchema,
-    requestId: z.string().uuid(),
+    requestId: requestIdSchema,
     targetLanguage: languageCodeSchema,
     translatedText: z.string().min(1).max(MAX_TRANSLATION_UTF8_BYTES),
     warnings: z.array(translationWarningSchema).max(10),
@@ -95,7 +104,7 @@ export const translationErrorSchema = z
       "internal-error",
     ]),
     message: z.string().min(1).max(240),
-    requestId: z.string().uuid().nullable(),
+    requestId: requestIdSchema.nullable(),
     retryable: z.boolean(),
   })
   .strict();
@@ -127,7 +136,25 @@ export const capabilityCatalogueSchema = z
   })
   .strict();
 
+export const gatewayHealthSchema = z
+  .object({
+    service: z.literal("lingobridge-gateway"),
+    status: z.literal("ok"),
+  })
+  .strict();
+
+export const gatewayVersionSchema = z
+  .object({
+    apiVersion: z.literal(GATEWAY_API_VERSION),
+    serviceVersion: z.string().min(1).max(40),
+    translationMode: z.enum(["fake", "live"]),
+  })
+  .strict();
+
 export type CapabilityCatalogue = z.infer<typeof capabilityCatalogueSchema>;
+export type GatewayHealth = z.infer<typeof gatewayHealthSchema>;
+export type GatewayVersion = z.infer<typeof gatewayVersionSchema>;
+export type LanguageCapability = z.infer<typeof languageCapabilitySchema>;
 export type OnlineConsent = z.infer<typeof onlineConsentSchema>;
 export type Provider = z.infer<typeof providerSchema>;
 export type TranslationError = z.infer<typeof translationErrorSchema>;

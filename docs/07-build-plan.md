@@ -1,6 +1,6 @@
 # Small phase-by-phase build plan
 
-Status: **Phase 0, Phase 1, and Phase 2 completed. Phase 3.1 is next after explicit authorization.**
+Status: **Phase 0 through Phase 3.1 completed. Phase 3.2 is next after explicit authorization.**
 
 Complete these phases serially after the user explicitly authorizes implementation. Keep each phase as one small reviewable change. Do not start the next phase until the current Done when condition passes.
 
@@ -37,6 +37,8 @@ Completed on 7 September 2026. The production popup now has its idle, loading, s
 | 2.3 | Add searchable languages, native names, recent items, and favourites from a capability fixture. | Every fixture language is discoverable and enhanced features are gated correctly. |
 
 ## 3 — protected Google translation
+
+Phase 3.1 completed on 7 September 2026. The popup now reaches a loopback-only Hono gateway through a contract-validating extension client. Health, version, fake capabilities, and translation routes use shared schemas and an injected deterministic fake adapter; route, client-integration, malformed-response, unsupported-pair, and safe-error tests pass without any Google or NVIDIA request.
 
 | Phase | Build | Done when |
 | --- | --- | --- |

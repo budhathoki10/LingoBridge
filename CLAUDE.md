@@ -2,7 +2,7 @@
 
 Follow `AGENTS.md` as the repository-wide source of truth.
 
-Phase 0, Phase 1, and Phase 2 are complete. Phase 3.1 is next after explicit authorization. Follow the serial gates in `docs/07-build-plan.md`; Phase 3.1 uses fake adapters, and real provider calls or credentials must wait until the Phase 3.2 security gate passes.
+Phase 0 through Phase 3.1 are complete. Phase 3.2 is next after explicit authorization. Follow the serial gates in `docs/07-build-plan.md`; real provider calls or credentials must wait until the Phase 3.2 security gate passes.
 
 When asked to review the project:
 
