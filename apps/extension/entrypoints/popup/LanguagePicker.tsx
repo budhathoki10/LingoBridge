@@ -5,7 +5,7 @@ import {
   getPreviewLanguage,
   type PreviewLanguage,
 } from "../../lib/capabilities";
-import { ArrowDownIcon, CheckIcon, SearchIcon, StarIcon } from "./Icons";
+import { ArrowDownIcon, CheckIcon, CloseIcon, SearchIcon, StarIcon } from "./Icons";
 
 interface LanguagePickerProps {
   disabledCode?: string;
@@ -35,7 +35,7 @@ export function LanguagePicker({
   value,
 }: LanguagePickerProps) {
   const [query, setQuery] = useState("");
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLFieldSetElement>(null);
   const dialogId = useId();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -57,6 +57,25 @@ export function LanguagePicker({
         onOpenChange(false);
         triggerRef.current?.focus();
       }
+
+      const menu = containerRef.current?.querySelector(".language-menu");
+      if (!menu?.contains(event.target as Node)) return;
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+      const choices = Array.from(
+        menu.querySelectorAll<HTMLButtonElement>(
+          ".language-option__choice:not(:disabled), .auto-language-option",
+        ),
+      );
+      if (!choices.length) return;
+      event.preventDefault();
+      const current = choices.indexOf(document.activeElement as HTMLButtonElement);
+      const next =
+        current < 0
+          ? event.key === "ArrowDown"
+            ? 0
+            : choices.length - 1
+          : (current + (event.key === "ArrowDown" ? 1 : -1) + choices.length) % choices.length;
+      choices[next]?.focus();
     }
 
     function handlePointerDown(event: PointerEvent) {
@@ -88,6 +107,7 @@ export function LanguagePicker({
     return (
       <div className="language-option" key={language.code}>
         <button
+          aria-pressed={isSelected}
           className="language-option__choice"
           disabled={isDisabled}
           onClick={() => chooseLanguage(language.code)}
@@ -116,12 +136,19 @@ export function LanguagePicker({
   }
 
   return (
-    <div className={`language-picker language-picker--${side}`} ref={containerRef}>
-      <span className="field-label">{label}</span>
+    <fieldset
+      className={`language-picker language-picker--${side}`}
+      ref={containerRef}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onOpenChange(false);
+      }}
+    >
+      <legend className="field-label">{label}</legend>
       <button
         aria-controls={isOpen ? dialogId : undefined}
         aria-expanded={isOpen}
         aria-haspopup="dialog"
+        aria-label={`${label}: ${value === AUTO_LANGUAGE_CODE ? "Detect language" : selectedLanguage?.name}`}
         className="language-trigger"
         onClick={() => onOpenChange(!isOpen)}
         ref={triggerRef}
@@ -145,6 +172,20 @@ export function LanguagePicker({
           id={dialogId}
           role="dialog"
         >
+          <div className="language-menu__heading">
+            <strong>{label === "From" ? "Source language" : "Translate to"}</strong>
+            <button
+              type="button"
+              className="picker-close"
+              aria-label="Close language picker"
+              onClick={() => {
+                onOpenChange(false);
+                triggerRef.current?.focus();
+              }}
+            >
+              <CloseIcon />
+            </button>
+          </div>
           <div className="language-search">
             <SearchIcon />
             <input
@@ -162,6 +203,7 @@ export function LanguagePicker({
               <section className="language-section">
                 <h3>Source option</h3>
                 <button
+                  aria-pressed={value === AUTO_LANGUAGE_CODE}
                   className="auto-language-option"
                   onClick={() => chooseLanguage(AUTO_LANGUAGE_CODE)}
                   type="button"
@@ -190,6 +232,6 @@ export function LanguagePicker({
           </div>
         </div>
       ) : null}
-    </div>
+    </fieldset>
   );
 }
