@@ -1,12 +1,12 @@
 # LingoBridge — Context-Aware Text Translator
 
-Status: **Phase 0 through Phase 3.1 complete. Phase 3.2—gateway security controls—is next after explicit authorization.**
+Status: **Phase 0 through Phase 4 implementation and automated verification are in progress locally. Credentialed provider smoke tests remain deployment evidence.**
 
 LingoBridge is a multilingual product with two user-facing surfaces: a Chrome extension for translation where users browse and a web dashboard for saved phrases, preferences, connected extension sessions, export, and account control. LingoBridge exposes every language currently supported by its primary Google provider. English–Nepali receives deeper evaluation, but it is not the complete product boundary.
 
 The product is deliberately focused. It translates text selected by the user; it does not continuously read browsing history or automatically rewrite complete websites.
 
-In Online mode, LingoBridge sends requests to its own gateway. The gateway uses Google Cloud Translation as the primary provider and may use NVIDIA Riva Translate 4B Instruct v2 as a disclosed backup only for language pairs NVIDIA officially supports. The selected provider is never called directly from the extension.
+In Online mode, LingoBridge sends requests to its own gateway. The gateway uses NVIDIA Riva Translate 4B Instruct v2 as the primary provider for reviewed supported directions and may use Google Cloud Translation as a disclosed backup when Google is configured. The selected provider is never called directly from the extension.
 
 ## Why it is useful
 
@@ -50,7 +50,26 @@ pnpm check
 pnpm build
 ```
 
-Run one surface with `pnpm dev:dashboard`, `pnpm dev:extension`, or `pnpm dev:gateway`. For the Phase 3.1 translator, keep `pnpm dev:gateway` running in one terminal and `pnpm dev:extension` in another. The fake gateway binds only to `http://127.0.0.1:8787`, and the unpacked production extension is generated at `apps/extension/.output/chrome-mv3`.
+Run one surface with `pnpm dev:dashboard`, `pnpm dev:extension`, or `pnpm dev:gateway`. For the translator, keep `pnpm dev:gateway` running in one terminal and `pnpm dev:extension` in another. The safe default remains the fake gateway on `http://127.0.0.1:8787`; every translation request is contract-validated, bounded, rate-limited by anonymous installation and network, and subject to a provider deadline. The unpacked production extension is generated at `apps/extension/.output/chrome-mv3`.
+
+### Run the NVIDIA-backed gateway locally
+
+NVIDIA live mode uses a gateway-only API key. Load the unpacked extension once, copy its ID from `chrome://extensions`, and start the gateway with exact configuration:
+
+```powershell
+$env:LINGOBRIDGE_TRANSLATION_MODE = "live"
+$env:LINGOBRIDGE_ALLOWED_EXTENSION_ORIGINS = "chrome-extension://YOUR_EXTENSION_ID"
+$env:NVIDIA_API_KEY = "YOUR_NVIDIA_API_KEY"
+pnpm dev:gateway
+```
+
+Google backup remains optional. After enabling Cloud Translation for your Google Cloud project and establishing ADC outside this repository, add:
+
+```powershell
+$env:GOOGLE_CLOUD_PROJECT = "YOUR_GOOGLE_CLOUD_PROJECT_ID"
+```
+
+Do not copy a service-account key, ADC file, NVIDIA key, or API key into the extension or repository. Live mode writes the validated last-known-good online capability snapshot to `.data/online-provider-capabilities.json`; `.data` is ignored by Git.
 
 ## Agent instructions
 

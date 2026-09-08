@@ -3,10 +3,10 @@
 ## Architecture goals
 
 - Keep the visible product small and responsive.
-- Expose the full current Google Cloud Translation language catalogue without hard-coding a language count.
+- Expose the current active provider capability catalogue without hard-coding a language count.
 - Use Chrome's on-device translation when a language pair is available.
-- Route online translations through a protected gateway with Google Cloud Translation as primary.
-- Use NVIDIA Riva Translate 4B Instruct v2 as a bounded backup for its supported pairs only.
+- Route online translations through a protected gateway with NVIDIA Riva Translate 4B Instruct v2 as primary for reviewed supported directions.
+- Use Google Cloud Translation as an optional backup when configured.
 - Keep provider choice replaceable.
 - Minimize permissions and data retention.
 
@@ -38,13 +38,13 @@ The popup or another extension-owned document performs on-device language detect
 
 ### Translation gateway
 
-A backend endpoint handles Online mode. It validates requests, applies limits, removes unnecessary operational metadata, and calls Google Cloud Translation first. If Google fails, the gateway may retry once with NVIDIA Riva Translate 4B Instruct v2 only when the pair is supported and the user has consented to both providers. Provider credentials stay on the server.
+A backend endpoint handles Online mode. It validates requests, applies limits, removes unnecessary operational metadata, and calls NVIDIA Riva Translate 4B Instruct v2 first for reviewed supported directions. If NVIDIA is unavailable or the direction is outside its reviewed support, the gateway may use Google Cloud Translation only when Google is configured, the pair is supported, and the user has consented to both providers. Provider credentials stay on the server.
 
 The extension-facing contract is a LingoBridge-owned `POST /v1/translate` endpoint. The gateway's Google adapter uses Cloud Translation Advanced `translateText`. The NVIDIA adapter uses the selected NIM's server-side inference endpoint. These vendor details never become part of the extension contract.
 
 ### Capability registry
 
-The gateway exposes `GET /v1/capabilities`. It normalizes Google's current supported-language catalogue and the reviewed NVIDIA language-pair tags into product capabilities. Translation, fallback, transliteration, styles, speech, and on-device support remain separate flags. A versioned last-known-good snapshot prevents a provider metadata outage from emptying the language picker.
+The gateway exposes `GET /v1/capabilities`. It normalizes Google's current supported-language catalogue and the reviewed NVIDIA language-pair tags into product capabilities. Google's general NMT all-supported-source-to-all-supported-target policy is encoded once with per-language source and target flags rather than expanded into tens of thousands of duplicate pair rows; providers with restricted pair matrices use exact direction records. Translation, fallback, transliteration, styles, speech, and on-device support remain separate flags. A versioned last-known-good snapshot prevents a provider metadata outage from emptying the language picker.
 
 ### Web dashboard
 
@@ -79,7 +79,7 @@ Stores preferences, site-access choices, disabled-site rules, consent state, sav
 3. The isolated selection observer waits for the range to remain stable and rejects ineligible or duplicate selections.
 4. A local detector proposes the source language when available; otherwise detection is included in the approved online request.
 5. The anchored translator opens immediately with source, target, and loading state.
-6. If Online auto-translation consent exists and no sensitive-text warning triggers, the request follows the Google-first online path.
+6. If Online auto-translation consent exists and no sensitive-text warning triggers, the request follows the NVIDIA-first online path.
 7. Otherwise the surface waits for explicit confirmation or offers On-device mode.
 8. Closing the surface or selecting unrelated text clears the temporary selection state.
 
@@ -98,9 +98,9 @@ Stores preferences, site-access choices, disabled-site rules, consent state, sav
 2. LingoBridge explains that the chosen text will leave the device and verifies consent.
 3. The extension sends text, language pair, and style to the gateway.
 4. The gateway validates size, rate, origin metadata, consent, and supported languages.
-5. The gateway calls Google Cloud Translation.
-6. If Google fails, the router checks whether NVIDIA supports the pair and whether backup consent exists.
-7. When both checks pass, the gateway retries once with NVIDIA; otherwise it returns a safe failure.
+5. The gateway calls NVIDIA when the reviewed pair is supported.
+6. If NVIDIA fails or does not support the direction, the router checks whether Google backup is configured and consented.
+7. When both checks pass, the gateway uses Google; otherwise it returns a safe failure.
 8. The gateway returns the translation, actual provider, detected language, confidence, and warnings.
 9. The extension displays the provider state and result.
 
@@ -173,6 +173,6 @@ The implementation phase should introduce these areas only after explicit approv
 
 Chrome's built-in Translator API currently supports many languages but does not list Nepali. LingoBridge therefore needs a cloud provider for English–Nepali and Romanized Nepali features unless Chrome adds that language later. Provider support must be checked again immediately before implementation.
 
-Google Cloud Translation is the chosen primary online provider, and LingoBridge exposes its current supported-language catalogue. NVIDIA Riva Translate 4B Instruct v2 provides backup only for its exact verified pair tags. It lists 37 languages but not Nepali, so it cannot back up English–Nepali. See `docs/11-language-coverage.md` for the capability policy.
+NVIDIA Riva Translate 4B Instruct v2 is now the chosen primary online provider for reviewed supported directions. Google Cloud Translation remains an optional backup and the only configured cloud path that can cover English-Nepali when Google credentials are available. NVIDIA lists 37 languages but not Nepali, so it cannot translate English-Nepali. See `docs/11-language-coverage.md` for the capability policy.
 
 Automatic selection detection cannot rely on `activeTab` alone because that permission begins only after an explicit extension gesture. LingoBridge therefore declares optional HTTP/HTTPS host access and requests it during Instant Selection onboarding. Users may grant the current site or all sites; the popup, context menu, and shortcut remain available without persistent access.

@@ -440,6 +440,52 @@ h1 {
   color: #15803d;
 }
 
+.online-consent {
+  display: grid;
+  gap: 9px;
+  margin: 0 0 13px;
+  padding: 11px;
+  border: 1px solid #c8d5eb;
+  border-radius: 8px;
+  background: #f5f8fd;
+}
+
+.online-consent p {
+  margin: 0;
+  color: #3f4a56;
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+
+.online-consent > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.online-consent a,
+.online-consent button {
+  min-height: 34px;
+  font-size: 0.68rem;
+  font-weight: 680;
+}
+
+.online-consent a {
+  display: inline-flex;
+  align-items: center;
+  color: #1d4ed8;
+}
+
+.online-consent button {
+  padding: 6px 10px;
+  border: 1px solid #174eb8;
+  border-radius: 6px;
+  color: #ffffff;
+  background: #2363eb;
+}
+
 .source-field {
   overflow: hidden;
   border: 1px solid #cfd2d4;

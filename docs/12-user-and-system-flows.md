@@ -27,15 +27,17 @@ flowchart TD
     P --> Q
     R -- Cancel --> T[Keep source locally and do not translate]
     R -- Continue --> S
-    S --> U[Google Cloud Translation]
-    U -- Success --> V[Display result labelled Google]
-    U -- Failure --> W{Exact NVIDIA pair supported?}
-    W -- No --> X[Show retry error and preserve source]
-    W -- Yes --> Y[NVIDIA fallback attempt]
+    S --> W{Exact NVIDIA pair supported?}
+    W -- Yes --> Y[NVIDIA primary attempt]
     Y -- Success --> Z[Display result labelled NVIDIA]
-    Y -- Failure --> X
+    Y -- Failure --> U{Google backup configured and supported?}
+    W -- No --> U
+    U -- Yes --> V[Google Cloud Translation backup]
+    V -- Success --> G2[Display result labelled Google]
+    U -- No --> X[Show retry error and preserve source]
+    V -- Failure --> X
     M --> AA[Display result labelled On-device]
-    V --> AB[Copy, Listen, Save, or Replace]
+    G2 --> AB
     Z --> AB
     AA --> AB
 ```
@@ -100,7 +102,7 @@ flowchart LR
     A[Eligible selected text] --> B{Local detector available?}
     B -- Yes --> C[Detect locally]
     B -- No --> D{Online processing allowed?}
-    D -- Yes --> E[Let Google detect during translation]
+    D -- Yes --> E[Use Google backup detection when configured]
     D -- No --> F[Ask user to choose source]
     C --> G{Confidence sufficient?}
     G -- No --> F
@@ -121,35 +123,43 @@ sequenceDiagram
     participant U as User
     participant E as LingoBridge extension
     participant G as LingoBridge gateway
-    participant T as Google Translation
     participant N as NVIDIA Riva
+    participant T as Google Translation
 
     U->>E: Select eligible text
     E->>E: Detect language and check consent
     E->>G: Translation request
     G->>G: Validate request, pair, size, rate and consent
-    G->>T: Primary translation request
-    alt Google succeeds
-        T-->>G: Translation
-        G-->>E: Result with provider Google
-    else Google fails
-        G->>G: Check exact NVIDIA pair allowlist
-        alt NVIDIA pair supported
-            G->>N: One fallback request
-            alt NVIDIA succeeds
-                N-->>G: Translation
-                G-->>E: Result with provider NVIDIA
-            else NVIDIA fails
+    G->>G: Check exact NVIDIA pair allowlist
+    alt NVIDIA pair supported
+        G->>N: Primary translation request
+        alt NVIDIA succeeds
+            N-->>G: Translation
+            G-->>E: Result with provider NVIDIA
+        else NVIDIA fails
+            G->>G: Check Google backup configuration and consent
+            alt Google backup available
+                G->>T: Backup translation request
+                T-->>G: Translation
+                G-->>E: Result with provider Google
+            else No backup
                 G-->>E: Safe retryable error
             end
-        else Pair unsupported by NVIDIA
+        end
+    else NVIDIA pair unsupported
+        G->>G: Check Google backup configuration and consent
+        alt Google backup available
+            G->>T: Backup translation request
+            T-->>G: Translation
+            G-->>E: Result with provider Google
+        else No backup
             G-->>E: Safe retryable error
         end
     end
     E-->>U: Show labelled result or error
 ```
 
-Nepali requests never enter the selected NVIDIA adapter because `riva-translate-4b-instruct-v2` does not support Nepali.
+Nepali requests never enter the selected NVIDIA adapter because `riva-translate-4b-instruct-v2` does not support Nepali. They require Google backup to be configured.
 
 ## 6. Anchored translator lifecycle
 
@@ -210,8 +220,8 @@ flowchart TD
 1. Open the language picker immediately using the last-known-good local catalogue.
 2. Ask the LingoBridge gateway for the current capability version.
 3. Validate the response before replacing the local catalogue.
-4. Enable standard translation for current Google-supported directions.
-5. Enable NVIDIA fallback only for reviewed exact pair tags.
+4. Enable NVIDIA only for reviewed exact pair tags.
+5. Enable Google backup for current Google-supported directions when configured.
 6. Gate speech, transliteration, styles, and on-device mode independently.
 7. If refresh fails, keep the cached catalogue and mark it as stale.
 

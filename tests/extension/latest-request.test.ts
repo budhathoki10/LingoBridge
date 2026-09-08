@@ -1,5 +1,5 @@
-import { LatestRequestRunner } from "../../apps/extension/lib/latest-request";
 import { describe, expect, it } from "vitest";
+import { LatestRequestRunner } from "../../apps/extension/lib/latest-request";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
