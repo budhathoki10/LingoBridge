@@ -1,6 +1,6 @@
 # Small phase-by-phase build plan
 
-Status: **Phase 0 through Phase 3.1 completed. Phase 3.2 is next after explicit authorization.**
+Status: **Phase 0 through Phase 3 implementation and automated verification completed. Phase 4 NVIDIA-primary implementation is authorized and in progress.**
 
 Complete these phases serially after the user explicitly authorizes implementation. Keep each phase as one small reviewable change. Do not start the next phase until the current Done when condition passes.
 
@@ -38,7 +38,13 @@ Completed on 7 September 2026. The production popup now has its idle, loading, s
 
 ## 3 — protected Google translation
 
-Phase 3.1 completed on 7 September 2026. The popup now reaches a loopback-only Hono gateway through a contract-validating extension client. Health, version, fake capabilities, and translation routes use shared schemas and an injected deterministic fake adapter; route, client-integration, malformed-response, unsupported-pair, and safe-error tests pass without any Google or NVIDIA request.
+Phase 3.1 completed on 7 September 2026. The popup reaches a loopback-only Hono gateway through a contract-validating extension client. Health, version, fake capabilities, and translation routes use shared schemas and an injected deterministic fake adapter.
+
+Phase 3.2 completed on 7 September 2026. The gateway now enforces request and response byte ceilings, exact live extension origins, persistent anonymous installation identifiers, per-installation and per-network rate controls, provider cancellation and deadlines, defensive response headers, fixed safe errors, content-free request logs, and environment-only security configuration. The security suite passes before any real provider is enabled.
+
+Phase 3.3 implementation completed on 7 September 2026. Live mode uses the official Google Cloud Translation v3 client with Application Default Credentials, the global `general/nmt` model, explicit text/plain input, automatic or explicit source language, fixed provider errors, and a non-retrying bounded call. The protected gateway integration, consent persistence/revocation, and server-only package boundary are covered by automated tests and production-package inspection. This machine has no ADC or Google project configuration, so a credentialed provider smoke test remains deployment evidence rather than a completed local test.
+
+Phase 3.4 implementation and automated verification completed on 8 September 2026. Live mode retrieves Google's current standard NMT source and target languages on the gateway, strictly normalizes them into the shared versioned contract, creates a content-derived catalogue version, and persists a validated last-known-good snapshot atomically. The gateway reuses fresh metadata, serves clearly marked stale metadata during bounded provider failures, applies retry backoff, deduplicates concurrent refreshes without allowing one cancelled caller to cancel the shared refresh, and fails safely when neither provider metadata nor cache is valid. The extension loads its validated local cache first, rejects a cache from the wrong gateway mode, refreshes it from the gateway, and drives both language pickers and pair validation from the active catalogue. Fresh, stale, malformed, unavailable, cancellation, cache, production-build, and Chromium fake-gateway interaction checks pass; a credentialed Google catalogue refresh remains deployment evidence.
 
 | Phase | Build | Done when |
 | --- | --- | --- |
@@ -47,13 +53,13 @@ Phase 3.1 completed on 7 September 2026. The popup now reaches a loopback-only H
 | 3.3 | Add Google Cloud Translation Advanced standard NMT as primary. | Translation works through the gateway and no credential reaches the extension. |
 | 3.4 | Add the live, versioned Google capability catalogue with last-known-good caching. | Fresh, stale, malformed, and unavailable catalogue tests pass. |
 
-## 4 — NVIDIA backup
+## 4 — NVIDIA primary with Google backup
 
 | Phase | Build | Done when |
 | --- | --- | --- |
-| 4.1 | Add the server-side `nvidia/riva-translate-4b-instruct-v2` adapter without automatic fallback. | Reviewed pair tags work and Nepali is rejected before any NVIDIA request. |
-| 4.2 | Add one-attempt Google-to-NVIDIA fallback for qualifying errors and supported pairs. | Success, unsupported pair, timeout, cancellation, and double-failure tests pass. |
-| 4.3 | Add actual-provider labels and multi-provider consent checks. | Every result truthfully shows On-device, Google, or NVIDIA. |
+| 4.1 | Add the server-side `nvidia/riva-translate-4b-instruct-v2` adapter as the primary online provider for reviewed supported directions. | Reviewed pair tags work and Nepali is rejected before any NVIDIA request. |
+| 4.2 | Add Google backup for qualifying NVIDIA failures and unsupported NVIDIA directions when Google is configured. | Success, unsupported pair, timeout, cancellation, and double-failure tests pass. |
+| 4.3 | Add actual-provider labels and multi-provider consent checks. | Every result truthfully shows On-device, NVIDIA, or Google. |
 
 ## 5 — Instant Selection
 

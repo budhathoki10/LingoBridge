@@ -1,19 +1,22 @@
+import { describe, expect, it } from "vitest";
 import {
-  MAX_TRANSLATION_CODE_POINTS,
+  anonymousInstallationIdSchema,
   capabilityCatalogueSchema,
+  MAX_TRANSLATION_CODE_POINTS,
+  MAX_TRANSLATION_RESPONSE_UTF8_BYTES,
   onlineConsentSchema,
   providerSchema,
   translationErrorSchema,
   translationRequestSchema,
   translationResultSchema,
 } from "../../packages/contracts/src/index";
-import { describe, expect, it } from "vitest";
 
 const validRequest = {
   consent: {
     acceptedAt: "2026-09-06T12:00:00.000Z",
-    google: true as const,
-    nvidiaBackup: true,
+    google: true,
+    googleBackup: true,
+    nvidia: true,
     version: "2026-09-06",
   },
   operation: "translate" as const,
@@ -57,11 +60,17 @@ describe("translationRequestSchema", () => {
 describe("providerSchema", () => {
   it("accepts only reviewed provider labels", () => {
     expect(providerSchema.safeParse("google").success).toBe(true);
+    expect(providerSchema.safeParse("nvidia").success).toBe(true);
     expect(providerSchema.safeParse("unapproved-provider").success).toBe(false);
   });
 });
 
 describe("response and consent contracts", () => {
+  it("accepts only UUID anonymous installation identifiers", () => {
+    expect(anonymousInstallationIdSchema.safeParse(validRequest.requestId).success).toBe(true);
+    expect(anonymousInstallationIdSchema.safeParse("device-1").success).toBe(false);
+  });
+
   it("rejects unreviewed consent fields", () => {
     expect(
       onlineConsentSchema.safeParse({
@@ -82,6 +91,19 @@ describe("response and consent contracts", () => {
         warnings: [],
       }).success,
     ).toBe(true);
+  });
+
+  it("rejects provider output above the UTF-8 response ceiling", () => {
+    expect(
+      translationResultSchema.safeParse({
+        detectedSourceLanguage: "en",
+        provider: "google",
+        requestId: validRequest.requestId,
+        targetLanguage: "ne",
+        translatedText: "न".repeat(MAX_TRANSLATION_RESPONSE_UTF8_BYTES),
+        warnings: [],
+      }).success,
+    ).toBe(false);
   });
 
   it("rejects unknown error codes and fields", () => {

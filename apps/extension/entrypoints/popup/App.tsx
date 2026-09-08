@@ -1,22 +1,36 @@
 import {
+  type CapabilityCatalogue,
   MAX_TRANSLATION_CODE_POINTS,
   MAX_TRANSLATION_UTF8_BYTES,
-  translationTextSchema,
+  type OnlineConsent,
   type TranslationRequest,
   type TranslationResult,
+  translationTextSchema,
 } from "@lingobridge/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AUTO_LANGUAGE_CODE,
+  catalogueToPreviewLanguages,
   getPreviewDirectionCapabilities,
   getPreviewLanguage,
   inferPreviewLanguage,
+  PREVIEW_LANGUAGES,
 } from "../../lib/capabilities";
+import {
+  loadCachedCapabilityCatalogue,
+  markCapabilityCatalogueStale,
+  saveCachedCapabilityCatalogue,
+} from "../../lib/capability-cache";
 import { GatewayClientError, gatewayClient } from "../../lib/gateway-client";
 import { LatestRequestRunner } from "../../lib/latest-request";
 import {
-  DEFAULT_POPUP_PREFERENCES,
+  acceptOnlineProviderConsent,
+  loadOnlineProviderConsent,
+  revokeOnlineProviderConsent,
+} from "../../lib/online-consent";
+import {
   addRecentLanguage,
+  DEFAULT_POPUP_PREFERENCES,
   loadPopupPreferences,
   savePopupPreferences,
 } from "../../lib/popup-preferences";
@@ -31,6 +45,7 @@ type TranslationView =
   | { kind: "success"; result: TranslationResult };
 
 type GatewayState = "checking" | "ready" | "unavailable";
+type GatewayMode = "fake" | "live";
 
 const utf8Encoder = new TextEncoder();
 
@@ -55,6 +70,10 @@ export function App() {
   const [view, setView] = useState<TranslationView>({ kind: "idle" });
   const [lastRequest, setLastRequest] = useState<TranslationRequest | null>(null);
   const [gatewayState, setGatewayState] = useState<GatewayState>("checking");
+  const [gatewayMode, setGatewayMode] = useState<GatewayMode | null>(null);
+  const [catalogue, setCatalogue] = useState<CapabilityCatalogue | null>(null);
+  const [onlineConsent, setOnlineConsent] = useState<OnlineConsent | null>(null);
+  const [consentReady, setConsentReady] = useState(false);
   const [favouriteCodes, setFavouriteCodes] = useState(
     DEFAULT_POPUP_PREFERENCES.favouriteLanguageCodes,
   );
@@ -62,8 +81,17 @@ export function App() {
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
   const [targetPickerOpen, setTargetPickerOpen] = useState(false);
-  const target = getPreviewLanguage(targetLanguage);
-  const capabilities = getPreviewDirectionCapabilities(sourceLanguage, targetLanguage);
+  const languages = useMemo(
+    () => (catalogue ? catalogueToPreviewLanguages(catalogue) : [...PREVIEW_LANGUAGES]),
+    [catalogue],
+  );
+  const target = getPreviewLanguage(targetLanguage, languages);
+  const capabilities = getPreviewDirectionCapabilities(
+    sourceLanguage,
+    targetLanguage,
+    catalogue,
+    languages,
+  );
   const codePointCount = countCodePoints(text);
   const utf8ByteCount = utf8Encoder.encode(text).byteLength;
   const textIsOverLimit =
@@ -91,19 +119,80 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+    void loadOnlineProviderConsent()
+      .then((consent) => {
+        if (active) setOnlineConsent(consent);
+      })
+      .finally(() => {
+        if (active) setConsentReady(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
     const controller = new AbortController();
 
-    void gatewayClient
-      .inspect(controller.signal)
-      .then((snapshot) => {
-        if (snapshot.version.translationMode === "fake") setGatewayState("ready");
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setGatewayState("unavailable");
-      });
+    void (async () => {
+      let cached: CapabilityCatalogue | null = null;
+      try {
+        cached = await loadCachedCapabilityCatalogue();
+        if (!controller.signal.aborted && cached) {
+          setCatalogue(markCapabilityCatalogueStale(cached));
+        }
+      } catch {
+        cached = null;
+      }
+
+      try {
+        const service = await gatewayClient.inspectService(controller.signal);
+        if (controller.signal.aborted) return;
+        const cacheMatchesMode =
+          !cached ||
+          (service.version.translationMode === "live" && cached.source !== "fake") ||
+          (service.version.translationMode === "fake" && cached.source === "fake");
+        if (!cacheMatchesMode) {
+          cached = null;
+          setCatalogue(null);
+        }
+        setGatewayMode(service.version.translationMode);
+        setGatewayState("ready");
+
+        try {
+          const current = await gatewayClient.getCapabilities(controller.signal);
+          if (controller.signal.aborted) return;
+          setCatalogue(current);
+          void saveCachedCapabilityCatalogue(current).catch(() => undefined);
+        } catch {
+          if (!controller.signal.aborted && cached) {
+            setCatalogue(markCapabilityCatalogueStale(cached));
+          }
+        }
+      } catch {
+        if (!controller.signal.aborted) {
+          setGatewayState("unavailable");
+          if (cached) setCatalogue(markCapabilityCatalogueStale(cached));
+        }
+      }
+    })();
 
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    if (!catalogue || target) return;
+    const fallbackTarget =
+      catalogue.languages.find((language) => language.code === "en" && language.googleTarget) ??
+      catalogue.languages.find((language) => language.googleTarget) ??
+      catalogue.languages.find((language) =>
+        catalogue.directions.some(
+          (direction) => direction.targetLanguage === language.code && direction.nvidia,
+        ),
+      );
+    if (fallbackTarget) setTargetLanguage(fallbackTarget.code);
+  }, [catalogue, target]);
 
   useEffect(() => {
     if (!preferencesReady) return;
@@ -188,19 +277,61 @@ export function App() {
       return;
     }
 
+    if (gatewayMode === "live" && !onlineConsent) {
+      setView({
+        kind: "error",
+        message: "Allow Online translation before sending text to the selected provider.",
+        retryable: false,
+      });
+      return;
+    }
+
     void runTranslation({
-      consent: {
-        acceptedAt: new Date().toISOString(),
-        google: true,
-        nvidiaBackup: false,
-        version: "phase-3.1-fake-gateway",
-      },
+      consent:
+        gatewayMode === "live" && onlineConsent
+          ? onlineConsent
+          : {
+              acceptedAt: new Date().toISOString(),
+              google: true,
+              googleBackup: true,
+              nvidia: true,
+              version: "phase-3.1-fake-gateway",
+            },
       operation: "translate",
       requestId: crypto.randomUUID(),
       sourceLanguage,
       targetLanguage,
       text,
     });
+  }
+
+  async function handleAcceptOnlineTranslation() {
+    try {
+      const consent = await acceptOnlineProviderConsent();
+      setOnlineConsent(consent);
+      if (view.kind === "error") setView({ kind: "idle" });
+    } catch {
+      setView({
+        kind: "error",
+        message: "Online consent could not be saved. Try again before translating.",
+        retryable: false,
+      });
+    }
+  }
+
+  async function handleRevokeOnlineTranslation() {
+    requestRunner.current.cancel();
+    try {
+      await revokeOnlineProviderConsent();
+      setOnlineConsent(null);
+      setView({ kind: "idle" });
+    } catch {
+      setView({
+        kind: "error",
+        message: "Online consent could not be changed. Try again.",
+        retryable: false,
+      });
+    }
   }
 
   function handleRetry() {
@@ -277,8 +408,8 @@ export function App() {
   const detectedLanguageName = useMemo(() => {
     if (view.kind !== "success") return null;
     if (!view.result.detectedSourceLanguage) return "Unknown";
-    return getPreviewLanguage(view.result.detectedSourceLanguage)?.name ?? "Unknown";
-  }, [view]);
+    return getPreviewLanguage(view.result.detectedSourceLanguage, languages)?.name ?? "Unknown";
+  }, [languages, view]);
 
   return (
     <main className="popup-shell">
@@ -290,7 +421,7 @@ export function App() {
             <span>Translate without leaving the page</span>
           </div>
         </div>
-        <span className="preview-badge">Phase 3.1</span>
+        <span className="preview-badge">Phase 4</span>
       </header>
 
       <section aria-labelledby="translator-title" className="translator">
@@ -305,7 +436,9 @@ export function App() {
               className={`local-note__dot local-note__dot--${gatewayState}`}
             />
             {gatewayState === "ready"
-              ? "Fake gateway ready"
+              ? gatewayMode === "live"
+                ? "NVIDIA gateway ready"
+                : "Fake gateway ready"
               : gatewayState === "checking"
                 ? "Checking gateway"
                 : "Gateway offline"}
@@ -325,6 +458,7 @@ export function App() {
             recentCodes={recentCodes}
             side="source"
             value={sourceLanguage}
+            languages={languages}
           />
 
           <button
@@ -347,6 +481,7 @@ export function App() {
             recentCodes={recentCodes}
             side="target"
             value={targetLanguage}
+            languages={languages}
           />
         </div>
 
@@ -359,7 +494,41 @@ export function App() {
               ? "Speech is supported later"
               : `Speech unavailable for ${target?.name ?? "this language"}`}
           </span>
+          {catalogue?.freshness === "stale" ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>Language list is cached</span>
+            </>
+          ) : null}
         </div>
+
+        {gatewayMode === "live" && consentReady ? (
+          <div className="online-consent">
+            {onlineConsent ? (
+              <>
+                <p>Online translation is allowed for text you choose.</p>
+                <button onClick={() => void handleRevokeOnlineTranslation()} type="button">
+                  Turn off
+                </button>
+              </>
+            ) : (
+              <>
+                <p>
+                  Online mode sends only the text you choose to NVIDIA first. Google is used only as
+                  a backup when configured. LingoBridge does not save it.
+                </p>
+                <div>
+                  <a href="/privacy.html" target="_blank" rel="noopener">
+                    Privacy details
+                  </a>
+                  <button onClick={() => void handleAcceptOnlineTranslation()} type="button">
+                    Allow Online translation
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        ) : null}
 
         <div className="source-field">
           <div className="source-field__heading">
@@ -447,18 +616,24 @@ export function App() {
             <div className="result-success">
               <div className="result-heading">
                 <h2>Translation</h2>
-                <span>Fake adapter</span>
+                <span>{gatewayMode === "live" ? view.result.provider : "Fake adapter"}</span>
               </div>
               <p
                 className="translated-text"
-                dir={getPreviewLanguage(view.result.targetLanguage)?.textDirection ?? "ltr"}
+                dir={
+                  getPreviewLanguage(view.result.targetLanguage, languages)?.textDirection ?? "ltr"
+                }
                 lang={view.result.targetLanguage}
               >
                 {view.result.translatedText}
               </p>
               <p className="result-meta">
-                Detected {detectedLanguageName} · Simulated {view.result.provider} route · no
-                external provider call
+                {gatewayMode === "live"
+                  ? `Detected ${detectedLanguageName} · Online via ${view.result.provider}`
+                  : `Detected ${detectedLanguageName} · Simulated ${view.result.provider} route · no external provider call`}
+                {view.result.warnings.some((warning) => warning.code === "capability-stale")
+                  ? " · Language availability is cached"
+                  : ""}
               </p>
             </div>
           ) : null}
@@ -492,7 +667,11 @@ export function App() {
       </section>
 
       <footer>
-        <span>Local gateway · fake adapter only</span>
+        <span>
+          {gatewayMode === "live"
+            ? "Online gateway · NVIDIA primary"
+            : "Local gateway · fake adapter only"}
+        </span>
         <span>v{version}</span>
       </footer>
     </main>

@@ -1,15 +1,18 @@
-import { createGatewayApp } from "../../apps/gateway/src/app";
-import { FakeTranslationAdapter } from "../../apps/gateway/src/fake-translation-adapter";
+import { describe, expect, it } from "vitest";
 import {
   createGatewayClient,
   type GatewayClientError,
   type GatewayFetch,
 } from "../../apps/extension/lib/gateway-client";
+import { createGatewayApp } from "../../apps/gateway/src/app";
+import { FakeTranslationAdapter } from "../../apps/gateway/src/fake-translation-adapter";
 import type { TranslationRequest } from "../../packages/contracts/src/index";
-import { describe, expect, it } from "vitest";
 
 function appFetcher(): GatewayFetch {
-  const app = createGatewayApp({ translationAdapter: new FakeTranslationAdapter(0) });
+  const app = createGatewayApp({
+    logger: { info: () => undefined },
+    translationAdapter: new FakeTranslationAdapter(0),
+  });
   return async (input, init) => app.request(new Request(input, init));
 }
 
@@ -17,7 +20,8 @@ const request: TranslationRequest = {
   consent: {
     acceptedAt: "2026-09-07T00:00:00.000Z",
     google: true,
-    nvidiaBackup: false,
+    googleBackup: true,
+    nvidia: true,
     version: "phase-3.1-fake-gateway",
   },
   operation: "translate",
@@ -32,6 +36,7 @@ describe("extension gateway client", () => {
     const client = createGatewayClient({
       baseUrl: "http://gateway.test",
       fetcher: appFetcher(),
+      installationIdProvider: async () => "51e8bfee-b285-46ba-928c-44e914935634",
     });
 
     const snapshot = await client.inspect();
@@ -48,6 +53,7 @@ describe("extension gateway client", () => {
     const client = createGatewayClient({
       baseUrl: "http://gateway.test",
       fetcher: async () => Response.json({ translatedText: "missing required fields" }),
+      installationIdProvider: async () => "51e8bfee-b285-46ba-928c-44e914935634",
     });
 
     await expect(client.translate(request, new AbortController().signal)).rejects.toMatchObject({

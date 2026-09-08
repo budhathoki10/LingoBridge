@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <title>LingoBridge Online translation privacy</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">LingoBridge privacy notice</p>
+      <h1>Online translation</h1>
+      <p class="summary">
+        Online mode sends only the text you deliberately translate, its language choice, and the
+        minimum request metadata needed for security to the LingoBridge gateway.
+      </p>
+
+      <section>
+        <h2>Who processes the text?</h2>
+        <p>
+          In Phase 4, the gateway sends the chosen text to NVIDIA Riva Translate 4B Instruct v2
+          first for supported directions. Google Cloud Translation Advanced is used only as a
+          backup when it is configured and the requested direction is supported.
+        </p>
+      </section>
+
+      <section>
+        <h2>What LingoBridge keeps</h2>
+        <p>
+          The gateway does not create translation history and its operational logs do not contain
+          source or translated text. A random installation identifier is stored only in the
+          extension and used for abuse limits.
+        </p>
+      </section>
+
+      <section>
+        <h2>Your control</h2>
+        <p>
+          Online translation stays disabled until you allow it in the popup. You can turn it off
+          there at any time. Disabling it prevents new text from being sent; it does not delete text
+          you deliberately save in later product phases.
+        </p>
+      </section>
+
+      <p class="provider-link">
+        Read NVIDIA's
+        <a
+          href="https://build.nvidia.com/nvidia/riva-translate-4b-instruct-v2/modelcard"
+          rel="noreferrer"
+          target="_blank"
+          >model card</a
+        >
+        and Google's
+        <a href="https://cloud.google.com/translate/data-usage" rel="noreferrer" target="_blank"
+          >Cloud Translation data usage terms</a
+        >.
+      </p>
+    </main>
+  </body>
+</html>

@@ -56,7 +56,7 @@ The role-protected admin view contains operational metadata only:
 - Request totals by provider and language code.
 - Success, timeout, rate-limit, and error categories.
 - Median and 95th-percentile latency.
-- NVIDIA fallback attempts and outcomes.
+- Google backup attempts and outcomes.
 - Quota and estimated-cost warnings.
 
 It must never show selected text, translated text, saved phrases, authentication tokens, provider keys, complete IP addresses, or user browsing activity.

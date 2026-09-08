@@ -23,7 +23,7 @@
 2. After the selection remains stable briefly, LingoBridge opens a translator beside it automatically.
 3. Language detection suggests a source language; the user can correct it.
 4. The preferred target language is selected automatically and can be changed or swapped.
-5. LingoBridge uses the user's privacy setting. On-device-only requests stay local; consented Online requests go to Google first.
+5. LingoBridge uses the user's privacy setting. On-device-only requests stay local; consented Online requests go to NVIDIA first for supported directions.
 6. The surface shows loading and then the result with Copy, Listen, and Save actions.
 7. Escape or Close dismisses it. Selecting different text replaces it rather than stacking another translator.
 8. The temporary source text expires when the surface closes or after a short timeout.
@@ -77,9 +77,9 @@ This flow remains disabled in version 1 unless the Phase 9 quality gate explicit
 
 - The language picker contains the current Google-supported catalogue and makes unsupported enhancements visible per pair.
 - On-device is preferred when Chrome supports the pair and the chosen style needs only direct translation.
-- Google Cloud Translation is the primary provider for every language pair it currently supports in Online mode.
-- NVIDIA Riva Translate 4B Instruct v2 is attempted once only after a Google failure, only for its documented pairs, and only under previously disclosed backup consent.
-- NVIDIA is not used as a fallback for Nepali because the selected model does not support it.
+- NVIDIA Riva Translate 4B Instruct v2 is the primary online provider for reviewed supported directions.
+- Google Cloud Translation is used as backup only when configured, supported, and consented.
+- NVIDIA is not used for Nepali because the selected model does not support it.
 - A later release may use Online processing for Romanized Nepali and context styles if their quality and privacy gates pass.
 - The user can require On-device only; unsupported requests then show a clear limitation.
 
@@ -88,8 +88,8 @@ This flow remains disabled in version 1 unless the Phase 9 quality gate explicit
 - Unsupported language pair: suggest an available processing mode.
 - Local model missing: show availability and download progress supplied by Chrome; do not claim a download size Chrome does not provide.
 - Network unavailable: retain the source and allow retry.
-- Google failure on a supported NVIDIA pair: retry once through NVIDIA and label the result.
-- Google failure on Nepali or another unsupported NVIDIA pair: retain the source and show retry; do not route to NVIDIA.
+- NVIDIA failure on a Google-supported pair: use Google backup when configured and label the result.
+- NVIDIA-unsupported Nepali with no Google backup: retain the source and show retry; do not route to NVIDIA.
 - Provider rate limit: show when the user can retry and which provider failed.
 - Low confidence: show alternative wording and ask the user to review names, dates, and formal terms.
 - Restricted page or missing site access: keep the popup available and explain that Chrome does not allow the automatic overlay there.

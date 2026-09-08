@@ -1,8 +1,8 @@
+import { describe, expect, it } from "vitest";
 import {
   addRecentLanguage,
   normalizePopupPreferences,
 } from "../../apps/extension/lib/popup-preferences";
-import { describe, expect, it } from "vitest";
 
 describe("popup preferences", () => {
   it("keeps only bounded, known language codes", () => {

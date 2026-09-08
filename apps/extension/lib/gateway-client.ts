@@ -1,24 +1,31 @@
 import {
-  GATEWAY_ROUTES,
-  capabilityCatalogueSchema,
-  gatewayHealthSchema,
-  gatewayVersionSchema,
-  translationErrorSchema,
-  translationRequestSchema,
-  translationResultSchema,
+  ANONYMOUS_INSTALLATION_HEADER,
   type CapabilityCatalogue,
+  capabilityCatalogueSchema,
+  GATEWAY_ROUTES,
   type GatewayHealth,
   type GatewayVersion,
+  gatewayHealthSchema,
+  gatewayVersionSchema,
   type TranslationError,
   type TranslationRequest,
   type TranslationResult,
+  translationErrorSchema,
+  translationRequestSchema,
+  translationResultSchema,
 } from "@lingobridge/contracts";
 import { GATEWAY_ORIGIN } from "./gateway-config";
+import { getAnonymousInstallationId } from "./installation-id";
 
 export type GatewayFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 export interface GatewaySnapshot {
   capabilities: CapabilityCatalogue;
+  health: GatewayHealth;
+  version: GatewayVersion;
+}
+
+export interface GatewayServiceSnapshot {
   health: GatewayHealth;
   version: GatewayVersion;
 }
@@ -40,13 +47,16 @@ export class GatewayClientError extends Error {
 }
 
 export interface GatewayClient {
+  getCapabilities(signal?: AbortSignal): Promise<CapabilityCatalogue>;
   inspect(signal?: AbortSignal): Promise<GatewaySnapshot>;
+  inspectService(signal?: AbortSignal): Promise<GatewayServiceSnapshot>;
   translate(request: TranslationRequest, signal: AbortSignal): Promise<TranslationResult>;
 }
 
 interface GatewayClientOptions {
   baseUrl?: string;
   fetcher?: GatewayFetch;
+  installationIdProvider?: () => Promise<string>;
 }
 
 function endpoint(baseUrl: string, route: string): string {
@@ -85,12 +95,18 @@ function requestFailure(payload: unknown, response: Response): GatewayClientErro
 export function createGatewayClient(options: GatewayClientOptions = {}): GatewayClient {
   const baseUrl = options.baseUrl ?? GATEWAY_ORIGIN;
   const fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
+  const installationIdProvider = options.installationIdProvider ?? getAnonymousInstallationId;
 
   async function get(route: string, signal?: AbortSignal): Promise<unknown> {
     let response: Response;
 
     try {
-      response = await fetcher(endpoint(baseUrl, route), { method: "GET", signal });
+      const installationId = await installationIdProvider();
+      response = await fetcher(endpoint(baseUrl, route), {
+        headers: { [ANONYMOUS_INSTALLATION_HEADER]: installationId },
+        method: "GET",
+        signal,
+      });
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") throw error;
       throw new GatewayClientError(
@@ -105,32 +121,50 @@ export function createGatewayClient(options: GatewayClientOptions = {}): Gateway
     return payload;
   }
 
+  async function getCapabilities(signal?: AbortSignal): Promise<CapabilityCatalogue> {
+    const parsed = capabilityCatalogueSchema.safeParse(
+      await get(GATEWAY_ROUTES.capabilities, signal),
+    );
+    if (!parsed.success) {
+      throw new GatewayClientError(
+        "invalid-response",
+        "The gateway language catalogue did not match the shared contract.",
+        true,
+      );
+    }
+    return parsed.data;
+  }
+
+  async function inspectService(signal?: AbortSignal): Promise<GatewayServiceSnapshot> {
+    const [health, version] = await Promise.all([
+      get(GATEWAY_ROUTES.health, signal),
+      get(GATEWAY_ROUTES.version, signal),
+    ]);
+    const parsedHealth = gatewayHealthSchema.safeParse(health);
+    const parsedVersion = gatewayVersionSchema.safeParse(version);
+    if (!parsedHealth.success || !parsedVersion.success) {
+      throw new GatewayClientError(
+        "invalid-response",
+        "The gateway information did not match the shared contract.",
+        true,
+      );
+    }
+    return { health: parsedHealth.data, version: parsedVersion.data };
+  }
+
   return {
+    getCapabilities,
     async inspect(signal) {
-      const [health, version, capabilities] = await Promise.all([
-        get(GATEWAY_ROUTES.health, signal),
-        get(GATEWAY_ROUTES.version, signal),
-        get(GATEWAY_ROUTES.capabilities, signal),
+      const [service, capabilities] = await Promise.all([
+        inspectService(signal),
+        getCapabilities(signal),
       ]);
-
-      const parsedHealth = gatewayHealthSchema.safeParse(health);
-      const parsedVersion = gatewayVersionSchema.safeParse(version);
-      const parsedCapabilities = capabilityCatalogueSchema.safeParse(capabilities);
-
-      if (!parsedHealth.success || !parsedVersion.success || !parsedCapabilities.success) {
-        throw new GatewayClientError(
-          "invalid-response",
-          "The gateway information did not match the shared contract.",
-          true,
-        );
-      }
-
       return {
-        capabilities: parsedCapabilities.data,
-        health: parsedHealth.data,
-        version: parsedVersion.data,
+        capabilities,
+        ...service,
       };
     },
+    inspectService,
 
     async translate(request, signal) {
       const parsedRequest = translationRequestSchema.safeParse(request);
@@ -144,9 +178,13 @@ export function createGatewayClient(options: GatewayClientOptions = {}): Gateway
 
       let response: Response;
       try {
+        const installationId = await installationIdProvider();
         response = await fetcher(endpoint(baseUrl, GATEWAY_ROUTES.translate), {
           body: JSON.stringify(parsedRequest.data),
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            [ANONYMOUS_INSTALLATION_HEADER]: installationId,
+          },
           method: "POST",
           signal,
         });
