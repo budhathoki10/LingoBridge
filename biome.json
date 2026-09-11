@@ -10,6 +10,7 @@
       "!!**/coverage",
       "!!**/dist",
       "!!**/node_modules",
+      "!!apps/gateway/.data",
       "!!pnpm-lock.yaml"
     ]
   },

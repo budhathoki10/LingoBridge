@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:e2e": "playwright test --config playwright.config.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
@@ -11,6 +12,8 @@
     "@lingobridge/contracts": "workspace:*"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/chrome": "0.2.9",
     "typescript": "5.9.3",
     "vitest": "5.0.0"
   }

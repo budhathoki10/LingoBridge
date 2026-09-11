@@ -18,8 +18,8 @@ Every provider should return:
 
 ## Automatic language detection
 
-- Detection starts only after an eligible selection becomes stable.
-- Prefer an available on-device language detector so opening the translator does not itself disclose text.
+- Detection starts only after an eligible selection becomes stable and the user clicks its magic icon.
+- Prefer an available on-device language detector so opening the translator after the click does not itself disclose text.
 - In consented Online mode, omit the source language only when Google backup handles detection; NVIDIA requires an explicit reviewed source-target tag.
 - Show Detecting until a result exists; never label a guess as certain.
 - Very short, numeric, emoji-only, or heavily mixed-language selections may require the user to choose the source language.

@@ -1,4 +1,4 @@
-import { PREVIEW_LANGUAGES } from "./capabilities";
+import { languageCodeSchema } from "@lingobridge/contracts";
 
 export interface PopupPreferences {
   favouriteLanguageCodes: string[];
@@ -13,8 +13,6 @@ export const DEFAULT_POPUP_PREFERENCES: PopupPreferences = {
 };
 
 const STORAGE_KEY = "phase2PopupPreferences";
-const validCodes = new Set(PREVIEW_LANGUAGES.map((language) => language.code));
-
 interface ExtensionStorageArea {
   get(key: string): Promise<Record<string, unknown>>;
   set(items: Record<string, unknown>): Promise<void>;
@@ -24,7 +22,10 @@ function cleanCodes(value: unknown, maximum: number): string[] {
   if (!Array.isArray(value)) return [];
 
   return [...new Set(value)]
-    .filter((code): code is string => typeof code === "string" && validCodes.has(code))
+    .filter(
+      (code): code is string =>
+        typeof code === "string" && languageCodeSchema.safeParse(code).success,
+    )
     .slice(0, maximum);
 }
 
@@ -37,7 +38,8 @@ export function normalizePopupPreferences(value: unknown): PopupPreferences {
     favouriteLanguageCodes: cleanCodes(candidate.favouriteLanguageCodes, 12),
     recentLanguageCodes: cleanCodes(candidate.recentLanguageCodes, 5),
     targetLanguage:
-      typeof candidate.targetLanguage === "string" && validCodes.has(candidate.targetLanguage)
+      typeof candidate.targetLanguage === "string" &&
+      languageCodeSchema.safeParse(candidate.targetLanguage).success
         ? candidate.targetLanguage
         : DEFAULT_POPUP_PREFERENCES.targetLanguage,
   };

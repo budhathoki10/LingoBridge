@@ -75,7 +75,7 @@ Use a non-networked fake provider first. Confirm that a new user can select, tra
 ## Resolved for implementation
 
 - Version 1 requests are limited to 5,000 Unicode code points and 20 KiB of UTF-8 source text.
-- Instant Selection recommends current-site access first; all-site access is a separate optional choice.
+- Selection Magic recommends current-site access first; all-site access is a separate optional choice. A stable selection shows a magic icon, and only clicking that icon starts detection and translation into the saved preferred target language.
 - Dynamic content scripts are registered only for granted origins and are both self-disabled and unregistered when access is removed.
 - Next.js serves the dashboard, WXT builds the extension, and the translation gateway remains an independently deployable TypeScript service.
 

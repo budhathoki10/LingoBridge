@@ -6,7 +6,7 @@
 2. LingoBridge suggests a target from the browser language and asks the user to confirm it.
 3. LingoBridge explains two processing choices: On-device and Online.
 4. The user can start with pasted text without granting page access.
-5. LingoBridge offers Instant Selection and recommends current-site access first. All-site access remains an optional explained choice.
+5. LingoBridge offers Selection Magic and recommends current-site access first. All-site access remains an optional explained choice.
 6. Signing in is optional. Translation and local saved phrases work without an account; sign-in is offered only for dashboard access and deliberate cross-device sync.
 
 ## Enable On-device translation
@@ -20,15 +20,16 @@
 ## Translate selected webpage text
 
 1. The user highlights a sentence.
-2. After the selection remains stable briefly, LingoBridge opens a translator beside it automatically.
-3. Language detection suggests a source language; the user can correct it.
-4. The preferred target language is selected automatically and can be changed or swapped.
-5. LingoBridge uses the user's privacy setting. On-device-only requests stay local; consented Online requests go to NVIDIA first for supported directions.
-6. The surface shows loading and then the result with Copy, Listen, and Save actions.
-7. Escape or Close dismisses it. Selecting different text replaces it rather than stacking another translator.
-8. The temporary source text expires when the surface closes or after a short timeout.
+2. After the selection remains stable briefly, LingoBridge shows a small magic icon beside it.
+3. The user clicks the magic icon; selecting text alone never starts translation or sends it online.
+4. Language detection suggests a source language; the user can correct it.
+5. The user's saved preferred target language is selected automatically and can be changed or swapped.
+6. LingoBridge uses the user's privacy setting. On-device-only requests stay local; consented Online requests go to NVIDIA first for supported directions.
+7. The surface shows loading and then the result with Copy, Listen, and Save actions.
+8. Escape or Close dismisses it. Selecting different text replaces it rather than stacking another translator.
+9. The temporary source text expires when the surface closes or after a short timeout.
 
-If Instant Selection lacks site access, LingoBridge does nothing silently until the user invokes the context menu, shortcut, or popup. It never tricks the user into believing automatic access is active.
+If Selection Magic lacks site access, LingoBridge does nothing silently until the user invokes the context menu, shortcut, or popup. It never tricks the user into believing selection access is active.
 
 ## Translate writing
 

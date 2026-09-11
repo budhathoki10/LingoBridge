@@ -5,7 +5,7 @@
 - Version 1 matches the approved requirements.
 - The extension has one clear purpose: user-triggered text translation.
 - Onboarding explains selection, pasted text, On-device, and Online modes.
-- Onboarding explains that Instant Selection needs current-site or all-site access and that automatic Online translation sends the selected text after consent.
+- Onboarding explains that Selection Magic needs current-site or all-site access and that selected text is translated only after the user clicks the magic icon and accepts Online processing.
 - Unsupported and offline states are understandable.
 - The language picker matches the reviewed capability catalogue and does not advertise unsupported enhanced features.
 - Translation and local saving still work without an account; sign-in is required only for the dashboard and synchronized data.
@@ -25,7 +25,7 @@
 - Every permission has a feature-level explanation.
 - No permission is broader than its feature requires.
 - Optional site access is requested in context.
-- Revoking site access or disabling Instant Selection stops automatic selection handling.
+- Revoking site access or disabling Selection Magic removes the selection icon and stops selection handling.
 - Incognito behaviour has been reviewed.
 
 ## Privacy

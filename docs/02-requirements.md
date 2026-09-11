@@ -5,12 +5,14 @@
 ### Selection translation
 
 - Accept text selected on a normal webpage.
-- When Instant Selection is enabled for the site, wait for the selection to stabilize, detect its language, start translation, and open an anchored translator automatically.
+- When Selection Magic is enabled for the site, wait for the selection to stabilize and show one small magic-icon button beside the eligible range.
+- Do not detect, transmit, or translate the selected text merely because the icon appeared. Start the translation flow only after the user clicks the icon.
+- After the icon click, detect the source language and open an anchored translator using the user's saved preferred target language. Let the user correct either language.
 - Keep right-click and keyboard-shortcut actions as accessible fallbacks.
 - Anchor the translator near the selection while keeping it inside the visible viewport.
 - Show source and target language selectors, swap, source text, result, loading, Copy, Listen, Save, settings, and close controls.
 - Close on Escape, explicit close, a new unrelated selection, page navigation, or loss of the selected range.
-- Do not reopen repeatedly for the same unchanged selection.
+- Do not recreate the icon or reopen the translator repeatedly for the same unchanged selection.
 - Ignore collapsed, whitespace-only, over-limit, hidden, password, and extension-interface selections.
 - Preserve paragraphs, punctuation, names, numbers, links, and line breaks where possible.
 - Never translate password fields or hidden fields.
@@ -75,9 +77,9 @@
 
 ## Quality requirements
 
-- Installation does not require all-site access. Onboarding requests optional site access with a clear explanation before Instant Selection is enabled.
+- Installation does not require all-site access. Onboarding requests optional site access with a clear explanation before Selection Magic is enabled.
 - The basic popup works without page access.
-- Users can grant Instant Selection on the current site or all normal websites and can revoke it at any time.
+- Users can grant Selection Magic on the current site or all normal websites and can revoke it at any time.
 - Translation errors preserve the source text and provide a retry.
 - The interface works with keyboard navigation and 200% browser zoom.
 - No remote executable code is loaded by the extension.
@@ -94,5 +96,5 @@
 7. Google fails for an English–Nepali request, LingoBridge does not call the unsupported NVIDIA model and instead preserves the source with a retry message.
 8. A user searches for any language in the current Google catalogue, selects a valid pair, and completes a standard translation.
 9. The network is unavailable when loading capabilities, and LingoBridge uses its last-known-good catalogue while clearly marking stale availability.
-10. A user grants Instant Selection, highlights stable visible text, and an anchored translator opens without another click.
+10. A user grants Selection Magic, highlights stable visible text, sees one magic icon beside it, clicks the icon, and receives an anchored translation in the saved preferred target language.
 11. A user selects password-field or sensitive-looking text, and LingoBridge does not silently send it online.
