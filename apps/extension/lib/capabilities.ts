@@ -110,54 +110,72 @@ export const PREVIEW_LANGUAGES: readonly PreviewLanguage[] = [
   },
 ] as const;
 
-const previewLanguageCodes = new Set(PREVIEW_LANGUAGES.map((language) => language.code));
+export function catalogueToPreviewLanguages(catalogue: CapabilityCatalogue): PreviewLanguage[] {
+  return catalogue.languages.map((language) => ({
+    code: language.code,
+    name: language.name,
+    nativeName: language.nativeName ?? language.name,
+    supportsSpeech: false,
+    textDirection: language.textDirection,
+  }));
+}
 
-export function getPreviewLanguage(code: string): PreviewLanguage | undefined {
-  return PREVIEW_LANGUAGES.find((language) => language.code === code);
+export function getPreviewLanguage(
+  code: string,
+  languages: readonly PreviewLanguage[] = PREVIEW_LANGUAGES,
+): PreviewLanguage | undefined {
+  return languages.find((language) => language.code === code);
 }
 
 function normalizeSearchValue(value: string): string {
   return value.normalize("NFKD").toLocaleLowerCase().trim();
 }
 
-export function searchPreviewLanguages(query: string): PreviewLanguage[] {
+export function searchPreviewLanguages(
+  query: string,
+  languages: readonly PreviewLanguage[] = PREVIEW_LANGUAGES,
+): PreviewLanguage[] {
   const normalizedQuery = normalizeSearchValue(query);
 
   if (!normalizedQuery) {
-    return [...PREVIEW_LANGUAGES];
+    return [...languages];
   }
 
-  return PREVIEW_LANGUAGES.filter((language) =>
+  return languages.filter((language) =>
     [language.name, language.nativeName, language.code].some((value) =>
       normalizeSearchValue(value).includes(normalizedQuery),
     ),
   );
 }
 
-function uniqueKnownCodes(codes: readonly string[]): string[] {
-  return [...new Set(codes)].filter((code) => previewLanguageCodes.has(code));
+function uniqueKnownCodes(codes: readonly string[], knownCodes: ReadonlySet<string>): string[] {
+  return [...new Set(codes)].filter((code) => knownCodes.has(code));
 }
 
 export function buildLanguageSections(
   query: string,
   favouriteCodes: readonly string[],
   recentCodes: readonly string[],
+  languages: readonly PreviewLanguage[] = PREVIEW_LANGUAGES,
 ): LanguageSection[] {
+  const knownCodes = new Set(languages.map((language) => language.code));
   if (query.trim()) {
     return [
       {
         id: "results",
         label: "Search results",
-        languages: searchPreviewLanguages(query),
+        languages: searchPreviewLanguages(query, languages),
       },
     ];
   }
 
-  const favourites = uniqueKnownCodes(favouriteCodes);
+  const favourites = uniqueKnownCodes(favouriteCodes, knownCodes);
   const favouriteSet = new Set(favourites);
-  const recent = uniqueKnownCodes(recentCodes).filter((code) => !favouriteSet.has(code));
+  const recent = uniqueKnownCodes(recentCodes, knownCodes).filter(
+    (code) => !favouriteSet.has(code),
+  );
   const promotedCodes = new Set([...favourites, ...recent]);
-  const byCode = new Map(PREVIEW_LANGUAGES.map((language) => [language.code, language]));
+  const byCode = new Map(languages.map((language) => [language.code, language]));
   const sections: LanguageSection[] = [];
 
   if (favourites.length > 0) {
@@ -184,8 +202,8 @@ export function buildLanguageSections(
 
   sections.push({
     id: "all",
-    label: "All preview languages",
-    languages: PREVIEW_LANGUAGES.filter((language) => !promotedCodes.has(language.code)),
+    label: "All languages",
+    languages: languages.filter((language) => !promotedCodes.has(language.code)),
   });
 
   return sections;
@@ -196,14 +214,51 @@ const transliterationPairs = new Set(["ar:en", "hi:en", "ne:en"]);
 export function getPreviewDirectionCapabilities(
   sourceLanguage: string,
   targetLanguage: string,
+  catalogue?: CapabilityCatalogue | null,
+  languages: readonly PreviewLanguage[] = PREVIEW_LANGUAGES,
 ): PreviewDirectionCapabilities {
-  const source = getPreviewLanguage(sourceLanguage);
-  const target = getPreviewLanguage(targetLanguage);
+  const source = getPreviewLanguage(sourceLanguage, languages);
+  const target = getPreviewLanguage(targetLanguage, languages);
   const differentLanguages =
     sourceLanguage === AUTO_LANGUAGE_CODE || sourceLanguage !== targetLanguage;
+  let standardTranslation = Boolean(target && differentLanguages);
+
+  if (catalogue) {
+    const targetCapability = catalogue.languages.find(
+      (language) => language.code === targetLanguage,
+    );
+    if (sourceLanguage === AUTO_LANGUAGE_CODE) {
+      standardTranslation = Boolean(
+        targetCapability?.googleTarget &&
+          catalogue.languages.some((language) => language.googleSource),
+      );
+    } else if (catalogue.googlePairing === "all-listed") {
+      const explicitProviderDirection = catalogue.directions.some(
+        (direction) =>
+          direction.sourceLanguage === sourceLanguage &&
+          direction.targetLanguage === targetLanguage &&
+          (direction.google || direction.nvidia),
+      );
+      standardTranslation = Boolean(
+        explicitProviderDirection ||
+          (differentLanguages &&
+            targetCapability?.googleTarget &&
+            catalogue.languages.find(
+              (language) => language.code === sourceLanguage && language.googleSource,
+            )),
+      );
+    } else {
+      standardTranslation = catalogue.directions.some(
+        (direction) =>
+          (direction.google || direction.nvidia) &&
+          direction.sourceLanguage === sourceLanguage &&
+          direction.targetLanguage === targetLanguage,
+      );
+    }
+  }
 
   return {
-    standardTranslation: Boolean(target && differentLanguages),
+    standardTranslation,
     speech: Boolean(target?.supportsSpeech),
     styles: false,
     transliteration: Boolean(
@@ -222,3 +277,5 @@ export function inferPreviewLanguage(text: string): string {
   if (/[Ѐ-ӿ]/u.test(text)) return "ru";
   return "en";
 }
+
+import type { CapabilityCatalogue } from "@lingobridge/contracts";

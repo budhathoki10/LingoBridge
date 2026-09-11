@@ -13,6 +13,7 @@ interface LanguagePickerProps {
   includeAuto?: boolean;
   isOpen: boolean;
   label: string;
+  languages: readonly PreviewLanguage[];
   onOpenChange: (open: boolean) => void;
   onSelect: (languageCode: string) => void;
   onToggleFavourite: (languageCode: string) => void;
@@ -27,6 +28,7 @@ export function LanguagePicker({
   includeAuto = false,
   isOpen,
   label,
+  languages,
   onOpenChange,
   onSelect,
   onToggleFavourite,
@@ -39,8 +41,8 @@ export function LanguagePicker({
   const dialogId = useId();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const selectedLanguage = getPreviewLanguage(value);
-  const sections = buildLanguageSections(query, favouriteCodes, recentCodes);
+  const selectedLanguage = getPreviewLanguage(value, languages);
+  const sections = buildLanguageSections(query, favouriteCodes, recentCodes, languages);
   const hasResults = sections.some((section) => section.languages.length > 0);
 
   useEffect(() => {
@@ -227,7 +229,7 @@ export function LanguagePicker({
                 ) : null,
               )
             ) : (
-              <p className="empty-search">No preview language matches “{query}”.</p>
+              <p className="empty-search">No language matches “{query}”.</p>
             )}
           </div>
         </div>

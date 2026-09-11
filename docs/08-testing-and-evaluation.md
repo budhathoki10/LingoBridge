@@ -8,7 +8,7 @@
 - Romanized Nepali transliteration and translation only when a Phase 9 feature gate is under evaluation.
 - Empty, whitespace-only, emoji, mixed-script, multiline, and maximum-size inputs.
 - Network failure, timeout, provider limit, local-model download, and unavailable model.
-- Google success, Google-to-NVIDIA fallback, unsupported NVIDIA pair, double failure, and fallback timeout.
+- NVIDIA success, NVIDIA-to-Google backup, unsupported NVIDIA pair, double failure, and backup timeout.
 - Selection translation on static pages, dynamic pages, nested elements, and editable fields.
 - Pointer, keyboard, touchpad, double-click, drag, select-all, rapidly changing, repeated, and collapsed selection behaviour.
 - Overlay positioning near every viewport edge, during scroll, resize, zoom, and page navigation.
@@ -28,8 +28,8 @@
 - Page CSS cannot restyle the Shadow DOM translator, and translator CSS cannot alter the page.
 - Card-like numbers, one-time codes, and secret-like content trigger the intended protection.
 - Online requests cannot exceed size or rate limits.
-- Nepali requests cannot enter the NVIDIA Riva fallback adapter.
-- One user action cannot produce more than one fallback attempt.
+- Nepali requests cannot enter the NVIDIA Riva adapter.
+- One user action cannot produce more than one backup attempt.
 - Logs and error reports contain no source or translated text.
 - Packaged files contain no keys or remotely hosted executable code.
 - OAuth/OIDC state, nonce, redirect allowlist, authorization-code lifetime, and PKCE verification reject tampering and replay.

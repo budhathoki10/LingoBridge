@@ -1,34 +1,38 @@
 # Language coverage
 
-Status: **Architecture approved; provider capabilities must be refreshed before implementation and release**
+Status: **Phase 3 live-catalogue implementation and automated verification complete; credentialed refresh and release review pending**
 
 ## Coverage promise
 
-LingoBridge is multilingual. Online mode exposes every source and target language currently supported by Google Cloud Translation instead of limiting the product to English and Nepali.
+LingoBridge is multilingual. Online mode exposes every source and target language currently supported by the active online capability catalogue instead of limiting the product to English and Nepali.
 
-This promise applies to standard text translation. Enhanced capabilities such as on-device processing, NVIDIA fallback, transliteration, speech, Romanized input, and translation styles have their own smaller support matrices.
+This promise applies to standard text translation. Enhanced capabilities such as on-device processing, Google backup, transliteration, speech, Romanized input, and translation styles have their own smaller support matrices.
 
 ## Capability catalogue
 
 The extension reads a normalized catalogue from the LingoBridge gateway through `GET /v1/capabilities`. The response identifies:
 
 - language code and user-facing name;
-- supported source and target directions;
+- supported source and target directions, represented by per-language Google flags plus its reviewed all-listed pairing policy and exact rows for restricted providers;
 - Google availability;
-- NVIDIA backup availability for the exact direction;
+- NVIDIA availability for the exact direction;
 - Chrome on-device availability when checked locally;
 - transliteration, romanization, speech, and style availability;
 - catalogue version and last verification time.
 
 The gateway builds its Google catalogue from Cloud Translation's supported-language capability and keeps a reviewed last-known-good snapshot. The extension caches the last valid LingoBridge catalogue so the language picker can still open during a temporary capability-service failure.
 
-## Google primary coverage
+## NVIDIA primary coverage
 
-Google Cloud Translation is the primary provider for every language and direction it currently reports as supported. The architecture does not hard-code a language count because Google can add or change languages.
+NVIDIA Riva Translate 4B Instruct v2 is the primary provider for reviewed supported directions exposed by the active catalogue. Current implementation enables English-pivot directions only, matching the model-card benchmark shape rather than inferring every possible pair. The selected NVIDIA model does not include Nepali.
+
+## Google backup coverage
+
+Google Cloud Translation is an optional backup provider when the gateway is configured with a Google project and Application Default Credentials. Google general NMT's documented all-supported-source-to-all-supported-target behavior is represented compactly by source and target flags on each listed language; it is not expanded into a quadratic response. The architecture does not hard-code a language count because Google can add or change languages.
 
 Standard translation availability does not automatically mean that transliteration, speech, custom styles, or local processing are available. The interface must disable or explain unsupported enhancements per language pair.
 
-## NVIDIA backup coverage
+## NVIDIA model coverage
 
 The selected `nvidia/riva-translate-4b-instruct-v2` model documents these 37 languages:
 
@@ -70,7 +74,7 @@ The selected `nvidia/riva-translate-4b-instruct-v2` model documents these 37 lan
 - Indonesian (`id`)
 - Thai (`th`)
 
-NVIDIA fallback is enabled only for exact language-pair tags documented and verified for this model. LingoBridge must not infer that every combination of these languages is supported. Nepali is not in this list.
+NVIDIA is enabled only for exact language-pair tags documented and verified for this model. LingoBridge must not infer that every combination of these languages is supported. Nepali is not in this list.
 
 ## User-interface behaviour
 
@@ -83,8 +87,8 @@ NVIDIA fallback is enabled only for exact language-pair tags documented and veri
 
 ## Release checks
 
-- Every advertised Google pair receives an automated request-contract smoke test.
-- Every enabled NVIDIA fallback tag receives a success, failure, and provider-labelling test.
+- Every advertised NVIDIA pair receives an automated request-contract smoke test.
+- Every enabled Google backup path receives a success, failure, and provider-labelling test.
 - A representative set of high-use scripts receives visual and copy/paste testing.
 - English–Nepali receives the deeper human quality evaluation defined in the testing document.
 - Right-to-left scripts, complex scripts, accents, surrogate pairs, and mixed-language text receive interface tests.

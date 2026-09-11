@@ -1,10 +1,12 @@
+import { describe, expect, it } from "vitest";
 import {
-  PREVIEW_LANGUAGES,
   buildLanguageSections,
+  catalogueToPreviewLanguages,
   getPreviewDirectionCapabilities,
+  PREVIEW_LANGUAGES,
   searchPreviewLanguages,
 } from "../../apps/extension/lib/capabilities";
-import { describe, expect, it } from "vitest";
+import type { CapabilityCatalogue } from "../../packages/contracts/src/index";
 
 describe("preview capability fixture", () => {
   it("finds every fixture language by name, native name, and code", () => {
@@ -43,5 +45,71 @@ describe("preview capability fixture", () => {
       transliteration: true,
     });
     expect(getPreviewDirectionCapabilities("en", "en").standardTranslation).toBe(false);
+  });
+});
+
+describe("live capability catalogue", () => {
+  const catalogue: CapabilityCatalogue = {
+    catalogueVersion: "google-nmt-test",
+    directions: [],
+    freshness: "fresh",
+    generatedAt: "2026-09-07T12:00:00.000Z",
+    googlePairing: "all-listed",
+    languages: [
+      {
+        code: "en",
+        googleSource: true,
+        googleTarget: true,
+        name: "English",
+        nativeName: null,
+        textDirection: "ltr",
+      },
+      {
+        code: "ne",
+        googleSource: true,
+        googleTarget: true,
+        name: "Nepali",
+        nativeName: "नेपाली",
+        textDirection: "ltr",
+      },
+    ],
+    source: "google-nmt",
+    verifiedAt: "2026-09-07T12:00:00.000Z",
+  };
+
+  it("builds picker languages from the provider catalogue", () => {
+    const languages = catalogueToPreviewLanguages(catalogue);
+
+    expect(languages).toEqual([
+      {
+        code: "en",
+        name: "English",
+        nativeName: "English",
+        supportsSpeech: false,
+        textDirection: "ltr",
+      },
+      {
+        code: "ne",
+        name: "Nepali",
+        nativeName: "नेपाली",
+        supportsSpeech: false,
+        textDirection: "ltr",
+      },
+    ]);
+    expect(buildLanguageSections("Nepali", [], [], languages)[0]?.languages).toHaveLength(1);
+  });
+
+  it("derives exact Google support from compact source and target flags", () => {
+    const languages = catalogueToPreviewLanguages(catalogue);
+
+    expect(
+      getPreviewDirectionCapabilities("en", "ne", catalogue, languages).standardTranslation,
+    ).toBe(true);
+    expect(
+      getPreviewDirectionCapabilities("ne", "ne", catalogue, languages).standardTranslation,
+    ).toBe(false);
+    expect(
+      getPreviewDirectionCapabilities("fr", "ne", catalogue, languages).standardTranslation,
+    ).toBe(false);
   });
 });

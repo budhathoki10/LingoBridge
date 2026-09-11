@@ -25,11 +25,11 @@
 
 ### Language coverage
 
-- Expose every language currently returned by the approved Google Cloud Translation capability source.
-- Support translation between Google-supported source and target languages when the provider supports that direction.
+- Expose every language currently returned by the active online capability source.
+- Support translation between active-provider source and target languages when the provider supports that direction.
 - Retrieve a normalized capability catalogue through the LingoBridge gateway and keep a last-known-good local cache.
 - Provide searchable source and target pickers with recent languages, favourites, automatic detection, and language swap.
-- Show a language only when its currently selected operation is supported; translation, transliteration, speech, styles, on-device processing, and NVIDIA fallback are separate capabilities.
+- Show a language only when its currently selected operation is supported; translation, transliteration, speech, styles, on-device processing, and Google backup are separate capabilities.
 - Do not claim that every language supports every enhanced feature.
 
 ### Nepali-specific experience
@@ -40,13 +40,13 @@
 ### Review and reuse
 
 - Allow the user to compare source and result.
-- Show the processing mode and actual provider: On-device, Google, or NVIDIA.
+- Show the processing mode and actual provider: On-device, NVIDIA, or Google.
 - Show an uncertainty message when language detection or translation confidence is low.
 - Save phrases only when the user chooses Save.
 - Keep saved phrases locally by default.
 - Replace text only inside an editable field and only after the user confirms.
-- In Online mode, use Google Cloud Translation first.
-- Retry with NVIDIA Riva Translate 4B Instruct v2 only when Google fails, the language pair is on NVIDIA's supported list, and the user has accepted both providers.
+- In Online mode, use NVIDIA Riva Translate 4B Instruct v2 first for reviewed supported directions.
+- Use Google Cloud Translation only as a backup when Google is configured, the requested direction is supported, and the user has accepted both providers.
 - Never present NVIDIA as an English–Nepali backup because the selected NVIDIA model does not support Nepali.
 
 ### Web dashboard and account

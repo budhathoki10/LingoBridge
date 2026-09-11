@@ -1,9 +1,9 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   PreviewProviderError,
   type PreviewTranslationRequest,
   translateWithPreviewData,
 } from "../../apps/extension/lib/fake-provider";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const request: PreviewTranslationRequest = {
   attempt: 1,

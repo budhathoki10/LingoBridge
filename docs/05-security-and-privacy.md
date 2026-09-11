@@ -53,7 +53,7 @@ The dashboard must provide export, delete-one, delete-all, session revocation, a
 
 The gateway must not create translation history, analytics events containing text, or error logs containing source or result content.
 
-Online consent must name Google Cloud Translation as the primary processor and NVIDIA as a possible backup processor for supported pairs. A fallback is allowed only within that disclosed consent. The result must identify the provider that actually processed the text.
+Online consent must name NVIDIA as the primary processor for supported directions and Google Cloud Translation as a possible backup processor when configured. A fallback is allowed only within that disclosed consent. The result must identify the provider that actually processed the text.
 
 ## Threats and controls
 
@@ -122,6 +122,33 @@ The dashboard uses its own restrictive policy, permits network access only to ap
 - The fake adapter contains deterministic local fixtures and makes no outbound provider request. The version endpoint reports `translationMode: fake`, and the popup labels results as simulated.
 - Translation payloads use the strict shared request contract. Invalid requests receive bounded errors that do not reflect source text.
 - Phase 3.2 must replace the development-origin assumptions with deployment-specific origin validation, rate controls, timeouts, redacted operational logs, response-size limits, and reviewed secret storage before any real provider is enabled.
+
+## Phase 3.2 gateway security review
+
+- Live mode refuses to start without one or more exact `chrome-extension://` origins. Wildcards and arbitrary web origins are rejected; fake local mode remains explicitly separate.
+- Each extension installation creates one random UUID in extension-local storage. Translation requests are limited independently by that identifier and by the gateway-observed network address.
+- The gateway rejects unsupported media types, invalid contracts, bodies over 24 KiB, source text over 5,000 Unicode code points or 20 KiB, and provider output over 64 KiB before it crosses the API boundary.
+- Provider work receives a bounded deadline and abort signal. User cancellation and server timeout are classified separately and return fixed, retry-safe errors.
+- Request logs contain only a gateway-generated request identifier, route, method, status, and duration. They do not contain origin text, translated text, provider errors, installation identifiers, or network addresses.
+- Configuration is read from deployment environment variables. Provider credentials are not accepted in extension configuration or committed environment files; Google live mode uses Application Default Credentials supplied by the deployment secret or workload-identity system.
+- The Phase 3.2 security tests cover origin rejection, throttling, cancellation, timeout races, oversized input and output, safe errors, redacted logs, and defensive headers. No real provider request is made by these tests.
+
+## Phase 3.3 Google provider review
+
+- The Google Cloud Translation v3 client exists only in the gateway workspace. The production extension package contains neither the Google client nor credential markers and can connect only to its configured LingoBridge gateway origin.
+- Live gateway startup requires an exact extension-origin allowlist and a validated Google project identifier. Authentication uses Application Default Credentials; API keys and inline service-account JSON are not configuration options.
+- Online text uses Cloud Translation Advanced at `locations/global` with the `general/nmt` model and `text/plain` input. Provider retries are disabled at the client boundary and every call remains inside the gateway deadline.
+- The extension requires a current, explicit Google Online consent record before a live translation. The bundled privacy notice identifies the submitted fields and Google processor, and consent can be revoked from the popup.
+- Automated tests prove request mapping, automatic detection, explicit source languages, safe error handling, cancellation, consent versioning and revocation, and the protected gateway result. No credentialed request was made on the development machine because neither ADC nor a Google project is configured.
+
+## Phase 3.4 capability catalogue review
+
+- Only the gateway asks Google for supported NMT languages. The extension receives a strict, content-only LingoBridge contract with no project identifier, credential, quota, or provider error detail.
+- Catalogue versions are derived from normalized capability content, while `verifiedAt` records refresh time. The compact `all-listed` policy avoids an unnecessarily quadratic list of Google pairs.
+- The gateway accepts only complete `google-nmt` catalogues as last-known-good data, writes them atomically outside tracked source, reuses fresh data, and labels fallback data as stale. Malformed provider or disk data cannot become an allowlist.
+- Concurrent callers share one bounded provider refresh, but cancellation remains caller-scoped. If no valid provider response or stored snapshot exists, capability and translation routes return a fixed safe unavailable error.
+- The extension strictly validates cached and refreshed catalogues, rejects cache data from the wrong gateway mode, and never broadens its gateway host permission or calls Google directly.
+- Automated tests cover fresh reuse, stale fallback, malformed source and cache, complete unavailability, atomic persistence, concurrent cancellation, extension caching, pair gating, and stale-result labelling. The production extension package was inspected for credential and Google-client markers.
 
 ## Privacy interface requirements
 

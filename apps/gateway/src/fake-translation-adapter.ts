@@ -1,5 +1,5 @@
-import { translationResultSchema, type TranslationRequest } from "@lingobridge/contracts";
-import { TranslationAdapterError, type TranslationAdapter } from "./translation-adapter.js";
+import { type TranslationRequest, translationResultSchema } from "@lingobridge/contracts";
+import { type TranslationAdapter, TranslationAdapterError } from "./translation-adapter.js";
 
 const exactTranslations = new Map<string, string>([
   ["en:ne:hello, how are you?", "नमस्ते, तपाईंलाई कस्तो छ?"],

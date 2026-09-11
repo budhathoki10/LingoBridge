@@ -20,7 +20,7 @@ Because users need broad multilingual coverage and the initial evaluation includ
 - use a LingoBridge-controlled gateway for the complete Google-supported catalogue, Romanized input, and richer context modes;
 - tell the user which path will be used before selected text leaves the device.
 
-Google Cloud Translation Advanced is now the chosen primary online provider. NVIDIA Riva Translate 4B Instruct v2 is the chosen backup for its supported pairs. This routing choice is not proof of translation quality; quality, privacy, latency, availability, and cost still require measurement.
+NVIDIA Riva Translate 4B Instruct v2 is now the chosen primary online provider for reviewed supported directions because the current development machine lacks Google setup. Google Cloud Translation Advanced remains the chosen backup when configured, and the only current cloud path for English-Nepali. This routing choice is not proof of translation quality; quality, privacy, latency, availability, and cost still require measurement.
 
 Google's documentation states that translations are supported between languages in its Neural Machine Translation list. The exact catalogue can change, so LingoBridge will retrieve and normalize provider capabilities instead of freezing a language count in the extension.
 
