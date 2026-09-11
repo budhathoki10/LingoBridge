@@ -34,7 +34,7 @@ import {
   loadPopupPreferences,
   savePopupPreferences,
 } from "../../lib/popup-preferences";
-import { CheckIcon, CloseIcon, SparkIcon, SwapIcon } from "./Icons";
+import { CheckIcon, CloseIcon, SwapIcon } from "./Icons";
 import { LanguagePicker } from "./LanguagePicker";
 
 type TranslationView =
@@ -418,7 +418,7 @@ export function App() {
           <img src="/icon/32.png" alt="" width="30" height="30" />
           <div>
             <strong>LingoBridge</strong>
-            <span>Translate without leaving the page</span>
+            <span>Text translator</span>
           </div>
         </div>
         <span className="preview-badge">Phase 4</span>
@@ -427,8 +427,7 @@ export function App() {
       <section aria-labelledby="translator-title" className="translator">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Translator</p>
-            <h1 id="translator-title">Understand what you’re reading</h1>
+            <h1 id="translator-title">Translate text</h1>
           </div>
           <span className="local-note">
             <span
@@ -557,7 +556,9 @@ export function App() {
             value={text}
           />
           <div className="source-field__meta">
-            <span id="source-help">Ctrl + Enter to translate</span>
+            <span id="source-help">
+              <kbd>Ctrl</kbd> + <kbd>Enter</kbd>
+            </span>
             <span className={textIsOverLimit ? "count count--error" : "count"} id="source-count">
               {codePointCount.toLocaleString()} / {MAX_TRANSLATION_CODE_POINTS.toLocaleString()}
             </span>
@@ -577,9 +578,7 @@ export function App() {
               <CloseIcon /> Stop translation
             </>
           ) : (
-            <>
-              <SparkIcon /> Translate
-            </>
+            <>Translate</>
           )}
         </button>
 
@@ -590,10 +589,9 @@ export function App() {
         >
           {view.kind === "idle" ? (
             <div className="result-empty">
-              <SparkIcon />
               <div>
-                <h2>Your gateway translation will appear here</h2>
-                <p>Start the gateway, then try “Hello, how are you?” with Nepali.</p>
+                <h2>Your translation appears here</h2>
+                <p>Try “Hello, how are you?” with Nepali.</p>
               </div>
             </div>
           ) : null}
@@ -602,8 +600,8 @@ export function App() {
             <div className="result-loading">
               <div aria-hidden="true" className="spinner" />
               <div>
-                <h2>Calling the local gateway</h2>
-                <p>The deterministic adapter makes no Google or NVIDIA request.</p>
+                <h2>Translating…</h2>
+                <p>Preparing your preview translation.</p>
               </div>
               <div aria-hidden="true" className="loading-lines">
                 <span />
@@ -667,12 +665,20 @@ export function App() {
       </section>
 
       <footer>
-        <span>
-          {gatewayMode === "live"
-            ? "Online gateway · NVIDIA primary"
-            : "Local gateway · fake adapter only"}
-        </span>
-        <span>v{version}</span>
+        <details className="preview-details">
+          <summary>About this build</summary>
+          <p>
+            {gatewayMode === "live"
+              ? "Online mode is available. Only the text you choose is sent, and only after you allow it."
+              : "This build uses a local gateway with simulated translations. No text is sent to Google or NVIDIA."}
+          </p>
+          <p>
+            {capabilities.speech
+              ? "Speech is supported later."
+              : `Speech unavailable for ${target?.name ?? "this language"}.`}
+          </p>
+        </details>
+        <span className="app-version">v{version}</span>
       </footer>
     </main>
   );
