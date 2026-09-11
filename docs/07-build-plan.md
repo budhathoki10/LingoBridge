@@ -1,6 +1,6 @@
 # Small phase-by-phase build plan
 
-Status: **Phase 0 through Phase 3 implementation and automated verification completed. Phase 4 NVIDIA-primary implementation is authorized and in progress.**
+Status: **Phase 0 through Phase 5 implementation and automated verification completed locally. Phase 6 has not started. Credentialed provider smoke tests remain deployment evidence.**
 
 Complete these phases serially after the user explicitly authorizes implementation. Keep each phase as one small reviewable change. Do not start the next phase until the current Done when condition passes.
 
@@ -61,18 +61,20 @@ Phase 3.4 implementation and automated verification completed on 8 September 202
 | 4.2 | Add Google backup for qualifying NVIDIA failures and unsupported NVIDIA directions when Google is configured. | Success, unsupported pair, timeout, cancellation, and double-failure tests pass. |
 | 4.3 | Add actual-provider labels and multi-provider consent checks. | Every result truthfully shows On-device, NVIDIA, or Google. |
 
-## 5 — Instant Selection
+## 5 — Selection Magic
+
+Completed on 10 September 2026. The popup explains and requests current-site or all-site access, while the background worker dynamically registers or removes the isolated observer only for granted origins. Stable eligible selections show one Shadow DOM magic icon without scanning the page, detecting language, or making a request; clicking it starts source inference, uses the saved preferred target, honours Online consent and sensitive-text confirmation, and displays the actual provider-labelled result. Automated coverage verifies selection eligibility, forbidden and sensitive text, strict messages, language rules, viewport positioning, expiry, permission registration, cancellation, hostile page CSS, narrow and long-content layouts, no request before click, Escape, replacement by a new selection, and per-site disable in bundled Chromium.
 
 | Phase | Build | Done when |
 | --- | --- | --- |
-| 5.1 | Add explained current-site and all-site permission onboarding. | Popup still works when permission is denied or revoked. |
-| 5.2 | Register the isolated observer only on granted sites. | One stable eligible selection produces one internal event without page scanning. |
+| 5.1 | Add explained current-site and all-site Selection Magic permission onboarding. | Popup still works when permission is denied or revoked. |
+| 5.2 | Register the isolated observer only on granted sites. | One stable eligible selection shows one magic icon without page scanning, language detection, or a translation request. |
 | 5.3 | Reject empty, hidden, password, oversized, duplicate, and extension-owned selections. | Every forbidden test selection produces no translation request. |
-| 5.4 | Build the Shadow DOM translator and safe viewport positioning. | Page CSS, scrolling, zoom, narrow screens, and long results do not break it. |
-| 5.5 | Add automatic source detection and preferred-target rules. | Clear, short, uncertain, mixed-script, and same-language cases behave correctly. |
-| 5.6 | Connect automatic translation after stored Online consent. | Selecting eligible text once produces one current, labelled result. |
+| 5.4 | Build the Shadow DOM magic-icon action, anchored translator, and safe viewport positioning. | Page CSS, scrolling, zoom, narrow screens, and long results do not break the icon or translator. |
+| 5.5 | After the icon click, add source detection and saved preferred-target rules. | Clear, short, uncertain, mixed-script, and same-language cases behave correctly. |
+| 5.6 | Connect user-triggered translation after the magic-icon click and stored Online consent. | Selection alone sends nothing; one icon click produces one current, labelled result in the user's preferred target language. |
 | 5.7 | Add sensitive-text warnings that pause transmission. | Seeded secret, payment, identity, health, and OTP examples make no request before confirmation. |
-| 5.8 | Add cancellation and temporary-selection expiry. | Close, Escape, new selection, navigation, revocation, and timeout clear temporary state. |
+| 5.8 | Add cancellation and temporary-selection expiry. | Close, Escape, new selection, navigation, revocation, and timeout clear the icon, translator, and temporary state. |
 
 ## 6 — on-device mode
 

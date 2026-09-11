@@ -18,15 +18,15 @@ Provides pasted-text translation, language choices, style selection, result revi
 
 ### Context-menu entry
 
-Receives only the text the user selected and starts the translation flow. It remains a fallback when Instant Selection is disabled or site access is unavailable.
+Receives only the text the user selected and starts the translation flow. It remains a fallback when Selection Magic is disabled or site access is unavailable.
 
 ### Selection observer
 
-Runs only on sites where the user granted access. It reacts to completed pointer or keyboard selections, waits for a short stability interval, validates the active range, and emits one event for a new eligible selection. It does not crawl the DOM, index page text, or continuously transmit selections.
+Runs only on sites where the user granted access. It reacts to completed pointer or keyboard selections, waits for a short stability interval, validates the active range, and shows one small magic-icon action beside a new eligible selection. It does not crawl the DOM, index page text, detect language, or transmit a selection merely because the icon is visible.
 
 ### Anchored translator overlay
 
-Shows source and translated text near the selection. It runs in an isolated extension world and mounts its interface inside a closed Shadow DOM with an explicit style reset. Page-derived and provider-derived content is rendered as plain text. Positioning keeps the surface inside the viewport and responds to scrolling, resizing, zoom, and selection loss.
+Opens only after the user clicks the selection's magic icon, then shows source and translated text near the selection. It defaults to the user's saved preferred target language. It runs in an isolated extension world and mounts its interface inside a closed Shadow DOM with an explicit style reset. Page-derived and provider-derived content is rendered as plain text. Positioning keeps the icon and surface inside the viewport and responds to scrolling, resizing, zoom, and selection loss.
 
 ### Background service worker
 
@@ -72,16 +72,17 @@ Stores preferences, site-access choices, disabled-site rules, consent state, sav
 
 ## Data flow
 
-### Instant-selection path
+### Selection Magic path
 
-1. The user grants Instant Selection access for the current site or all normal websites.
+1. The user grants Selection Magic access for the current site or all normal websites.
 2. The user completes a pointer or keyboard text selection.
-3. The isolated selection observer waits for the range to remain stable and rejects ineligible or duplicate selections.
-4. A local detector proposes the source language when available; otherwise detection is included in the approved online request.
-5. The anchored translator opens immediately with source, target, and loading state.
-6. If Online auto-translation consent exists and no sensitive-text warning triggers, the request follows the NVIDIA-first online path.
-7. Otherwise the surface waits for explicit confirmation or offers On-device mode.
-8. Closing the surface or selecting unrelated text clears the temporary selection state.
+3. The isolated selection observer waits for the range to remain stable, rejects ineligible or duplicate selections, and shows one magic icon beside the range.
+4. The user clicks the magic icon. Until this click, LingoBridge does not detect, transmit, or translate the selection.
+5. A local detector proposes the source language when available; otherwise detection is included in the approved online request.
+6. The anchored translator opens with the user's saved preferred target language and a loading state.
+7. If Online consent exists and no sensitive-text warning triggers, the request follows the NVIDIA-first online path.
+8. Otherwise the surface waits for required consent or offers On-device mode.
+9. Closing the icon or surface, losing the range, or selecting unrelated text clears the temporary selection state.
 
 ### On-device path
 
@@ -175,4 +176,4 @@ Chrome's built-in Translator API currently supports many languages but does not 
 
 NVIDIA Riva Translate 4B Instruct v2 is now the chosen primary online provider for reviewed supported directions. Google Cloud Translation remains an optional backup and the only configured cloud path that can cover English-Nepali when Google credentials are available. NVIDIA lists 37 languages but not Nepali, so it cannot translate English-Nepali. See `docs/11-language-coverage.md` for the capability policy.
 
-Automatic selection detection cannot rely on `activeTab` alone because that permission begins only after an explicit extension gesture. LingoBridge therefore declares optional HTTP/HTTPS host access and requests it during Instant Selection onboarding. Users may grant the current site or all sites; the popup, context menu, and shortcut remain available without persistent access.
+Showing Selection Magic immediately after text selection cannot rely on `activeTab` alone because that permission begins only after an explicit extension gesture. LingoBridge therefore declares optional HTTP/HTTPS host access and requests it during Selection Magic onboarding. Users may grant the current site or all sites; the popup, context menu, and shortcut remain available without persistent access.

@@ -1,6 +1,6 @@
 # LingoBridge — Context-Aware Text Translator
 
-Status: **Phase 0 through Phase 4 implementation and automated verification are in progress locally. Credentialed provider smoke tests remain deployment evidence.**
+Status: **Phase 0 through Phase 5 implementation and automated verification are complete locally. Phase 6 has not started. Credentialed provider smoke tests remain deployment evidence.**
 
 LingoBridge is a multilingual product with two user-facing surfaces: a Chrome extension for translation where users browse and a web dashboard for saved phrases, preferences, connected extension sessions, export, and account control. LingoBridge exposes every language currently supported by its primary Google provider. English–Nepali receives deeper evaluation, but it is not the complete product boundary.
 
@@ -11,7 +11,7 @@ In Online mode, LingoBridge sends requests to its own gateway. The gateway uses 
 ## Why it is useful
 
 - Translate selected webpage text without changing tabs.
-- Detect the selected language and open an anchored translator automatically after selection stabilizes.
+- Show a small magic icon beside stable selected text; clicking it detects the source language and opens an anchored translation in the user's preferred target language.
 - Translate pasted text in a compact popup.
 - Detect the source language when confidence is sufficient.
 - Use evaluated style and Romanized-input enhancements in a later release if they pass quality gates.

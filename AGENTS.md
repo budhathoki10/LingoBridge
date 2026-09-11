@@ -2,7 +2,7 @@
 
 ## Current phase
 
-Phase 0 through Phase 3 implementation and automated verification are complete. Phase 4, the NVIDIA-primary online provider with optional Google backup, is explicitly authorized by the user and in progress locally. Credentialed provider smoke tests remain deployment evidence, not a reason to place credentials in the repository.
+Phase 0 through Phase 5 implementation and automated verification are complete locally. Phase 6 has not started. Credentialed provider smoke tests remain deployment evidence, not a reason to place credentials in the repository.
 
 ## Required reading
 
@@ -28,7 +28,7 @@ Read the remaining documents when the task affects workflow, AI behaviour, deliv
 - LingoBridge has two required user-facing surfaces: the Chrome extension for translation and a web dashboard for deliberate saved phrases, safe synchronized preferences, connected extension sessions, export, and account deletion.
 - Translation and local saving must remain usable without an account. Never turn the dashboard into automatic cloud history of every translation.
 - Preserve the compact select, translate, review, copy workflow.
-- Instant selection is a core opt-in workflow: stable eligible selections open the translator automatically on sites where access is granted.
+- Selection Magic is a core opt-in workflow: stable eligible selections show a small magic icon near the range on sites where access is granted. Translation begins only after the user clicks that icon, and the result targets the user's saved preferred language.
 - Do not turn it into a general chatbot, full-page surveillance tool, writing suite, or language-learning platform.
 - Do not claim Nepali is supported by Chrome's local translator unless current official documentation confirms it.
 - In Online mode, NVIDIA `riva-translate-4b-instruct-v2` is primary for reviewed supported directions. Google Cloud Translation is an optional backup when configured; NVIDIA is not a Nepali provider.

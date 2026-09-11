@@ -25,14 +25,14 @@ Literal translation also loses tone and context. Romanized Nepali is common in i
 
 ## Core promise
 
-The user can select text and immediately see an anchored translator that detects the language, translates it, and lets the user copy or use the result without leaving the page. When signed in, the user can deliberately save useful phrases and manage them from a web dashboard.
+The user can select text, click the small magic icon shown beside it, and immediately see an anchored translator that detects the source language, translates into the user's preferred target language, and lets the user copy or use the result without leaving the page. When signed in, the user can deliberately save useful phrases and manage them from a web dashboard.
 
 The language picker reflects the provider's current supported-language catalogue instead of shipping an artificial small list.
 
 ## Product principles
 
 - User action always starts a translation.
-- Completing a deliberate text selection counts as the user action when Instant Selection is enabled.
+- A stable text selection reveals the translation action; clicking its magic icon is the deliberate action that starts translation.
 - The result appears close to the selected text.
 - The original text remains visible.
 - LingoBridge states whether translation happened on the device or online.
@@ -48,4 +48,4 @@ LingoBridge is more than a dictionary lookup. It combines instant multilingual t
 
 ## Product success
 
-A first-time user should translate a selected sentence within fifteen seconds of enabling site access. A returning Instant Selection user should complete the action by selecting text; LingoBridge detects and opens automatically.
+A first-time user should translate a selected sentence within fifteen seconds of enabling site access. A returning user should complete the action by selecting text and clicking the nearby magic icon; LingoBridge then detects the source and translates into the saved preferred target language.

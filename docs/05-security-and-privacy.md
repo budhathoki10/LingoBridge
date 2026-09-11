@@ -9,9 +9,9 @@ LingoBridge processes text that may be personal, private, or controlled by a hos
 - Use `activeTab` and `scripting` for user-triggered access.
 - Add `contextMenus` for the selection action.
 - Add `storage` for settings and explicitly saved phrases.
-- Declare HTTP and HTTPS sites as optional host permissions. Request current-site or all-site access only when the user enables Instant Selection and after explaining what the extension can read.
-- Instant Selection must stop immediately when access is revoked or the site is disabled.
-- Do not request history, cookies, clipboard-read, downloads, debugger, or webRequest. Do not require all-site access at installation; all-site Instant Selection access is an explained runtime choice.
+- Declare HTTP and HTTPS sites as optional host permissions. Request current-site or all-site access only when the user enables Selection Magic and after explaining what the extension can read.
+- Selection Magic must stop immediately when access is revoked or the site is disabled.
+- Do not request history, cookies, clipboard-read, downloads, debugger, or webRequest. Do not require all-site access at installation; all-site Selection Magic access is an explained runtime choice.
 - Keep incognito access disabled by default.
 
 ## Data classification
@@ -63,7 +63,7 @@ Webpage text is untrusted. Render it with text-only DOM APIs, never HTML interpr
 
 ### Excessive page observation
 
-The selection observer listens only for completed user pointer and keyboard selection activity. It reads the current range after a stability delay and does not crawl text nodes, attach a whole-page mutation observer, record selection history, or transmit anything while the selection is changing.
+The selection observer listens only for completed user pointer and keyboard selection activity. It reads the current range after a stability delay only to validate the selection and position the magic icon. It does not crawl text nodes, attach a whole-page mutation observer, record selection history, detect language, or transmit selected text before the user clicks the icon.
 
 ### Secret exposure
 
@@ -83,7 +83,7 @@ Cloud AI receives a fixed translation instruction and the selected text in separ
 
 ### Accidental sensitive translation
 
-Online mode clearly states that selected text will be sent to a provider. Automatic online translation begins only after explicit Instant Selection and Online auto-translation consent. The extension warns when simple local patterns resemble passwords, private keys, payment-card numbers, health or identity numbers, or one-time codes and blocks password-field capture entirely. A warning pauses transmission until the user confirms.
+Online mode clearly states that selected text will be sent to a provider. Online translation begins only after the user clicks the selection's magic icon and has accepted Online processing. The extension warns when simple local patterns resemble passwords, private keys, payment-card numbers, health or identity numbers, or one-time codes and blocks password-field capture entirely. A warning pauses transmission until the user confirms.
 
 ### Translation replacing user writing
 
@@ -150,13 +150,22 @@ The dashboard uses its own restrictive policy, permits network access only to ap
 - The extension strictly validates cached and refreshed catalogues, rejects cache data from the wrong gateway mode, and never broadens its gateway host permission or calls Google directly.
 - Automated tests cover fresh reuse, stale fallback, malformed source and cache, complete unavailability, atomic persistence, concurrent cancellation, extension caching, pair gating, and stale-result labelling. The production extension package was inspected for credential and Google-client markers.
 
+## Phase 5 Selection Magic security review
+
+- HTTP and HTTPS origins are optional host permissions. The extension has no statically declared webpage content script; the background worker registers the isolated observer only for origins the user has granted and removes or disables it after revocation or a per-site opt-out.
+- The observer reads only the active, completed selection after a short stability delay. It does not scan, index, or observe the full page, and displaying the magic icon performs no source detection or network request.
+- Empty, whitespace-only, hidden, password-field, oversized, duplicate, and extension-owned selections are rejected before the translation surface opens. Temporary selection state is cleared on close, Escape, a new selection, navigation, permission removal, site disable, or expiry.
+- The magic-icon click is the translation activation boundary. Source inference, capability loading, Online-consent checks, and gateway translation begin only after that explicit gesture. Sensitive-looking secrets, card numbers, identity or health numbers, and one-time codes pause before transmission and require a second confirmation.
+- The anchored translator uses a closed Shadow DOM, renders webpage text and provider output only through text nodes, validates extension messages, bounds message text, keeps requests abortable, and communicates only with the configured LingoBridge gateway.
+- Automated unit and bundled-Chromium tests verify permission registration, forbidden selections, sensitive warnings, no request before click, cancellation, viewport bounds, hostile page CSS isolation, narrow and long-content layouts, Escape, replacement by a new selection, and per-site disable. Production-package inspection confirms there is no static content-script declaration or detected provider credential material.
+
 ## Privacy interface requirements
 
 - Display On-device or Online beside every result.
 - For Online results, display Google or NVIDIA as the actual processor.
 - Link to the privacy policy before the first online translation.
-- Explain current-site versus all-site access before Chrome displays the permission prompt.
-- Provide a visible Instant Selection toggle and per-site disable action.
+- Explain current-site versus all-site Selection Magic access before Chrome displays the permission prompt.
+- Provide a visible Selection Magic toggle and per-site disable action.
 - Make online consent revocable.
 - Provide local-data deletion from settings.
 - Provide synchronized-data export, phrase deletion, session revocation, and account deletion from the dashboard.

@@ -24,7 +24,8 @@
 - Source text is rendered as text and cannot execute HTML or script.
 - Messages with invalid origin, sender, action, or payload are rejected.
 - Password fields are never captured.
-- Sensitive-looking selections pause automatic online transmission until confirmed.
+- Merely selecting text or displaying the magic icon produces no translation request, language-detection request, or online transmission.
+- Sensitive-looking selections pause online transmission after the magic-icon click until confirmed.
 - Page CSS cannot restyle the Shadow DOM translator, and translator CSS cannot alter the page.
 - Card-like numbers, one-time codes, and secret-like content trigger the intended protection.
 - Online requests cannot exceed size or rate limits.
@@ -46,7 +47,7 @@
 - Revoke online consent and confirm that cloud translation cannot proceed silently.
 - Delete saved data and verify that local phrase records are removed.
 - Close a selection flow and verify temporary text expires.
-- Disable Instant Selection and revoke host access, then confirm no selection listener operates on newly loaded pages.
+- Disable Selection Magic and revoke host access, then confirm no selection listener operates on newly loaded pages.
 - Translate without signing in and confirm no account or sync request is required.
 - Confirm that unsaved translations, temporary selections, site permissions, and sensitive-text decisions never appear in synchronized records.
 - Save one phrase and confirm that only the explicitly saved record and approved preference fields are synchronized.
@@ -94,3 +95,11 @@ Release targets:
 ## Release evidence
 
 Keep test output, permission review, dependency audit, package inspection, translation-review results, dashboard and authorization test results, database migration evidence, and manual Chrome results with the release record. Clearly separate tested behaviour from planned behaviour.
+
+### Phase 5 local evidence — 10 September 2026
+
+- Repository quality gate: formatting, lint, all workspace type-checks, and 103 unit/integration tests pass.
+- Bundled Chromium: four journeys pass, covering the click gate and preferred target, hostile CSS and responsive positioning, in-flight cancellation and replacement, password exclusion, sensitive-text confirmation, Escape, per-site disable, and popup translation without webpage access.
+- Production builds pass for the contracts, database, dashboard, gateway, and Chrome Manifest V3 extension.
+- The generated manifest has optional HTTP/HTTPS host permissions and no static `content_scripts` entry. Package scanning found no provider API key or private-key material.
+- Credentialed NVIDIA and Google provider smoke tests remain deployment evidence; Phase 5 browser validation used the deterministic fake gateway and therefore did not transmit selected text to an external provider.

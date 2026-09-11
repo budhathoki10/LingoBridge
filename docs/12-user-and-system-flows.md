@@ -1,32 +1,35 @@
 # User and system flows
 
-Status: **Approved product flow; foundation complete and feature implementation pending**
+Status: **Approved product flow; Phase 5 Selection Magic implementation and automated verification complete locally**
 
-## 1. Complete Instant Selection flow
+## 1. Complete Selection Magic flow
 
 ```mermaid
 flowchart TD
-    A[User selects visible text] --> B{Instant Selection active on this site?}
+    A[User selects visible text] --> B{Selection Magic active on this site?}
     B -- No --> C[Wait for context menu, shortcut, or popup]
     B -- Yes --> D[Wait for selection to stabilize]
     D --> E{Eligible new selection?}
     E -- No --> F[Ignore without storing or sending]
-    E -- Yes --> G[Open anchored translator]
-    G --> H[Show Detecting and Translating states]
-    H --> I[Detect source language]
-    I --> J[Choose preferred target language]
-    J --> K{Processing mode}
-    K -- On-device only --> L{Local pair available?}
-    L -- Yes --> M[Translate locally]
-    L -- No --> N[Show unsupported local-pair message]
-    K -- Online --> O{Online auto-translation consent?}
-    O -- No --> P[Wait for Translate confirmation]
-    O -- Yes --> Q{Sensitive-text warning?}
-    Q -- Yes --> R[Pause and request confirmation]
-    Q -- No --> S[Send selected text to LingoBridge gateway]
-    P --> Q
-    R -- Cancel --> T[Keep source locally and do not translate]
-    R -- Continue --> S
+    E -- Yes --> G[Show magic icon beside selection]
+    G --> H{User clicks icon?}
+    H -- No --> F2[Keep text local and wait or dismiss]
+    H -- Yes --> I[Open anchored translator]
+    I --> J[Detect source language]
+    J --> K[Load saved preferred target language]
+    K --> L{Processing mode}
+    L -- On-device only --> M{Local pair available?}
+    M -- Yes --> N[Translate locally]
+    M -- No --> O[Show unsupported local-pair message]
+    L -- Online --> P{Online processing consent?}
+    P -- No --> Q[Request consent before sending]
+    P -- Yes --> R{Sensitive-text warning?}
+    Q -- Accepted --> R
+    Q -- Cancel --> T[Keep source locally and do not translate]
+    R -- Yes --> R2[Pause and request confirmation]
+    R -- No --> S[Send selected text to LingoBridge gateway]
+    R2 -- Cancel --> T
+    R2 -- Continue --> S
     S --> W{Exact NVIDIA pair supported?}
     W -- Yes --> Y[NVIDIA primary attempt]
     Y -- Success --> Z[Display result labelled NVIDIA]
@@ -36,7 +39,7 @@ flowchart TD
     V -- Success --> G2[Display result labelled Google]
     U -- No --> X[Show retry error and preserve source]
     V -- Failure --> X
-    M --> AA[Display result labelled On-device]
+    N --> AA[Display result labelled On-device]
     G2 --> AB
     Z --> AB
     AA --> AB
@@ -49,7 +52,7 @@ flowchart TD
     A[Install LingoBridge] --> B[Choose preferred target language]
     B --> C[Explain On-device and Online processing]
     C --> D[Popup translation works without page access]
-    D --> E{Enable Instant Selection?}
+    D --> E{Enable Selection Magic?}
     E -- No --> F[Use popup, shortcut, or context menu]
     E -- Yes --> G[Explain what site access allows]
     G --> H{Access choice}
@@ -59,11 +62,11 @@ flowchart TD
     J --> K
     K -- No --> F
     K -- Yes --> L[Activate lightweight selection observer]
-    L --> M[Offer separate Online auto-translation consent]
-    M --> N[Instant Selection ready]
+    L --> M[Offer separate Online processing consent]
+    M --> N[Selection Magic ready]
 ```
 
-The permission and online-processing decisions are separate. Site access lets LingoBridge see the active selection; online consent controls whether eligible selected text may be sent automatically for translation.
+The permission and online-processing decisions are separate. Site access lets LingoBridge validate the active selection and show the magic icon. Clicking the icon is required before detection or translation starts, and Online consent separately controls whether the selected text may be sent to a provider.
 
 ## 2A. Explicit On-device preparation flow
 
@@ -84,7 +87,7 @@ LingoBridge does not promise a model-download size because Chrome does not expos
 
 ## 3. Selection eligibility flow
 
-Before opening the translator, LingoBridge evaluates the active range in this order:
+Before showing the magic icon, LingoBridge evaluates the active range in this order:
 
 1. Confirm the event came from a completed pointer or keyboard selection action.
 2. Wait briefly and verify that the selection is no longer changing.
@@ -93,13 +96,14 @@ Before opening the translator, LingoBridge evaluates the active range in this or
 5. Reject password fields, hidden content, extension UI, and unsupported browser pages.
 6. Reject the same unchanged range if it was already handled.
 7. Capture only the active selected text and its visible bounding rectangle.
-8. Open one translator; never stack multiple panels.
+8. Show one magic icon; never stack multiple icons or panels.
+9. Start language detection and translation only after the user clicks the icon.
 
 ## 4. Language detection and target flow
 
 ```mermaid
 flowchart LR
-    A[Eligible selected text] --> B{Local detector available?}
+    A[User clicks selection magic icon] --> B{Local detector available?}
     B -- Yes --> C[Detect locally]
     B -- No --> D{Online processing allowed?}
     D -- Yes --> E[Use Google backup detection when configured]
@@ -127,7 +131,9 @@ sequenceDiagram
     participant T as Google Translation
 
     U->>E: Select eligible text
-    E->>E: Detect language and check consent
+    E-->>U: Show magic icon beside selection
+    U->>E: Click magic icon
+    E->>E: Detect language, load preferred target, and check consent
     E->>G: Translation request
     G->>G: Validate request, pair, size, rate and consent
     G->>G: Check exact NVIDIA pair allowlist
@@ -166,7 +172,8 @@ Nepali requests never enter the selected NVIDIA adapter because `riva-translate-
 ```mermaid
 stateDiagram-v2
     [*] --> Closed
-    Closed --> Opening: eligible stable selection
+    Closed --> IconVisible: eligible stable selection
+    IconVisible --> Opening: magic icon click
     Opening --> Detecting
     Detecting --> Translating: source resolved
     Detecting --> NeedsSource: uncertain or unavailable
@@ -180,26 +187,28 @@ stateDiagram-v2
     Result --> Translating: pair, style, or text changes
     Result --> Closed: Escape or Close
     Error --> Closed: Escape or Close
+    IconVisible --> Closed: Escape, new selection, or selection lost
     Opening --> Closed: selection lost
     Detecting --> Closed: new unrelated selection
     Translating --> Closed: navigation or access revoked
     Closed --> [*]
 ```
 
-Scroll, resize, and zoom reposition the same surface without creating another translation request.
+Scroll, resize, and zoom reposition the same icon or translator without creating another translation request.
 
 ## 7. Translator surface flow
 
 The anchored surface follows the reference layout in a compact form:
 
-1. The top row contains detected source, swap, and target-language controls.
-2. The source remains visible beside or above the translation, depending on available space.
-3. The result area announces detecting, loading, success, warning, and failure states accessibly.
-4. Copy copies only the translation.
-5. Listen appears only where speech is supported.
-6. Save stores the chosen source and translation locally.
-7. Replace appears only for an editable selection and requires review.
-8. Close removes the surface and temporary selection data.
+1. Clicking the magic icon opens the surface; merely selecting text does not start detection or translation.
+2. The top row contains detected source, swap, and target-language controls, with the saved preferred target selected by default.
+3. The source remains visible beside or above the translation, depending on available space.
+4. The result area announces detecting, loading, success, warning, and failure states accessibly.
+5. Copy copies only the translation.
+6. Listen appears only where speech is supported.
+7. Save stores the chosen source and translation locally.
+8. Replace appears only for an editable selection and requires review.
+9. Close removes the icon or surface and temporary selection data.
 
 ## 8. Editable-field replacement flow
 
