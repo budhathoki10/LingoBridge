@@ -21,6 +21,19 @@ import {
   loadPopupPreferences,
   savePopupPreferences,
 } from "../lib/popup-preferences";
+import { pickSpeechVoice, rangeStillMatches, replaceRange } from "../lib/result-actions";
+import {
+  loadSavedPhrases,
+  removeSavedPhrase,
+  type SavedPhrase,
+  savePhrase,
+  saveSavedPhrases,
+} from "../lib/saved-phrases";
+import {
+  chooseSelectionTargetLanguage,
+  resolveSelectionSource,
+  supportedTargetsForSource,
+} from "../lib/selection-language";
 import {
   computeAnchoredPosition,
   detectSensitiveSelection,
@@ -29,14 +42,9 @@ import {
   parseSelectionMagicMessage,
   SELECTION_MAGIC_EXPIRY_MS,
   SELECTION_MAGIC_STABILITY_MS,
-  selectionFingerprint,
   type SensitiveSelectionKind,
+  selectionFingerprint,
 } from "../lib/selection-magic";
-import {
-  chooseSelectionTargetLanguage,
-  resolveSelectionSource,
-  supportedTargetsForSource,
-} from "../lib/selection-language";
 
 // Page origins are never allowed by the gateway, and Chrome gives a content-script fetch the
 // page's origin. Every gateway call therefore goes through the background worker, which runs on
@@ -89,6 +97,12 @@ interface CapturedSelection {
   editable: boolean;
   fingerprint: string;
   getRect: () => DOMRect;
+  /**
+   * Writes the translation over the captured range, or refuses. Present only for editable
+   * selections. It re-checks the range at call time: the page may have rewritten the field since
+   * capture, and offsets that no longer hold the translated text must not be overwritten.
+   */
+  replace?: (translation: string) => boolean;
   text: string;
 }
 
@@ -284,6 +298,35 @@ function usableRect(rect: DOMRect): DOMRect {
   return new DOMRect(rect.left, rect.top, 1, 18);
 }
 
+/**
+ * Writes into a form field without ever letting the page treat it as a submission. No key events
+ * are synthesized and no submit is dispatched: `insertText` is preferred because it keeps the
+ * field's own undo history and notifies frameworks the way typing does, and the manual path still
+ * only sets the value and raises `input`.
+ */
+function writeIntoField(
+  field: HTMLInputElement | HTMLTextAreaElement,
+  start: number,
+  end: number,
+  translation: string,
+): boolean {
+  if (field.disabled || field.readOnly || !field.isConnected) return false;
+  if (!rangeStillMatches(field.value, start, end, field.value.slice(start, end))) return false;
+
+  field.focus({ preventScroll: true });
+  field.setSelectionRange(start, end);
+  if (document.execCommand("insertText", false, translation)) return true;
+
+  const prototype = field instanceof HTMLInputElement ? HTMLInputElement : HTMLTextAreaElement;
+  const setValue = Object.getOwnPropertyDescriptor(prototype.prototype, "value")?.set;
+  const next = replaceRange(field.value, start, end, translation);
+  if (setValue) setValue.call(field, next);
+  else field.value = next;
+  field.setSelectionRange(start, start + translation.length);
+  field.dispatchEvent(new Event("input", { bubbles: true }));
+  return true;
+}
+
 function captureSelection(
   lastFingerprint: string | null,
   providedText?: string,
@@ -310,11 +353,16 @@ function captureSelection(
       text,
     });
     if (!eligibility.eligible) return null;
+    const field = active;
+    const captured = eligibility.text;
     return {
       editable: true,
       fingerprint,
-      getRect: () => usableRect(active.getBoundingClientRect()),
-      text: eligibility.text,
+      getRect: () => usableRect(field.getBoundingClientRect()),
+      replace: (translation) =>
+        rangeStillMatches(field.value, start, end, captured) &&
+        writeIntoField(field, start, end, translation),
+      text: captured,
     };
   }
 
@@ -341,14 +389,34 @@ function captureSelection(
     text,
   });
   if (!eligibility.eligible) return null;
+  const host = element?.closest("[contenteditable='true']");
+  const captured = eligibility.text;
   return {
-    editable: Boolean(element?.closest("[contenteditable='true']")),
+    editable: Boolean(host),
     fingerprint,
     getRect: () => {
       if (!range?.commonAncestorContainer.isConnected) return initialRect;
       return usableRect(range.getBoundingClientRect());
     },
-    text: eligibility.text,
+    replace:
+      host && range
+        ? (translation) => {
+            // The same guard as a form field: the range must still be connected and still hold
+            // exactly the text that was translated.
+            if (!range.commonAncestorContainer.isConnected) return false;
+            if (range.toString() !== captured) return false;
+            const live = window.getSelection();
+            if (!live) return false;
+            live.removeAllRanges();
+            live.addRange(range);
+            if (document.execCommand("insertText", false, translation)) return true;
+            range.deleteContents();
+            range.insertNode(document.createTextNode(translation));
+            host.dispatchEvent(new Event("input", { bubbles: true }));
+            return true;
+          }
+        : undefined,
+    text: captured,
   };
 }
 
@@ -382,6 +450,13 @@ function createController(): InstalledController {
   let errorMessage = "";
   let errorRetryable = false;
   let sensitiveKind: SensitiveSelectionKind | null = null;
+  let savedPhraseId: string | null = null;
+  let savePending = false;
+  let copyFeedback: "copied" | "failed" | null = null;
+  let copyFeedbackTimer: number | null = null;
+  let speaking = false;
+  let voicesRequested = false;
+  let replaceFeedback: "stale" | null = null;
   let lastFingerprint: string | null = null;
   let stabilityTimer: number | null = null;
   let expiryTimer: number | null = null;
@@ -431,6 +506,8 @@ function createController(): InstalledController {
     if (stabilityTimer !== null) window.clearTimeout(stabilityTimer);
     if (expiryTimer !== null) window.clearTimeout(expiryTimer);
     if (positionFrame !== null) cancelAnimationFrame(positionFrame);
+    if (copyFeedbackTimer !== null) window.clearTimeout(copyFeedbackTimer);
+    copyFeedbackTimer = null;
     stabilityTimer = null;
     expiryTimer = null;
     positionFrame = null;
@@ -448,6 +525,11 @@ function createController(): InstalledController {
     context = null;
     result = null;
     sensitiveKind = null;
+    savedPhraseId = null;
+    savePending = false;
+    copyFeedback = null;
+    replaceFeedback = null;
+    stopSpeaking();
     activeSelection = null;
   }
 
@@ -720,12 +802,180 @@ function createController(): InstalledController {
           ? `Online via ${result.provider}`
           : `Simulated ${result.provider} route`;
       body.insertBefore(meta, actions);
+
+      if (replaceFeedback === "stale") {
+        statusContent(status, "That text changed on the page, so nothing was replaced.", "warning");
+      }
+
+      actions.append(
+        actionButton(
+          copyFeedback === "copied" ? "Copied" : copyFeedback === "failed" ? "Copy failed" : "Copy",
+          copyTranslation,
+          true,
+        ),
+      );
+
+      // Listen appears only when the browser really has a voice for this language. The catalogue
+      // carries no speech data, so asking it would hide the action everywhere.
+      if (pickSpeechVoice(availableVoices(), result.targetLanguage)) {
+        actions.append(actionButton(speaking ? "Stop" : "Listen", toggleSpeaking, true));
+      }
+
+      if (activeSelection?.replace) {
+        actions.append(actionButton("Replace", replaceSelection, true));
+      }
+
+      // Saving happens only here, on a deliberate click. Showing or closing a result never stores
+      // it, which is the promise in docs/02-requirements.md.
+      const saved = savedPhraseId !== null;
+      const save = actionButton(
+        saved ? "Saved" : "Save phrase",
+        () => void togglePhraseSaved(),
+        true,
+      );
+      save.disabled = savePending;
+      save.setAttribute("aria-pressed", saved ? "true" : "false");
+      actions.append(save);
       return;
     }
 
     if (state === "error") {
       statusContent(status, errorMessage, "error");
       if (errorRetryable) actions.append(actionButton("Retry", () => void runTranslation()));
+    }
+  }
+
+  function availableVoices(): SpeechSynthesisVoice[] {
+    if (typeof speechSynthesis === "undefined") return [];
+    const voices = speechSynthesis.getVoices();
+    // The list is often empty until the engine warms up. Ask once, and redraw when it arrives so
+    // Listen can appear without the user reopening the panel.
+    if (voices.length === 0 && !voicesRequested) {
+      voicesRequested = true;
+      speechSynthesis.addEventListener(
+        "voiceschanged",
+        () => {
+          if (state === "success") renderPanel();
+        },
+        { once: true },
+      );
+    }
+    return voices;
+  }
+
+  function stopSpeaking(): void {
+    if (typeof speechSynthesis === "undefined") return;
+    speechSynthesis.cancel();
+    speaking = false;
+  }
+
+  function toggleSpeaking(): void {
+    if (!result) return;
+    if (speaking) {
+      stopSpeaking();
+      renderPanel();
+      return;
+    }
+    const voice = pickSpeechVoice(availableVoices(), result.targetLanguage);
+    if (!voice) return;
+    const utterance = new SpeechSynthesisUtterance(result.translatedText);
+    utterance.lang = result.targetLanguage;
+    utterance.voice = voice;
+    utterance.addEventListener("end", () => {
+      speaking = false;
+      if (state === "success") renderPanel();
+    });
+    utterance.addEventListener("error", () => {
+      speaking = false;
+      if (state === "success") renderPanel();
+    });
+    speechSynthesis.cancel();
+    speechSynthesis.speak(utterance);
+    speaking = true;
+    renderPanel();
+  }
+
+  function showCopyFeedback(outcome: "copied" | "failed"): void {
+    copyFeedback = outcome;
+    if (copyFeedbackTimer !== null) window.clearTimeout(copyFeedbackTimer);
+    copyFeedbackTimer = window.setTimeout(() => {
+      copyFeedbackTimer = null;
+      copyFeedback = null;
+      if (state === "success") renderPanel();
+    }, 1_600);
+    renderPanel();
+  }
+
+  /**
+   * The fallback textarea lives inside the panel's own shadow root, so copying never adds a node
+   * to the page or disturbs what the page has selected.
+   */
+  function copyThroughSurface(text: string): boolean {
+    if (!shadow) return false;
+    const carrier = document.createElement("textarea");
+    carrier.setAttribute("aria-hidden", "true");
+    carrier.style.setProperty("position", "absolute");
+    carrier.style.setProperty("opacity", "0");
+    carrier.value = text;
+    shadow.append(carrier);
+    carrier.select();
+    let copied = false;
+    try {
+      copied = document.execCommand("copy");
+    } catch {
+      copied = false;
+    }
+    carrier.remove();
+    return copied;
+  }
+
+  function copyTranslation(): void {
+    if (!result) return;
+    const text = result.translatedText;
+    void navigator.clipboard?.writeText(text).then(
+      () => showCopyFeedback("copied"),
+      () => showCopyFeedback(copyThroughSurface(text) ? "copied" : "failed"),
+    );
+  }
+
+  function replaceSelection(): void {
+    if (!activeSelection?.replace || !result) return;
+    if (activeSelection.replace(result.translatedText)) {
+      stopSpeaking();
+      close();
+      return;
+    }
+    replaceFeedback = "stale";
+    renderPanel();
+  }
+
+  async function togglePhraseSaved(): Promise<void> {
+    if (!activeSelection || !result || !context || savePending) return;
+    savePending = true;
+    renderPanel();
+    const removingId = savedPhraseId;
+    try {
+      if (removingId) {
+        await saveSavedPhrases(removeSavedPhrase(await loadSavedPhrases(), removingId));
+        savedPhraseId = null;
+      } else {
+        const record: SavedPhrase = {
+          id: crypto.randomUUID(),
+          provider: result.provider,
+          savedAt: new Date().toISOString(),
+          sourceLanguage: result.detectedSourceLanguage ?? context.sourceLanguage,
+          sourceText: activeSelection.text,
+          targetLanguage: result.targetLanguage,
+          translatedText: result.translatedText,
+        };
+        await savePhrase(record);
+        savedPhraseId = record.id;
+      }
+    } catch {
+      // Storage refused the write. The button simply returns to its previous state.
+    } finally {
+      savePending = false;
+      renderPanel();
     }
   }
 
@@ -829,6 +1079,9 @@ function createController(): InstalledController {
     const sequence = requestSequence;
     requestController?.abort();
     requestController = new AbortController();
+    savedPhraseId = null;
+    copyFeedback = null;
+    replaceFeedback = null;
     state = "loading";
     renderPanel();
     const request: TranslationRequest = {
