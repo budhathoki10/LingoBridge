@@ -22,6 +22,18 @@ import {
   savePopupPreferences,
 } from "../lib/popup-preferences";
 import {
+  loadSavedPhrases,
+  removeSavedPhrase,
+  type SavedPhrase,
+  savePhrase,
+  saveSavedPhrases,
+} from "../lib/saved-phrases";
+import {
+  chooseSelectionTargetLanguage,
+  resolveSelectionSource,
+  supportedTargetsForSource,
+} from "../lib/selection-language";
+import {
   computeAnchoredPosition,
   detectSensitiveSelection,
   evaluateSelection,
@@ -29,14 +41,9 @@ import {
   parseSelectionMagicMessage,
   SELECTION_MAGIC_EXPIRY_MS,
   SELECTION_MAGIC_STABILITY_MS,
-  selectionFingerprint,
   type SensitiveSelectionKind,
+  selectionFingerprint,
 } from "../lib/selection-magic";
-import {
-  chooseSelectionTargetLanguage,
-  resolveSelectionSource,
-  supportedTargetsForSource,
-} from "../lib/selection-language";
 
 // Page origins are never allowed by the gateway, and Chrome gives a content-script fetch the
 // page's origin. Every gateway call therefore goes through the background worker, which runs on
@@ -382,6 +389,8 @@ function createController(): InstalledController {
   let errorMessage = "";
   let errorRetryable = false;
   let sensitiveKind: SensitiveSelectionKind | null = null;
+  let savedPhraseId: string | null = null;
+  let savePending = false;
   let lastFingerprint: string | null = null;
   let stabilityTimer: number | null = null;
   let expiryTimer: number | null = null;
@@ -448,6 +457,8 @@ function createController(): InstalledController {
     context = null;
     result = null;
     sensitiveKind = null;
+    savedPhraseId = null;
+    savePending = false;
     activeSelection = null;
   }
 
@@ -720,12 +731,54 @@ function createController(): InstalledController {
           ? `Online via ${result.provider}`
           : `Simulated ${result.provider} route`;
       body.insertBefore(meta, actions);
+
+      // Saving happens only here, on a deliberate click. Showing or closing a result never stores
+      // it, which is the promise in docs/02-requirements.md.
+      const saved = savedPhraseId !== null;
+      const save = actionButton(
+        saved ? "Saved" : "Save phrase",
+        () => void togglePhraseSaved(),
+        true,
+      );
+      save.disabled = savePending;
+      save.setAttribute("aria-pressed", saved ? "true" : "false");
+      actions.append(save);
       return;
     }
 
     if (state === "error") {
       statusContent(status, errorMessage, "error");
       if (errorRetryable) actions.append(actionButton("Retry", () => void runTranslation()));
+    }
+  }
+
+  async function togglePhraseSaved(): Promise<void> {
+    if (!activeSelection || !result || !context || savePending) return;
+    savePending = true;
+    renderPanel();
+    const removingId = savedPhraseId;
+    try {
+      if (removingId) {
+        await saveSavedPhrases(removeSavedPhrase(await loadSavedPhrases(), removingId));
+        savedPhraseId = null;
+      } else {
+        const record: SavedPhrase = {
+          id: crypto.randomUUID(),
+          provider: result.provider,
+          savedAt: new Date().toISOString(),
+          sourceLanguage: result.detectedSourceLanguage ?? context.sourceLanguage,
+          sourceText: activeSelection.text,
+          targetLanguage: result.targetLanguage,
+          translatedText: result.translatedText,
+        };
+        await savePhrase(record);
+        savedPhraseId = record.id;
+      }
+    } catch {
+      // Storage refused the write. The button simply returns to its previous state.
+    } finally {
+      savePending = false;
+      renderPanel();
     }
   }
 
@@ -829,6 +882,7 @@ function createController(): InstalledController {
     const sequence = requestSequence;
     requestController?.abort();
     requestController = new AbortController();
+    savedPhraseId = null;
     state = "loading";
     renderPanel();
     const request: TranslationRequest = {

@@ -1,6 +1,6 @@
 # Small phase-by-phase build plan
 
-Status: **Phase 0 through Phase 5 implementation and automated verification completed locally. Phase 6 has not started. Credentialed provider smoke tests remain deployment evidence.**
+Status: **Phase 0 through Phase 5 and Phase 7.2 implementation and automated verification completed locally. Phase 6 is deferred by decision, not blocked: on-device mode adds no capability the target audience can use, because Chrome's on-device translator has no Nepali listing. Phases 7.1 and 7.3 have not started. Credentialed provider smoke tests remain deployment evidence.**
 
 Complete these phases serially after the user explicitly authorizes implementation. Keep each phase as one small reviewable change. Do not start the next phase until the current Done when condition passes.
 
@@ -85,6 +85,16 @@ Completed on 10 September 2026. The popup explains and requests current-site or 
 | 6.3 | Add unavailable and unprepared pair messaging without silent cloud fallback. | Local-only behaviour matches its privacy promise. |
 
 ## 7 — result actions
+
+Phase 7.2 implementation and automated verification completed on 12 September 2026. The selection
+panel offers Save phrase only on a delivered result, and only a deliberate click stores anything:
+showing, closing, cancelling, or replacing a result saves nothing. Records keep the phrase, its
+direction, the actual provider, and the save time, and deliberately omit the page URL. The store
+normalizes malformed records away, collapses duplicate ids, replaces an earlier save of the same
+text and direction, and is bounded. The popup lists saved phrases with search, delete-one, a
+confirmed delete-all, and JSON export. Unit coverage spans normalization, bounding, search,
+replacement, deletion, and export; bundled-Chromium coverage verifies search without mutation,
+delete-one removing exactly the intended record, confirmed delete-all, and the empty state.
 
 | Phase | Build | Done when |
 | --- | --- | --- |

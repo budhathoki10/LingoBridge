@@ -1,3 +1,4 @@
+import { SavedPhrases } from "./SavedPhrases";
 import { SelectionMagicCard } from "./SelectionMagicCard";
 
 export function App() {
@@ -16,6 +17,8 @@ export function App() {
       </header>
 
       <SelectionMagicCard />
+
+      <SavedPhrases />
 
       <footer>
         <span>v{version}</span>
