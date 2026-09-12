@@ -1,6 +1,6 @@
 # Small phase-by-phase build plan
 
-Status: **Phase 0 through Phase 5 and Phase 7.2 implementation and automated verification completed locally. Phase 6 is deferred by decision, not blocked: on-device mode adds no capability the target audience can use, because Chrome's on-device translator has no Nepali listing. Phases 7.1 and 7.3 have not started. Credentialed provider smoke tests remain deployment evidence.**
+Status: **Phase 0 through Phase 5 and all of Phase 7 implementation and automated verification completed locally. Phase 6 is deferred by decision, not blocked: on-device mode adds no capability the target audience can use, because Chrome's on-device translator has no Nepali listing. Phase 8 has not started. Credentialed provider smoke tests remain deployment evidence.**
 
 Complete these phases serially after the user explicitly authorizes implementation. Keep each phase as one small reviewable change. Do not start the next phase until the current Done when condition passes.
 
@@ -85,6 +85,17 @@ Completed on 10 September 2026. The popup explains and requests current-site or 
 | 6.3 | Add unavailable and unprepared pair messaging without silent cloud fallback. | Local-only behaviour matches its privacy promise. |
 
 ## 7 — result actions
+
+Phase 7.1 and 7.3 implementation and automated verification completed on 12 September 2026. A
+delivered result offers Copy, Listen and, for an editable selection, Replace. Copy prefers the
+clipboard API and falls back to a carrier inside the panel's own shadow root, so it never adds a
+node to the page. Listen is gated on a voice the browser actually has for the target language,
+because the catalogue carries no speech data and would otherwise hide the action everywhere;
+speech stops when the panel closes. Replace writes only while the captured offsets still hold the
+translated text, refusing with a visible message once the page has rewritten the field, and it
+submits nothing: no form submission, no synthesized key press, and only an `input` event. That
+last guarantee is pinned by tests that read the content script source, so a regression cannot pass
+silently.
 
 Phase 7.2 implementation and automated verification completed on 12 September 2026. The selection
 panel offers Save phrase only on a delivered result, and only a deliberate click stores anything:
