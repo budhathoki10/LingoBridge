@@ -19,7 +19,9 @@ import { acceptOnlineProviderConsent, loadOnlineProviderConsent } from "../lib/o
 import {
   DEFAULT_POPUP_PREFERENCES,
   loadPopupPreferences,
+  type PopupPreferences,
   savePopupPreferences,
+  toggleFavouriteLanguage,
 } from "../lib/popup-preferences";
 import { pickSpeechVoice, rangeStillMatches, replaceRange } from "../lib/result-actions";
 import {
@@ -120,6 +122,7 @@ type SurfaceState =
 interface TranslationContext {
   catalogue: CapabilityCatalogue;
   consent: OnlineConsent | null;
+  favouriteLanguageCodes: string[];
   gatewayMode: "fake" | "live";
   languages: PreviewLanguage[];
   sourceAssumed: boolean;
@@ -180,6 +183,17 @@ const SURFACE_CSS = `
   .close svg { width: 17px; height: 17px; }
   .body { display: grid; gap: 11px; padding: 12px; }
   .language-row { display: grid; grid-template-columns: minmax(0, 1fr) 20px minmax(0, 1fr); align-items: end; gap: 8px; }
+  .target-field { display: grid; min-width: 0; gap: 4px; }
+  .target-control { display: grid; grid-template-columns: minmax(0, 1fr) 34px; gap: 5px; }
+  .favorite-toggle { display: grid; width: 34px; height: 38px; padding: 0; place-items: center; border: 1px solid #cfd2d5; border-radius: 7px; color: #6b7480; background: #fff; font-size: 21px; line-height: 1; }
+  .favorite-toggle[aria-pressed="true"] { color: #a66b00; border-color: #e0c47c; background: #fffaf0; }
+  .favorite-toggle:hover { border-color: #969da4; }
+  .favorites { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+  .favorites[hidden] { display: none; }
+  .favorites-label { margin-right: 2px; color: #707981; font-size: 10px; font-weight: 650; }
+  .favorites button { min-height: 27px; padding: 4px 7px; border: 1px solid #cfd2d5; border-radius: 6px; color: #394450; background: #fff; font-size: 11px; font-weight: 600; }
+  .favorites button:hover { border-color: #2363eb; color: #1d4ed8; }
+  .favorites button[aria-pressed="true"] { border-color: #b9ccef; color: #174fbd; background: #edf3ff; }
   label { display: grid; min-width: 0; gap: 4px; color: #66707a; font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .02em; }
   .source-language { display: flex; min-width: 0; height: 38px; align-items: center; overflow: hidden; padding: 0 9px; border: 1px solid #d8dadd; border-radius: 7px; background: #f1f2f0; color: #3c454f; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
   select {
@@ -463,6 +477,7 @@ function createController(): InstalledController {
   let positionFrame: number | null = null;
   let requestController: AbortController | null = null;
   let requestSequence = 0;
+  let preferenceWrite: Promise<void> = Promise.resolve();
 
   function setHostPosition(width: number, height: number): void {
     if (!host || !activeSelection) return;
@@ -565,6 +580,8 @@ function createController(): InstalledController {
   function createPanel(): {
     actions: HTMLDivElement;
     body: HTMLDivElement;
+    favoriteToggle: HTMLButtonElement;
+    favorites: HTMLDivElement;
     sourceName: HTMLSpanElement;
     status: HTMLParagraphElement;
     targetSelect: HTMLSelectElement;
@@ -609,12 +626,27 @@ function createController(): InstalledController {
     arrow.className = "arrow";
     arrow.setAttribute("aria-hidden", "true");
     arrow.append(arrowSvg());
+    const targetField = document.createElement("div");
+    targetField.className = "target-field";
     const targetLabel = document.createElement("label");
-    targetLabel.append("To");
+    targetLabel.htmlFor = "lingobridge-target-language";
+    targetLabel.textContent = "To";
+    const targetControl = document.createElement("div");
+    targetControl.className = "target-control";
     const targetSelect = document.createElement("select");
+    targetSelect.id = "lingobridge-target-language";
     targetSelect.setAttribute("aria-label", "Target language");
-    targetLabel.append(targetSelect);
-    languageRow.append(sourceLabel, arrow, targetLabel);
+    const favoriteToggle = document.createElement("button");
+    favoriteToggle.className = "favorite-toggle";
+    favoriteToggle.type = "button";
+    favoriteToggle.textContent = "☆";
+    targetControl.append(targetSelect, favoriteToggle);
+    targetField.append(targetLabel, targetControl);
+    languageRow.append(sourceLabel, arrow, targetField);
+
+    const favorites = document.createElement("div");
+    favorites.className = "favorites";
+    favorites.setAttribute("aria-label", "Favorite target languages");
 
     const source = document.createElement("p");
     source.className = "source";
@@ -625,10 +657,10 @@ function createController(): InstalledController {
     status.setAttribute("aria-live", "polite");
     const actions = document.createElement("div");
     actions.className = "actions";
-    body.append(languageRow, source, status, actions);
+    body.append(languageRow, favorites, source, status, actions);
     panel.append(head, body);
     renderBase(panel);
-    return { actions, body, sourceName, status, targetSelect };
+    return { actions, body, favoriteToggle, favorites, sourceName, status, targetSelect };
   }
 
   function sourceLanguageName(): string {
@@ -649,6 +681,8 @@ function createController(): InstalledController {
   function fillLanguageControls(
     sourceName: HTMLSpanElement,
     targetSelect: HTMLSelectElement,
+    favoriteToggle: HTMLButtonElement,
+    favorites: HTMLDivElement,
   ): void {
     if (!context) return;
     const name = sourceLanguageName();
@@ -664,6 +698,57 @@ function createController(): InstalledController {
       void savePreferredTarget(context.targetLanguage);
       void runTranslation();
     });
+
+    const selectedName =
+      getPreviewLanguage(context.targetLanguage, context.languages)?.name ?? context.targetLanguage;
+    const pinned = context.favouriteLanguageCodes.includes(context.targetLanguage);
+    favoriteToggle.textContent = pinned ? "★" : "☆";
+    favoriteToggle.setAttribute("aria-pressed", String(pinned));
+    favoriteToggle.setAttribute(
+      "aria-label",
+      `${pinned ? "Remove" : "Add"} ${selectedName} ${pinned ? "from" : "to"} favorites`,
+    );
+    favoriteToggle.title = pinned ? "Remove from favorites" : "Add to favorites";
+    favoriteToggle.addEventListener("pointerdown", (event) => event.preventDefault());
+    favoriteToggle.addEventListener("click", () => {
+      if (!context) return;
+      const code = context.targetLanguage;
+      context.favouriteLanguageCodes = toggleFavouriteLanguage(
+        context.favouriteLanguageCodes,
+        code,
+      );
+      void persistPreferenceChange((preferences) => ({
+        ...preferences,
+        favouriteLanguageCodes: toggleFavouriteLanguage(preferences.favouriteLanguageCodes, code),
+      }));
+      renderPanel();
+    });
+
+    const compatibleFavorites = context.favouriteLanguageCodes.filter((code) => targets.has(code));
+    favorites.hidden = compatibleFavorites.length === 0;
+    if (compatibleFavorites.length > 0) {
+      const label = document.createElement("span");
+      label.className = "favorites-label";
+      label.textContent = "Favorites";
+      favorites.append(label);
+    }
+    for (const code of compatibleFavorites) {
+      const name = getPreviewLanguage(code, context.languages)?.name ?? code;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = name;
+      button.setAttribute("aria-label", `Translate to ${name}`);
+      button.setAttribute("aria-pressed", String(code === context.targetLanguage));
+      button.disabled = state === "loading" || state === "preparing";
+      button.addEventListener("pointerdown", (event) => event.preventDefault());
+      button.addEventListener("click", () => {
+        if (!context || context.targetLanguage === code) return;
+        context.targetLanguage = code;
+        void savePreferredTarget(code);
+        void runTranslation();
+      });
+      favorites.append(button);
+    }
   }
 
   function statusContent(
@@ -691,10 +776,12 @@ function createController(): InstalledController {
   }
 
   function renderPanel(): void {
-    const { actions, body, sourceName, status, targetSelect } = createPanel();
-    fillLanguageControls(sourceName, targetSelect);
+    const { actions, body, favoriteToggle, favorites, sourceName, status, targetSelect } =
+      createPanel();
+    fillLanguageControls(sourceName, targetSelect, favoriteToggle, favorites);
     const languageControlsReady = Boolean(context);
     targetSelect.disabled = !languageControlsReady || state === "loading" || state === "preparing";
+    favoriteToggle.disabled = targetSelect.disabled;
 
     if (state === "preparing") {
       statusContent(status, "Preparing your preferred language…");
@@ -979,9 +1066,21 @@ function createController(): InstalledController {
     }
   }
 
+  function persistPreferenceChange(
+    change: (preferences: PopupPreferences) => PopupPreferences,
+  ): Promise<void> {
+    const next = preferenceWrite
+      .catch(() => undefined)
+      .then(async () => {
+        const preferences = await loadPopupPreferences().catch(() => DEFAULT_POPUP_PREFERENCES);
+        await savePopupPreferences(change(preferences));
+      });
+    preferenceWrite = next;
+    return next.catch(() => undefined);
+  }
+
   async function savePreferredTarget(targetLanguage: string): Promise<void> {
-    const preferences = await loadPopupPreferences().catch(() => DEFAULT_POPUP_PREFERENCES);
-    await savePopupPreferences({ ...preferences, targetLanguage }).catch(() => undefined);
+    await persistPreferenceChange((preferences) => ({ ...preferences, targetLanguage }));
   }
 
   async function loadContext(): Promise<TranslationContext> {
@@ -1013,6 +1112,7 @@ function createController(): InstalledController {
     return {
       catalogue,
       consent,
+      favouriteLanguageCodes: preferences.favouriteLanguageCodes,
       gatewayMode: service.version.translationMode,
       languages,
       sourceAssumed: source.assumed,
@@ -1070,6 +1170,11 @@ function createController(): InstalledController {
 
   async function runTranslation(): Promise<void> {
     if (!activeSelection || !context) return;
+    if (context.gatewayMode === "live" && !context.consent) {
+      state = "consent";
+      renderPanel();
+      return;
+    }
     if (!isTranslatablePair()) {
       state = "unsupported-pair";
       renderPanel();

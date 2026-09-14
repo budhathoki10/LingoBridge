@@ -103,3 +103,22 @@ Keep test output, permission review, dependency audit, package inspection, trans
 - Production builds pass for the contracts, database, dashboard, gateway, and Chrome Manifest V3 extension.
 - The generated manifest has optional HTTP/HTTPS host permissions and no static `content_scripts` entry. Package scanning found no provider API key or private-key material.
 - Credentialed NVIDIA and Google provider smoke tests remain deployment evidence; Phase 5 browser validation used the deterministic fake gateway and therefore did not transmit selected text to an external provider.
+
+### Phase 8 local evidence — 14 September 2026
+
+- The repository quality gate passed formatting, lint, workspace type checks, and 228 unit and
+  integration tests. Production builds passed for the extension, contracts, database, auth,
+  gateway, and dashboard.
+- The focused dashboard Chromium suite passed three journeys: signed-out and forged-session
+  denial; sign-in, connection-code exchange, phrase sync/edit, revocation, deletion, CSP and
+  responsive widths; and regular-user admin denial.
+- After a popup report, an additional bundled-Chromium regression test reproduced and then
+  verified the fix for account actions from an extension-owned page with a `sender.tab` value.
+- The maintenance command ran against an empty in-memory PostgreSQL-compatible database, and
+  database tests covered the 30-day account purge. The production scheduler remains unverified.
+- The combined extension and dashboard browser suite passed seven of nine journeys. Two Selection
+  Magic journeys reached Online consent because port 8787 was occupied by an existing live gateway;
+  they require an isolated fake gateway for deterministic verification. No consent was given and
+  those two tests sent no selected text to the live provider.
+- Credentialed Google identity, PostgreSQL deployment, and packaged-extension-to-dashboard
+  connection remain deployment evidence, separate from these local tests.

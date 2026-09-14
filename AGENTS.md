@@ -2,7 +2,7 @@
 
 ## Current phase
 
-Phase 0 through Phase 5 implementation and automated verification are complete locally. Phase 6 has not started. Credentialed provider smoke tests remain deployment evidence, not a reason to place credentials in the repository.
+Phase 0 through Phase 5, Phase 7, and Phase 8 implementation and focused automated verification are complete locally. Phase 6 is deferred because Chrome's on-device translator has no confirmed Nepali support; Phase 9 has not started. Credentialed translation and Google identity smoke tests remain deployment evidence, not a reason to place credentials in the repository.
 
 ## Required reading
 

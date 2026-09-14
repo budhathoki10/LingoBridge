@@ -1,6 +1,6 @@
 # User and system flows
 
-Status: **Approved product flow; Phase 5 Selection Magic implementation and automated verification complete locally**
+Status: **Approved product flow; Phase 5 Selection Magic and Phase 8 dashboard/sync implemented and verified locally**
 
 ## 1. Complete Selection Magic flow
 

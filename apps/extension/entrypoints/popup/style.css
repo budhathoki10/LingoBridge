@@ -353,3 +353,105 @@ footer {
     border-color: var(--line);
   }
 }
+
+.account-card {
+  display: grid;
+  gap: 6px;
+  margin: 0 16px 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.account-card--warning {
+  border-color: #ecd49a;
+  background: #fffaf0;
+}
+.account-card h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.account-card__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.account-card__badge {
+  padding: 1px 7px;
+  border-radius: 4px;
+  background: #ecf7f0;
+  color: #1b7a43;
+  font-size: 11px;
+  font-weight: 550;
+}
+.account-card__badge--warning {
+  background: #fdf6e7;
+  color: #8a5300;
+}
+.account-card__text,
+.account-card__error {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.account-card__error {
+  color: #b42318;
+}
+.account-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.account-card__actions button,
+.account-card__link {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  padding: 5px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--surface);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.account-card__actions .account-card__quiet,
+.account-card__link {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--muted);
+}
+.account-card__actions button:disabled {
+  opacity: 0.58;
+}
+.account-card__link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@media (hover: hover) {
+  .account-card__actions button:hover:not(:disabled) {
+    background: #174fbd;
+  }
+  .account-card__actions .account-card__quiet:hover:not(:disabled),
+  .account-card__link:hover {
+    border-color: var(--accent);
+    background: var(--surface);
+    color: var(--accent);
+  }
+}
+@media (max-width: 300px) {
+  .account-card {
+    margin-inline: 10px;
+    padding: 10px;
+  }
+  .account-card__actions {
+    display: grid;
+  }
+}

@@ -1,4 +1,14 @@
 import {
+  dashboardConnectionPending,
+  focusDashboardConnection,
+  handleAccountMessage,
+  PERIODIC_SYNC_ALARM,
+  startDashboardConnection,
+  SYNC_ALARM,
+  syncService,
+} from "../lib/account-background";
+import { parseAccountMessage } from "../lib/account-status";
+import {
   GATEWAY_BRIDGE_PORT,
   type GatewayBridgeRequest,
   type GatewayBridgeResponse,
@@ -232,6 +242,29 @@ function serveGatewayBridgePort(port: Browser.runtime.Port): void {
   });
 }
 
+let localChangeTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Saving or deleting a phrase syncs shortly after, batching quick successive changes. */
+function syncSoonIfChanged(): void {
+  clearTimeout(localChangeTimer);
+  localChangeTimer = setTimeout(() => {
+    void syncService
+      .hasLocalChanges()
+      .then((changed) => (changed ? syncService.run() : undefined))
+      .catch(() => undefined);
+  }, 1_500);
+}
+
+/**
+ * Account actions are accepted only from the extension's own pages. Chrome can attach a tab to an
+ * extension page opened as a tab, so the sender URL is the boundary; content scripts report the
+ * webpage URL even though they also carry this extension's id.
+ */
+function isExtensionPageSender(sender: Browser.runtime.MessageSender): boolean {
+  if (sender.id !== browser.runtime.id) return false;
+  return typeof sender.url === "string" && sender.url.startsWith(browser.runtime.getURL("/"));
+}
+
 function createContextMenu(): void {
   browser.contextMenus.create(
     {
@@ -278,6 +311,18 @@ export default defineBackground(() => {
     if (areaName === "local" && changes.lingobridgeSelectionMagic) {
       void reconcileSelectionContentScript().catch(() => undefined);
     }
+    if (
+      areaName === "local" &&
+      (changes.lingobridgeSavedPhrases || changes.phase2PopupPreferences)
+    ) {
+      syncSoonIfChanged();
+    }
+  });
+
+  browser.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === SYNC_ALARM || alarm.name === PERIODIC_SYNC_ALARM) {
+      void syncService.run().catch(() => undefined);
+    }
   });
 
   browser.contextMenus.onClicked.addListener((info, tab) => {
@@ -297,6 +342,29 @@ export default defineBackground(() => {
   // to go through sendResponse, with `return true` holding the channel open until it arrives.
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (sender.id !== browser.runtime.id) return undefined;
+
+    const accountMessage = parseAccountMessage(message);
+    if (accountMessage) {
+      if (!isExtensionPageSender(sender)) return undefined;
+      if (accountMessage === "lingobridge:account:connect") {
+        if (dashboardConnectionPending()) {
+          focusDashboardConnection().then(sendResponse, () =>
+            sendResponse({
+              message: "The connection window could not be focused. Try again.",
+              ok: false,
+            }),
+          );
+          return true;
+        }
+        sendResponse({ message: null, ok: true });
+        startDashboardConnection();
+        return undefined;
+      }
+      handleAccountMessage(accountMessage).then(sendResponse, () =>
+        sendResponse({ message: "Something went wrong. Try again.", ok: false }),
+      );
+      return true;
+    }
 
     const parsed = parseSelectionMagicMessage(message);
     if (parsed?.type !== "lingobridge:selection-magic:reconcile") return undefined;

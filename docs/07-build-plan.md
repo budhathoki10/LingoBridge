@@ -1,6 +1,6 @@
 # Small phase-by-phase build plan
 
-Status: **Phase 0 through Phase 5 and all of Phase 7 implementation and automated verification completed locally. Phase 6 is deferred by decision, not blocked: on-device mode adds no capability the target audience can use, because Chrome's on-device translator has no Nepali listing. Phase 8 has not started. Credentialed provider smoke tests remain deployment evidence.**
+Status: **Phase 0 through Phase 5, Phase 7, and Phase 8 implementation and focused automated verification completed locally. Phase 6 is deferred by decision: Chrome's on-device translator has no Nepali listing. Phase 9 has not started. Credentialed provider and Google sign-in smoke tests remain deployment evidence.**
 
 Complete these phases serially after the user explicitly authorizes implementation. Keep each phase as one small reviewable change. Do not start the next phase until the current Done when condition passes.
 
@@ -114,6 +114,18 @@ delete-one removing exactly the intended record, confirmed delete-all, and the e
 | 7.3 | Add reviewed replacement for editable selections. | Only the still-valid selected range changes; Send and Submit never trigger. |
 
 ## 8 — dashboard and synchronization
+
+Implemented locally on 14 September 2026. The protected Next.js dashboard uses server-validated
+sessions, Google OpenID Connect in production and a development-only identity provider locally.
+Extension connection uses Chrome Identity with a one-time code and PKCE; tokens live only in the
+extension background worker's IndexedDB. PostgreSQL migrations cover users, revocable sessions,
+explicit phrases, approved preferences, revisions, tombstones, and roles. Local-first sync,
+dashboard management, recent-authenticated deletion receipts, and a role-protected aggregate
+operations view have focused unit, integration, and bundled-Chromium browser coverage. A daily
+maintenance command now purges expired sync metadata and de-identified deleted accounts after the
+documented window. The dashboard's Google client credentials, PostgreSQL deployment, scheduled
+maintenance, and exact-store-package connection are deployment evidence still to collect; see
+`docs/14-dashboard-operations.md`.
 
 | Phase | Build | Done when |
 | --- | --- | --- |

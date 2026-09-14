@@ -87,20 +87,26 @@ describe("Selection Magic settings and permissions", () => {
         desired,
       ),
     ).toBe(true);
+    expect(selectionRegistrationMatches({ matches: ["http://*/*", "https://*/*"] }, desired)).toBe(
+      false,
+    );
     expect(
-      selectionRegistrationMatches({ matches: ["http://*/*", "https://*/*"] }, desired),
-    ).toBe(false);
-    expect(
-      selectionRegistrationMatches({ excludeMatches: [], matches: ["https://*/*"] }, {
-        excludeMatches: [],
-        matches: ["https://*/*"],
-      }),
+      selectionRegistrationMatches(
+        { excludeMatches: [], matches: ["https://*/*"] },
+        {
+          excludeMatches: [],
+          matches: ["https://*/*"],
+        },
+      ),
     ).toBe(true);
     expect(
-      selectionRegistrationMatches({ excludeMatches: [], matches: ["https://a.example/*"] }, {
-        excludeMatches: [],
-        matches: ["https://b.example/*"],
-      }),
+      selectionRegistrationMatches(
+        { excludeMatches: [], matches: ["https://a.example/*"] },
+        {
+          excludeMatches: [],
+          matches: ["https://b.example/*"],
+        },
+      ),
     ).toBe(false);
   });
 

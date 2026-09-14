@@ -11,6 +11,8 @@ import {
  */
 export interface SavedPhrase {
   id: string;
+  /** Optional note, added from the dashboard and synchronized back. */
+  note?: string;
   provider: string;
   savedAt: string;
   sourceLanguage: string;
@@ -56,8 +58,15 @@ function normalizePhrase(value: unknown): SavedPhrase | null {
   if (!sourceText || !translatedText || !sourceLanguage || !targetLanguage || !savedAt) return null;
   if (typeof candidate.id !== "string" || candidate.id.length === 0) return null;
 
+  const note =
+    typeof candidate.note === "string" &&
+    candidate.note.trim() &&
+    Array.from(candidate.note).length <= 500
+      ? candidate.note
+      : null;
   return {
     id: candidate.id,
+    ...(note ? { note } : {}),
     provider: providerSchema.safeParse(candidate.provider).success
       ? (candidate.provider as string)
       : "unknown",

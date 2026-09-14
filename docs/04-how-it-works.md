@@ -60,7 +60,7 @@ LingoBridge does not turn every translation into cloud history. Unsaved source t
 
 1. The signed-in user sees an overview of saved phrases, recent deliberate saves, language-pair filters, and connected extension sessions.
 2. Preferences that are safe to synchronize can be changed from either surface.
-3. Disconnecting a session revokes only that extension installation.
+3. Disconnecting a session revokes only that extension installation. Signing out of the dashboard revokes every extension installation on the account.
 4. Export produces a user-readable copy of synchronized data.
 5. Account deletion requires fresh confirmation, revokes all sessions, deletes synchronized records, and clearly explains which local extension records may still remain on the device.
 

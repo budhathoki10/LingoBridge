@@ -5,6 +5,8 @@ import { type TranslationAdapter, TranslationAdapterError } from "./translation-
 export interface ProviderRouterOptions {
   google: TranslationAdapter | null;
   nvidia: TranslationAdapter;
+  /** Told whenever Google serves as the backup, with whether the backup succeeded. */
+  onBackup?: (succeeded: boolean) => void;
 }
 
 export class NvidiaPrimaryProviderRouter implements TranslationAdapter {
@@ -23,7 +25,14 @@ export class NvidiaPrimaryProviderRouter implements TranslationAdapter {
     }
 
     if (request.consent.google && this.options.google) {
-      return this.options.google.translate(request, signal);
+      try {
+        const result = await this.options.google.translate(request, signal);
+        this.options.onBackup?.(true);
+        return result;
+      } catch (error) {
+        this.options.onBackup?.(false);
+        throw error;
+      }
     }
 
     throw new TranslationAdapterError(

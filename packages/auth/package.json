@@ -1,0 +1,25 @@
+{
+  "name": "@lingobridge/auth",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@lingobridge/contracts": "workspace:*",
+    "@lingobridge/database": "workspace:*",
+    "jose": "6.2.12"
+  },
+  "devDependencies": {
+    "@types/node": "26.4.1",
+    "typescript": "5.9.3"
+  }
+}

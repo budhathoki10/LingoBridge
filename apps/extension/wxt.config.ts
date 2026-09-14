@@ -1,4 +1,5 @@
 import { defineConfig } from "wxt";
+import { DASHBOARD_ORIGIN } from "./lib/dashboard-config";
 import { GATEWAY_ORIGIN } from "./lib/gateway-config";
 
 export default defineConfig({
@@ -12,9 +13,9 @@ export default defineConfig({
   manifest: {
     name: "LingoBridge",
     description: "Translate selected text without leaving the page.",
-    host_permissions: [`${GATEWAY_ORIGIN}/*`],
+    host_permissions: [`${GATEWAY_ORIGIN}/*`, `${DASHBOARD_ORIGIN}/*`],
     optional_host_permissions: ["http://*/*", "https://*/*"],
-    permissions: ["activeTab", "contextMenus", "scripting", "storage"],
+    permissions: ["activeTab", "alarms", "contextMenus", "identity", "scripting", "storage"],
     commands: {
       "translate-selection": {
         description: "Translate the selected text",
