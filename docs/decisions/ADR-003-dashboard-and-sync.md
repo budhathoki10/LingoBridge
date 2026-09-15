@@ -17,7 +17,8 @@ LingoBridge requires both a Chrome extension and a web dashboard. A separate das
 - Connect the extension through an interactive Chrome identity flow using authorization code with PKCE.
 - Give each extension installation its own revocable session.
 - Keep site permissions, disabled sites, sensitive-text decisions, and local-model state on the device.
-- Store user-owned synchronized records in a PostgreSQL-compatible database with strict ownership checks.
+- Store user-owned synchronized records in a database with strict ownership checks. MongoDB Atlas
+  replaced the original PostgreSQL choice on 15 September 2026; see [ADR-004](ADR-004-mongodb-storage.md).
 - Include a server-role-protected admin operations view containing content-free aggregates only.
 - Use Google OpenID Connect for version 1 dashboard sign-in. The dashboard is the confidential
   OAuth client; the extension receives only a separate LingoBridge authorization code after the
@@ -67,7 +68,7 @@ local phrase saving remain available to people without a Google account. A hoste
 would add another processor and cost boundary without improving this first release.
 
 Production requires a Google web-application client ID and secret, the exact dashboard callback
-URI, HTTPS, a PostgreSQL database, exact extension IDs, and a session secret supplied outside the
+URI, HTTPS, a MongoDB database, exact extension IDs, and a session secret supplied outside the
 repository. Credentialed sign-in, regional availability, privacy terms, and real callback handling
 must be checked with the selected production Google project before release. The local development
 identity provider is forbidden in production.

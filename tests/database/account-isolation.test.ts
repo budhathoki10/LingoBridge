@@ -80,29 +80,44 @@ async function sessionFor(userId: string, label: string) {
 
 describe("migrations", () => {
   it("apply once and are a no-op when run again", async () => {
-    const rows = await database.query<{ id: string }>(
-      "select id from schema_migrations order by id",
-    );
-    expect(rows.rows.map((row) => row.id)).toEqual(migrations.map((migration) => migration.id));
+    const applied = await database.db
+      .collection<{ _id: string }>("schemaMigrations")
+      .find({}, { sort: { _id: 1 } })
+      .toArray();
+    expect(applied.map((entry) => entry._id)).toEqual(migrations.map((migration) => migration.id));
     await expect(runMigrations(database)).resolves.toEqual([]);
   });
 
   it("refuse a live phrase without text and a tombstone that still holds text", async () => {
     const user = await createUser(database, "shape@example.test", NOW);
+    const now = new Date();
     await expect(
-      database.query(
-        `insert into phrases (user_id, id, saved_at, updated_at, revision, change_seq)
-         values ($1, 'broken', now(), now(), 1, 1)`,
-        [user.id],
-      ),
+      database.db.collection("phrases").insertOne({
+        changeSeq: 1,
+        deletedAt: null,
+        id: "broken",
+        revision: 1,
+        savedAt: now,
+        updatedAt: now,
+        userId: user.id,
+      }),
     ).rejects.toThrow();
     await expect(
-      database.query(
-        `insert into phrases (user_id, id, source_text, translated_text, source_language, target_language,
-                              provider, saved_at, updated_at, revision, deleted_at, change_seq)
-         values ($1, 'leaky', 'a', 'b', 'en', 'ne', 'nvidia', now(), now(), 2, now(), 2)`,
-        [user.id],
-      ),
+      database.db.collection("phrases").insertOne({
+        changeSeq: 2,
+        deletedAt: now,
+        id: "leaky",
+        note: null,
+        provider: "nvidia",
+        revision: 2,
+        savedAt: now,
+        sourceLanguage: "en",
+        sourceText: "a",
+        targetLanguage: "ne",
+        translatedText: "b",
+        updatedAt: now,
+        userId: user.id,
+      }),
     ).rejects.toThrow();
   });
 });
@@ -220,17 +235,14 @@ describe("tombstones", () => {
     const saved = await saveFor(user.id, phrase({ note: "private note", sourceText: "Delete me" }));
     await deletePhrases(database, user.id, [saved.id], NOW);
 
-    const raw = await database.query<Record<string, unknown>>(
-      "select source_text, translated_text, note, provider, deleted_at from phrases where user_id = $1",
-      [user.id],
-    );
-    expect(raw.rows[0]).toMatchObject({
+    const raw = await database.db.collection("phrases").findOne({ userId: user.id });
+    expect(raw).toMatchObject({
       note: null,
       provider: null,
-      source_text: null,
-      translated_text: null,
+      sourceText: null,
+      translatedText: null,
     });
-    expect(raw.rows[0]?.deleted_at).not.toBeNull();
+    expect(raw?.deletedAt).toBeInstanceOf(Date);
   });
 
   it("are purged after the retention window and mutation receipts after a week", async () => {
@@ -239,10 +251,10 @@ describe("tombstones", () => {
     await deletePhrases(database, user.id, [saved.id], NOW);
 
     await purgeSyncMetadata(database, new Date(NOW.getTime() + 29 * DAY));
-    expect((await database.query("select id from phrases")).rows).toHaveLength(1);
+    expect(await database.db.collection("phrases").countDocuments()).toBe(1);
     await purgeSyncMetadata(database, new Date(NOW.getTime() + 31 * DAY));
-    expect((await database.query("select id from phrases")).rows).toHaveLength(0);
-    expect((await database.query("select mutation_id from sync_mutations")).rows).toHaveLength(0);
+    expect(await database.db.collection("phrases").countDocuments()).toBe(0);
+    expect(await database.db.collection("syncMutations").countDocuments()).toBe(0);
   });
 });
 
@@ -259,22 +271,20 @@ describe("account deletion", () => {
     expect(result.revokedExtensionSessions).toBe(2);
     expect(result.receipt.accountPurgeAfter).toBe(new Date(NOW.getTime() + 30 * DAY).toISOString());
 
+    expect(await database.db.collection("phrases").countDocuments({ userId: alice.id })).toBe(0);
     expect(
-      (await database.query("select 1 from phrases where user_id = $1", [alice.id])).rows,
-    ).toHaveLength(0);
-    expect(
-      (await database.query("select 1 from preferences where user_id = $1", [alice.id])).rows,
-    ).toHaveLength(0);
+      await database.db
+        .collection<{ _id: string }>("preferences")
+        .countDocuments({ _id: alice.id }),
+    ).toBe(0);
     const sessions = await listExtensionSessions(database, alice.id);
     expect(sessions.every((session) => session.revokedReason === "account-deleted")).toBe(true);
 
-    const shell = await database.query<{
-      display_name: string | null;
-      email: string | null;
-      identity_subject: string;
-    }>("select email, display_name, identity_subject from users where id = $1", [alice.id]);
-    expect(shell.rows[0]).toMatchObject({ display_name: null, email: null });
-    expect(shell.rows[0]?.identity_subject).toBe(`deleted:${alice.id}`);
+    const shell = await database.db
+      .collection<{ _id: string; identitySubject?: string }>("users")
+      .findOne({ _id: alice.id });
+    expect(shell).toMatchObject({ displayName: null, email: null });
+    expect(shell?.identitySubject).toBe(`deleted:${alice.id}`);
     expect(await findUserById(database, alice.id)).toBeNull();
 
     // Bob is untouched.
@@ -300,8 +310,13 @@ describe("account deletion", () => {
     expect(await purgeDeletedAccounts(database, new Date(NOW.getTime() + 29 * DAY))).toBe(0);
     expect(await purgeDeletedAccounts(database, new Date(NOW.getTime() + 30 * DAY))).toBe(1);
     expect(
-      (await database.query("select 1 from users where id = $1", [alice.id])).rows,
-    ).toHaveLength(0);
+      await database.db
+        .collection<{ _id: string; identitySubject?: string }>("users")
+        .countDocuments({ _id: alice.id }),
+    ).toBe(0);
+    expect(
+      await database.db.collection("extensionSessions").countDocuments({ userId: alice.id }),
+    ).toBe(0);
     expect((await getDeletionReceipt(database, result.receipt.id))?.accountPurgedAt).not.toBeNull();
   });
 });

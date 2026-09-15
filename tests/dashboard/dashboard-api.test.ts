@@ -403,7 +403,7 @@ describe("extension API", () => {
 describe("configuration", () => {
   it("refuses development shortcuts in production", () => {
     const production = {
-      DATABASE_URL: "postgres://db.example/lingobridge",
+      DATABASE_URL: "mongodb+srv://cluster.example.mongodb.net",
       LINGOBRIDGE_ALLOWED_EXTENSION_IDS: EXTENSION_ID,
       LINGOBRIDGE_DASHBOARD_ORIGIN: "https://dashboard.example",
       LINGOBRIDGE_SESSION_SECRET: "x".repeat(40),
@@ -417,6 +417,9 @@ describe("configuration", () => {
       loadDashboardConfig({ ...production, LINGOBRIDGE_AUTH_MODE: "development" }),
     ).toThrow();
     expect(() => loadDashboardConfig({ ...production, DATABASE_URL: "" })).toThrow();
+    expect(() =>
+      loadDashboardConfig({ ...production, DATABASE_URL: "postgres://db.example/lingobridge" }),
+    ).toThrow();
     expect(() => loadDashboardConfig({ ...production, LINGOBRIDGE_SESSION_SECRET: "" })).toThrow();
     expect(() => loadDashboardConfig({ ...production, OIDC_CLIENT_SECRET: "" })).toThrow();
     expect(() => loadDashboardConfig({ ...production, OIDC_CLIENT_ID: "" })).toThrow();

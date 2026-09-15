@@ -1,22 +1,25 @@
 import { randomUUID } from "node:crypto";
 import type { LivePhraseRecord, SyncedPreferences } from "@lingobridge/contracts/account";
 import {
+  type CollectionName,
+  collection,
   type Database,
-  type SqlClient,
-  toInteger,
+  type DbClient,
+  type DeletionReceiptDocument,
+  inSession,
   toIsoString,
   toNullableIsoString,
 } from "./client.js";
-import { getPreferences, PHRASE_COLUMNS, type PhraseRow, toPhraseRecord } from "./phrases.js";
+import { getPreferences, toLivePhraseRecords } from "./phrases.js";
 import { type ExtensionSession, listExtensionSessions } from "./sessions.js";
 import { lockAccount } from "./sync.js";
 import { findUserById } from "./users.js";
 
 /**
  * Deletion window: synchronized phrases, preferences, sync receipts, and every session are removed
- * or revoked immediately when the user confirms. The account row is kept only in a de-identified
- * state (no email, name, or identity subject) so revoked extensions receive a clear answer, and
- * it is purged once this window closes.
+ * or revoked immediately when the user confirms. The account document is kept only in a
+ * de-identified state (no email, name, or identity subject) so revoked extensions receive a clear
+ * answer, and it is purged once this window closes.
  */
 export const ACCOUNT_PURGE_WINDOW_MILLISECONDS = 30 * 24 * 60 * 60 * 1_000;
 
@@ -28,21 +31,13 @@ export interface DeletionReceipt {
   requestedAt: string;
 }
 
-interface DeletionReceiptRow {
-  account_purge_after: unknown;
-  account_purged_at: unknown;
-  content_deleted_at: unknown;
-  id: string;
-  requested_at: unknown;
-}
-
-function toDeletionReceipt(row: DeletionReceiptRow): DeletionReceipt {
+function toDeletionReceipt(document: DeletionReceiptDocument): DeletionReceipt {
   return {
-    accountPurgeAfter: toIsoString(row.account_purge_after),
-    accountPurgedAt: toNullableIsoString(row.account_purged_at),
-    contentDeletedAt: toIsoString(row.content_deleted_at),
-    id: row.id,
-    requestedAt: toIsoString(row.requested_at),
+    accountPurgeAfter: toIsoString(document.accountPurgeAfter),
+    accountPurgedAt: toNullableIsoString(document.accountPurgedAt),
+    contentDeletedAt: toIsoString(document.contentDeletedAt),
+    id: document._id,
+    requestedAt: toIsoString(document.requestedAt),
   };
 }
 
@@ -50,6 +45,14 @@ export interface AccountDeletionResult {
   receipt: DeletionReceipt;
   revokedExtensionSessions: number;
 }
+
+/** Collections whose documents belong to one user through a `userId` field. */
+const USER_CONTENT_COLLECTIONS = [
+  "phrases",
+  "syncMutations",
+  "loginAttempts",
+  "extensionAuthorizationCodes",
+] as const satisfies readonly CollectionName[];
 
 export async function deleteAccount(
   database: Database,
@@ -59,73 +62,87 @@ export async function deleteAccount(
   return database.transaction(async (client) => {
     await lockAccount(client, userId);
 
-    for (const table of [
-      "phrases",
-      "preferences",
-      "sync_mutations",
-      "login_attempts",
-      "extension_authorization_codes",
-    ]) {
-      await client.query(`delete from ${table} where user_id = $1`, [userId]);
+    for (const name of USER_CONTENT_COLLECTIONS) {
+      await client.db.collection(name).deleteMany({ userId }, inSession(client));
     }
-    const revoked = await client.query<{ id: string }>(
-      `update extension_sessions
-          set revoked_at = $2, revoked_reason = 'account-deleted'
-        where user_id = $1 and revoked_at is null
-        returning id`,
-      [userId, now],
+    await collection(client, "preferences").deleteOne({ _id: userId }, inSession(client));
+    const revoked = await collection(client, "extensionSessions").updateMany(
+      { revokedAt: null, userId },
+      { $set: { revokedAt: now, revokedReason: "account-deleted" } },
+      inSession(client),
     );
-    await client.query(
-      "update web_sessions set revoked_at = $2 where user_id = $1 and revoked_at is null",
-      [userId, now],
+    await collection(client, "webSessions").updateMany(
+      { revokedAt: null, userId },
+      { $set: { revokedAt: now } },
+      inSession(client),
     );
-    await client.query(
-      `update users
-          set deleted_at = $2, email = null, email_verified = false, display_name = null,
-              identity_subject = 'deleted:' || id::text, role = 'user', updated_at = $2
-        where id = $1`,
-      [userId, now],
+    await collection(client, "users").updateOne(
+      { _id: userId },
+      {
+        $set: {
+          deletedAt: now,
+          displayName: null,
+          email: null,
+          emailVerified: false,
+          identitySubject: `deleted:${userId}`,
+          role: "user",
+          updatedAt: now,
+        },
+      },
+      inSession(client),
     );
 
-    const { rows } = await client.query<DeletionReceiptRow>(
-      `insert into deletion_receipts (id, user_id, requested_at, content_deleted_at,
-                                      account_purge_after)
-       values ($1, $2, $3, $3, $4)
-       returning id, requested_at, content_deleted_at, account_purge_after, account_purged_at`,
-      [randomUUID(), userId, now, new Date(now.getTime() + ACCOUNT_PURGE_WINDOW_MILLISECONDS)],
-    );
-    if (!rows[0]) throw new Error("Deletion receipt insert returned no row.");
-    return { receipt: toDeletionReceipt(rows[0]), revokedExtensionSessions: revoked.rows.length };
+    const receipt: DeletionReceiptDocument = {
+      _id: randomUUID(),
+      accountPurgeAfter: new Date(now.getTime() + ACCOUNT_PURGE_WINDOW_MILLISECONDS),
+      accountPurgedAt: null,
+      contentDeletedAt: now,
+      requestedAt: now,
+      userId,
+    };
+    await collection(client, "deletionReceipts").insertOne(receipt, inSession(client));
+    return { receipt: toDeletionReceipt(receipt), revokedExtensionSessions: revoked.modifiedCount };
   });
 }
 
 export async function getDeletionReceipt(
-  client: SqlClient,
+  client: DbClient,
   receiptId: string,
 ): Promise<DeletionReceipt | null> {
-  const { rows } = await client.query<DeletionReceiptRow>(
-    `select id, requested_at, content_deleted_at, account_purge_after, account_purged_at
-       from deletion_receipts where id = $1`,
-    [receiptId],
+  const receipt = await collection(client, "deletionReceipts").findOne(
+    { _id: receiptId },
+    inSession(client),
   );
-  return rows[0] ? toDeletionReceipt(rows[0]) : null;
+  return receipt ? toDeletionReceipt(receipt) : null;
 }
 
-/** Removes de-identified account shells whose window has closed. The receipt itself remains. */
+/**
+ * Removes de-identified account shells whose window has closed, with every document that still
+ * references them. The receipt itself remains.
+ */
 export async function purgeDeletedAccounts(database: Database, now: Date): Promise<number> {
   return database.transaction(async (client) => {
-    const { rows } = await client.query<{ user_id: string }>(
-      `update deletion_receipts set account_purged_at = $1
-        where account_purge_after <= $1 and account_purged_at is null
-        returning user_id`,
-      [now],
-    );
-    for (const row of rows) {
-      await client.query("delete from users where id = $1 and deleted_at is not null", [
-        row.user_id,
-      ]);
+    const receipts = collection(client, "deletionReceipts");
+    const due = await receipts
+      .find({ accountPurgeAfter: { $lte: now }, accountPurgedAt: null }, inSession(client))
+      .toArray();
+    for (const receipt of due) {
+      await receipts.updateOne(
+        { _id: receipt._id },
+        { $set: { accountPurgedAt: now } },
+        inSession(client),
+      );
+      const user = await collection(client, "users").deleteOne(
+        { _id: receipt.userId, deletedAt: { $ne: null } },
+        inSession(client),
+      );
+      if (user.deletedCount === 0) continue;
+      for (const name of [...USER_CONTENT_COLLECTIONS, "extensionSessions", "webSessions"]) {
+        await client.db.collection(name).deleteMany({ userId: receipt.userId }, inSession(client));
+      }
+      await collection(client, "preferences").deleteOne({ _id: receipt.userId }, inSession(client));
     }
-    return rows.length;
+    return due.length;
   });
 }
 
@@ -149,33 +166,31 @@ export interface AccountExport {
 }
 
 export async function listAllLivePhrases(
-  client: SqlClient,
+  client: DbClient,
   userId: string,
 ): Promise<LivePhraseRecord[]> {
-  const { rows } = await client.query<PhraseRow>(
-    `select ${PHRASE_COLUMNS} from phrases
-      where user_id = $1 and deleted_at is null
-      order by saved_at desc, id`,
-    [userId],
-  );
-  return rows
-    .map(toPhraseRecord)
-    .filter((record): record is LivePhraseRecord => record.state === "live");
+  const documents = await collection(client, "phrases")
+    .find({ deletedAt: null, userId }, inSession(client))
+    .sort([
+      ["savedAt", -1],
+      ["id", 1],
+    ])
+    .toArray();
+  return toLivePhraseRecords(documents);
 }
 
 /** Session metadata is exported; token hashes and extension ids are not. */
 export async function exportAccount(
-  client: SqlClient,
+  client: DbClient,
   userId: string,
   now: Date,
 ): Promise<AccountExport | null> {
   const user = await findUserById(client, userId);
   if (!user) return null;
-  const [phrases, preferences, sessions] = await Promise.all([
-    listAllLivePhrases(client, userId),
-    getPreferences(client, userId),
-    listExtensionSessions(client, userId),
-  ]);
+  // Sequential: operations sharing a transaction session must not run concurrently.
+  const phrases = await listAllLivePhrases(client, userId);
+  const preferences = await getPreferences(client, userId);
+  const sessions = await listExtensionSessions(client, userId);
   return {
     account: {
       createdAt: user.createdAt,
@@ -205,36 +220,34 @@ export interface AccountOverview {
 }
 
 export async function getAccountOverview(
-  client: SqlClient,
+  client: DbClient,
   userId: string,
   now: Date,
 ): Promise<AccountOverview> {
-  const [counts, recent, preferences] = await Promise.all([
-    client.query<{ active_sessions: unknown; last_activity: unknown; phrases: unknown }>(
-      `select
-         (select count(*) from phrases where user_id = $1 and deleted_at is null) as phrases,
-         (select count(*) from extension_sessions
-           where user_id = $1 and revoked_at is null and expires_at > $2) as active_sessions,
-         (select max(last_used_at) from extension_sessions
-           where user_id = $1 and revoked_at is null) as last_activity`,
-      [userId, now],
-    ),
-    client.query<PhraseRow>(
-      `select ${PHRASE_COLUMNS} from phrases
-        where user_id = $1 and deleted_at is null
-        order by saved_at desc, id limit 5`,
-      [userId],
-    ),
-    getPreferences(client, userId),
-  ]);
-  const row = counts.rows[0];
+  const phrases = collection(client, "phrases");
+  const sessions = collection(client, "extensionSessions");
+  const phraseCount = await phrases.countDocuments({ deletedAt: null, userId }, inSession(client));
+  const activeExtensionSessions = await sessions.countDocuments(
+    { expiresAt: { $gt: now }, revokedAt: null, userId },
+    inSession(client),
+  );
+  const lastActive = await sessions.findOne(
+    { revokedAt: null, userId },
+    { ...inSession(client), projection: { lastUsedAt: 1 }, sort: { lastUsedAt: -1 } },
+  );
+  const recent = await phrases
+    .find({ deletedAt: null, userId }, inSession(client))
+    .sort([
+      ["savedAt", -1],
+      ["id", 1],
+    ])
+    .limit(5)
+    .toArray();
   return {
-    activeExtensionSessions: toInteger(row?.active_sessions ?? 0),
-    lastExtensionActivityAt: toNullableIsoString(row?.last_activity ?? null),
-    phraseCount: toInteger(row?.phrases ?? 0),
-    preferences,
-    recentPhrases: recent.rows
-      .map(toPhraseRecord)
-      .filter((record): record is LivePhraseRecord => record.state === "live"),
+    activeExtensionSessions,
+    lastExtensionActivityAt: toNullableIsoString(lastActive?.lastUsedAt ?? null),
+    phraseCount,
+    preferences: await getPreferences(client, userId),
+    recentPhrases: toLivePhraseRecords(recent),
   };
 }

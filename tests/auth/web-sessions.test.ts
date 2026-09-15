@@ -323,10 +323,8 @@ describe("dashboard sessions", () => {
   it("end on sign-out and store only token hashes", async () => {
     const { cookies, csrfToken } = await signInThroughHandlers(dashboard, "out@example.test");
     const token = readCookie(cookies, cookieNames(false).session) ?? "";
-    const stored = await dashboard.database.query<{ token_hash: string }>(
-      "select token_hash from web_sessions",
-    );
-    expect(stored.rows.some((row) => row.token_hash === token)).toBe(false);
+    const stored = await dashboard.database.db.collection("webSessions").find({}).toArray();
+    expect(stored.some((document) => document.tokenHash === token)).toBe(false);
 
     const response = await handleSignOut(
       new Request(`${DASHBOARD_ORIGIN}/auth/sign-out`, {

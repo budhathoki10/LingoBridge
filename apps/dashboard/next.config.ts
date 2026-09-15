@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   // Database drivers load native or WebAssembly assets at runtime and must not be bundled.
-  serverExternalPackages: ["@electric-sql/pglite", "pg"],
+  serverExternalPackages: ["mongodb", "mongodb-memory-server-core"],
   async headers() {
     return [
       {

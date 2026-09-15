@@ -8,6 +8,7 @@ export const ANONYMOUS_INSTALLATION_HEADER = "X-LingoBridge-Installation-Id";
 export const GATEWAY_API_VERSION = "v1" as const;
 export const GATEWAY_ROUTES = {
   capabilities: "/v1/capabilities",
+  explain: "/v1/explain",
   health: "/v1/health",
   translate: "/v1/translate",
   version: "/v1/version",
@@ -94,6 +95,65 @@ export const translationRequestSchema = z
       });
     }
   });
+
+/**
+ * Explanations cover a word, a phrase, or a paragraph a reader wants to understand; long documents
+ * keep the translation only. A separate consent names the AI model, because translation consent
+ * does not cover it.
+ */
+export const MAX_EXPLANATION_SOURCE_CODE_POINTS = 1_000;
+
+export const explanationConsentSchema = z
+  .object({
+    acceptedAt: z.string().datetime({ offset: true }),
+    nvidia: z.literal(true),
+    version: z.string().min(1).max(40),
+  })
+  .strict();
+
+const explanationSourceTextSchema = translationTextSchema.superRefine((text, context) => {
+  if (Array.from(text).length > MAX_EXPLANATION_SOURCE_CODE_POINTS) {
+    context.addIssue({
+      code: "custom",
+      message: `Explained text cannot exceed ${MAX_EXPLANATION_SOURCE_CODE_POINTS} code points`,
+    });
+  }
+});
+
+export const explanationRequestSchema = z
+  .object({
+    consent: explanationConsentSchema,
+    operation: z.literal("explain"),
+    requestId: requestIdSchema,
+    sourceLanguage: languageCodeSchema,
+    sourceText: explanationSourceTextSchema,
+    targetLanguage: languageCodeSchema,
+    translatedText: translationTextSchema,
+  })
+  .strict();
+
+export const explanationRegisterSchema = z.enum(["formal", "neutral", "casual", "slang"]);
+
+export const explanationResultSchema = z
+  .object({
+    examples: z
+      .array(
+        z
+          .object({
+            source: z.string().trim().min(1).max(300),
+            translation: z.string().trim().min(1).max(300),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(3),
+    meaning: z.string().trim().min(1).max(700),
+    provider: z.literal("nvidia"),
+    register: explanationRegisterSchema,
+    requestId: requestIdSchema,
+    usageNote: z.string().trim().max(300).nullable(),
+  })
+  .strict();
 
 export const translationWarningSchema = z
   .object({
@@ -189,6 +249,10 @@ export const gatewayVersionSchema = z
   })
   .strict();
 
+export type ExplanationConsent = z.infer<typeof explanationConsentSchema>;
+export type ExplanationRegister = z.infer<typeof explanationRegisterSchema>;
+export type ExplanationRequest = z.infer<typeof explanationRequestSchema>;
+export type ExplanationResult = z.infer<typeof explanationResultSchema>;
 export type CapabilityCatalogue = z.infer<typeof capabilityCatalogueSchema>;
 export type GatewayHealth = z.infer<typeof gatewayHealthSchema>;
 export type GatewayVersion = z.infer<typeof gatewayVersionSchema>;

@@ -14,6 +14,7 @@ if (!connectionString && production) {
 const embeddedDirectory = process.env.LINGOBRIDGE_EMBEDDED_DATABASE_DIR?.trim();
 const database = await openDatabase({
   connectionString,
+  databaseName: process.env.DATABASE_NAME?.trim() || undefined,
   embeddedDataDirectory:
     !production && embeddedDirectory && embeddedDirectory !== "memory"
       ? embeddedDirectory

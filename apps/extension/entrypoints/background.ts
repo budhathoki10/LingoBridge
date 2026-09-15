@@ -179,16 +179,8 @@ async function runGatewayBridgeRequest(
     if (request.operation === "inspect-service") {
       return { data: await gatewayClient.inspectService(controller.signal), ok: true };
     }
-    if (!request.request) {
-      return {
-        aborted: false,
-        error: {
-          code: "invalid-request",
-          message: "The translation request did not match the shared contract.",
-          retryable: false,
-        },
-        ok: false,
-      };
+    if (request.operation === "explain") {
+      return { data: await gatewayClient.explain(request.request, controller.signal), ok: true };
     }
     return { data: await gatewayClient.translate(request.request, controller.signal), ok: true };
   } catch (error) {

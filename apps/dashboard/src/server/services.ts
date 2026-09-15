@@ -53,6 +53,7 @@ export async function createDashboardServices(
     overrides.database ??
     (await openDatabase({
       connectionString: config.databaseUrl ?? undefined,
+      databaseName: config.databaseName,
       embeddedDataDirectory: config.embeddedDatabaseDirectory ?? undefined,
       production: config.production,
     }));

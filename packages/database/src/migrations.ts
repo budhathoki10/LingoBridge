@@ -1,177 +1,148 @@
+import type { Db, Document } from "mongodb";
 import type { Database } from "./client.js";
 
 export interface Migration {
   id: string;
-  sql: string;
+  apply(db: Db): Promise<void>;
+}
+
+const nullableString = { bsonType: ["string", "null"] };
+const nullableDate = { bsonType: ["date", "null"] };
+
+/**
+ * A live phrase carries its text and languages; a tombstone carries none of them and no note. The
+ * database refuses either half-shape so a bug cannot leave deleted text behind.
+ */
+const phraseValidator: Document = {
+  $jsonSchema: {
+    bsonType: "object",
+    required: ["userId", "id", "savedAt", "updatedAt", "revision", "deletedAt", "changeSeq"],
+    properties: {
+      userId: { bsonType: "string" },
+      id: { bsonType: "string" },
+      revision: { bsonType: ["int", "long", "double"], minimum: 1 },
+      changeSeq: { bsonType: ["int", "long", "double"] },
+      savedAt: { bsonType: "date" },
+      updatedAt: { bsonType: "date" },
+    },
+    oneOf: [
+      {
+        required: ["sourceText", "translatedText", "sourceLanguage", "targetLanguage", "provider"],
+        properties: {
+          deletedAt: { bsonType: "null" },
+          sourceText: { bsonType: "string" },
+          translatedText: { bsonType: "string" },
+          sourceLanguage: { bsonType: "string" },
+          targetLanguage: { bsonType: "string" },
+          provider: { bsonType: "string" },
+          note: nullableString,
+        },
+      },
+      {
+        required: ["deletedAt"],
+        properties: {
+          deletedAt: { bsonType: "date" },
+          sourceText: { bsonType: "null" },
+          translatedText: { bsonType: "null" },
+          sourceLanguage: { bsonType: "null" },
+          targetLanguage: { bsonType: "null" },
+          provider: { bsonType: "null" },
+          note: { bsonType: "null" },
+        },
+      },
+    ],
+  },
+};
+
+const userValidator: Document = {
+  $jsonSchema: {
+    bsonType: "object",
+    required: ["identityIssuer", "identitySubject", "role", "createdAt", "updatedAt"],
+    properties: {
+      identityIssuer: { bsonType: "string" },
+      identitySubject: { bsonType: "string" },
+      email: nullableString,
+      displayName: nullableString,
+      role: { enum: ["user", "admin"] },
+      deletedAt: nullableDate,
+    },
+  },
+};
+
+const extensionSessionValidator: Document = {
+  $jsonSchema: {
+    bsonType: "object",
+    properties: {
+      revokedReason: { enum: ["user", "refresh-reuse", "account-deleted", null] },
+    },
+  },
+};
+
+async function createCollection(db: Db, name: string, validator?: Document): Promise<void> {
+  const existing = await db.listCollections({ name }, { nameOnly: true }).toArray();
+  if (existing.length > 0) return;
+  await db.createCollection(name, validator ? { validator, validationLevel: "strict" } : {});
 }
 
 /**
- * Append-only. A shipped migration is never edited; a change adds a new entry. Every user-owned
- * table references `users(id)` with cascade so an account purge cannot leave orphaned content.
+ * Append-only. A shipped migration is never edited; a change adds a new entry. Collections are
+ * created up front because MongoDB cannot create them inside a multi-document transaction.
  */
 export const migrations: readonly Migration[] = [
   {
     id: "0001_accounts_sessions_and_sync",
-    sql: `
-      create table users (
-        id uuid primary key,
-        identity_issuer text not null,
-        identity_subject text not null,
-        email text,
-        email_verified boolean not null default false,
-        display_name text,
-        role text not null default 'user' check (role in ('user', 'admin')),
-        privacy_policy_version text,
-        created_at timestamptz not null,
-        updated_at timestamptz not null,
-        deleted_at timestamptz,
-        unique (identity_issuer, identity_subject)
-      );
+    async apply(db) {
+      await createCollection(db, "users", userValidator);
+      await createCollection(db, "preferences");
+      await createCollection(db, "loginAttempts");
+      await createCollection(db, "webSessions");
+      await createCollection(db, "extensionAuthorizationCodes");
+      await createCollection(db, "extensionSessions", extensionSessionValidator);
+      await createCollection(db, "phrases", phraseValidator);
+      await createCollection(db, "syncMutations");
+      await createCollection(db, "deletionReceipts");
 
-      create table login_attempts (
-        id uuid primary key,
-        state_hash text not null unique,
-        browser_binding_hash text not null,
-        nonce text not null,
-        code_verifier text not null,
-        purpose text not null check (purpose in ('sign-in', 'reauthenticate')),
-        return_to text not null,
-        user_id uuid references users(id) on delete cascade,
-        created_at timestamptz not null,
-        expires_at timestamptz not null,
-        consumed_at timestamptz
+      await db
+        .collection("users")
+        .createIndex({ identityIssuer: 1, identitySubject: 1 }, { unique: true });
+      await db.collection("loginAttempts").createIndex({ stateHash: 1 }, { unique: true });
+      await db.collection("loginAttempts").createIndex({ userId: 1 });
+      await db.collection("webSessions").createIndex({ tokenHash: 1 }, { unique: true });
+      await db.collection("webSessions").createIndex({ userId: 1 });
+      await db.collection("extensionAuthorizationCodes").createIndex({ userId: 1 });
+      const extensionSessions = db.collection("extensionSessions");
+      await extensionSessions.createIndex({ userId: 1 });
+      await extensionSessions.createIndex({ accessTokenHash: 1 }, { unique: true });
+      await extensionSessions.createIndex({ refreshTokenHash: 1 }, { unique: true });
+      await extensionSessions.createIndex(
+        { previousRefreshTokenHash: 1 },
+        {
+          partialFilterExpression: { previousRefreshTokenHash: { $type: "string" } },
+          unique: true,
+        },
       );
-
-      create table web_sessions (
-        id uuid primary key,
-        user_id uuid not null references users(id) on delete cascade,
-        token_hash text not null unique,
-        created_at timestamptz not null,
-        last_seen_at timestamptz not null,
-        idle_expires_at timestamptz not null,
-        absolute_expires_at timestamptz not null,
-        authenticated_at timestamptz not null,
-        revoked_at timestamptz
-      );
-      create index web_sessions_user_idx on web_sessions (user_id);
-
-      create table extension_authorization_codes (
-        code_hash text primary key,
-        user_id uuid not null references users(id) on delete cascade,
-        extension_id text not null,
-        redirect_uri text not null,
-        code_challenge text not null,
-        device_label text not null,
-        created_at timestamptz not null,
-        expires_at timestamptz not null,
-        consumed_at timestamptz
-      );
-
-      create table extension_sessions (
-        id uuid primary key,
-        user_id uuid not null references users(id) on delete cascade,
-        extension_id text not null,
-        device_label text not null,
-        access_token_hash text not null unique,
-        access_expires_at timestamptz not null,
-        refresh_token_hash text not null unique,
-        previous_refresh_token_hash text unique,
-        created_at timestamptz not null,
-        last_used_at timestamptz not null,
-        expires_at timestamptz not null,
-        revoked_at timestamptz,
-        revoked_reason text check (
-          revoked_reason in ('user', 'refresh-reuse', 'account-deleted')
-        )
-      );
-      create index extension_sessions_user_idx on extension_sessions (user_id);
-
-      create sequence sync_change_seq;
-
-      create table phrases (
-        user_id uuid not null references users(id) on delete cascade,
-        id text not null,
-        source_text text,
-        translated_text text,
-        source_language text,
-        target_language text,
-        provider text,
-        note text,
-        saved_at timestamptz not null,
-        updated_at timestamptz not null,
-        revision integer not null check (revision >= 1),
-        deleted_at timestamptz,
-        change_seq bigint not null,
-        primary key (user_id, id),
-        check (
-          (deleted_at is null) = (
-            source_text is not null and translated_text is not null
-            and source_language is not null and target_language is not null
-            and provider is not null
-          )
-        ),
-        check (deleted_at is null or note is null)
-      );
-      create index phrases_user_change_idx on phrases (user_id, change_seq);
-      create index phrases_user_saved_idx on phrases (user_id, saved_at desc) where deleted_at is null;
-
-      create table preferences (
-        user_id uuid primary key references users(id) on delete cascade,
-        preferred_target_language text,
-        processing_preference text check (processing_preference in ('online', 'on-device')),
-        phrase_sync_enabled boolean not null default true,
-        revision integer not null default 0,
-        updated_at timestamptz,
-        change_seq bigint not null default 0
-      );
-
-      create table sync_mutations (
-        user_id uuid not null references users(id) on delete cascade,
-        mutation_id uuid not null,
-        status text not null check (status in ('applied', 'conflict', 'rejected')),
-        reason text,
-        phrase_id text,
-        created_at timestamptz not null,
-        primary key (user_id, mutation_id)
-      );
-
-      create table sync_metadata (
-        key text primary key,
-        value bigint not null
-      );
-
-      create table deletion_receipts (
-        id uuid primary key,
-        user_id uuid not null,
-        requested_at timestamptz not null,
-        content_deleted_at timestamptz not null,
-        account_purge_after timestamptz not null,
-        account_purged_at timestamptz
-      );
-    `,
+      const phrases = db.collection("phrases");
+      await phrases.createIndex({ userId: 1, id: 1 }, { unique: true });
+      await phrases.createIndex({ userId: 1, changeSeq: 1 });
+      await phrases.createIndex({ userId: 1, deletedAt: 1, savedAt: -1 });
+      await db
+        .collection("syncMutations")
+        .createIndex({ userId: 1, mutationId: 1 }, { unique: true });
+      await db.collection("syncMutations").createIndex({ createdAt: 1 });
+    },
   },
 ];
 
 export async function runMigrations(database: Database): Promise<string[]> {
-  await database.exec(`
-    create table if not exists schema_migrations (
-      id text primary key,
-      applied_at timestamptz not null default now()
-    )
-  `);
-  const applied = new Set(
-    (await database.query<{ id: string }>("select id from schema_migrations")).rows.map(
-      (row) => row.id,
-    ),
-  );
+  const applied = database.db.collection<{ _id: string; appliedAt: Date }>("schemaMigrations");
+  const done = new Set((await applied.find({}).toArray()).map((entry) => entry._id));
 
   const newlyApplied: string[] = [];
   for (const migration of migrations) {
-    if (applied.has(migration.id)) continue;
-    await database.transaction(async (client) => {
-      await client.exec(migration.sql);
-      await client.query("insert into schema_migrations (id) values ($1)", [migration.id]);
-    });
+    if (done.has(migration.id)) continue;
+    // Every step is idempotent, so a migration interrupted part-way is simply run again.
+    await migration.apply(database.db);
+    await applied.insertOne({ _id: migration.id, appliedAt: new Date() });
     newlyApplied.push(migration.id);
   }
   return newlyApplied;

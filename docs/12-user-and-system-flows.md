@@ -201,7 +201,7 @@ Scroll, resize, and zoom reposition the same icon or translator without creating
 The anchored surface follows the reference layout in a compact form:
 
 1. Clicking the magic icon opens the surface; merely selecting text does not start detection or translation.
-2. The top row contains detected source, swap, and target-language controls, with the saved preferred target selected by default.
+2. The top row contains detected source and target-language controls, with the saved preferred target selected by default. A star pins the current target locally. Manage favorites opens a searchable checklist of targets supported for the detected source; the user can check several and save them together. Supported favorites below the row switch targets with one click. Pinning alone does not translate; switching follows the normal capability and Online-consent checks.
 3. The source remains visible beside or above the translation, depending on available space.
 4. The result area announces detecting, loading, success, warning, and failure states accessibly.
 5. Copy copies only the translation.

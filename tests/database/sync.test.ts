@@ -44,8 +44,11 @@ describe("sync writes", () => {
 
     expect(first.results[0]).toMatchObject({ phrase: { revision: 1 }, status: "applied" });
     expect(replay.results[0]).toMatchObject({ phrase: { revision: 1 }, status: "applied" });
-    const rows = await database.query("select revision from phrases where user_id = $1", [userId]);
-    expect(rows.rows).toEqual([{ revision: 1 }]);
+    const rows = await database.db
+      .collection("phrases")
+      .find({ userId }, { projection: { _id: 0, revision: 1 } })
+      .toArray();
+    expect(rows).toEqual([{ revision: 1 }]);
   });
 
   it("returns a conflict with the current record when the base revision is stale", async () => {
@@ -68,6 +71,27 @@ describe("sync writes", () => {
       phrase: { note: "edited on the web", revision: 2 },
       status: "conflict",
     });
+  });
+
+  it("serializes concurrent syncs for one account without losing or reordering changes", async () => {
+    const contents = Array.from({ length: 8 }, () => phrase());
+    await Promise.all(
+      contents.map((content) =>
+        runSync(database, userId, { cursor: null, mutations: [upsert(content)] }, NOW),
+      ),
+    );
+
+    const stored = await database.db
+      .collection<{ changeSeq: number; revision: number }>("phrases")
+      .find({ userId })
+      .toArray();
+    expect(stored).toHaveLength(contents.length);
+    expect(stored.every((document) => document.revision === 1)).toBe(true);
+    const sequences = stored.map((document) => document.changeSeq).sort((a, b) => a - b);
+    expect(sequences).toEqual(contents.map((_, index) => index + 1));
+
+    const pulled = await runSync(database, userId, { cursor: null, mutations: [] }, NOW);
+    expect(pulled.changes.phrases).toHaveLength(contents.length);
   });
 
   it("never lets a stale client recreate a deleted phrase", async () => {

@@ -2,6 +2,10 @@ import {
   ANONYMOUS_INSTALLATION_HEADER,
   type CapabilityCatalogue,
   capabilityCatalogueSchema,
+  type ExplanationRequest,
+  type ExplanationResult,
+  explanationRequestSchema,
+  explanationResultSchema,
   GATEWAY_ROUTES,
   type GatewayHealth,
   type GatewayVersion,
@@ -47,6 +51,7 @@ export class GatewayClientError extends Error {
 }
 
 export interface GatewayClient {
+  explain(request: ExplanationRequest, signal: AbortSignal): Promise<ExplanationResult>;
   getCapabilities(signal?: AbortSignal): Promise<CapabilityCatalogue>;
   inspect(signal?: AbortSignal): Promise<GatewaySnapshot>;
   inspectService(signal?: AbortSignal): Promise<GatewayServiceSnapshot>;
@@ -121,6 +126,32 @@ export function createGatewayClient(options: GatewayClientOptions = {}): Gateway
     return payload;
   }
 
+  async function post(route: string, body: unknown, signal: AbortSignal): Promise<unknown> {
+    let response: Response;
+    try {
+      const installationId = await installationIdProvider();
+      response = await fetcher(endpoint(baseUrl, route), {
+        body: JSON.stringify(body),
+        headers: {
+          "Content-Type": "application/json",
+          [ANONYMOUS_INSTALLATION_HEADER]: installationId,
+        },
+        method: "POST",
+        signal,
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") throw error;
+      throw new GatewayClientError(
+        "network-unavailable",
+        "The local LingoBridge gateway is not running. Start it with pnpm dev:gateway.",
+        true,
+      );
+    }
+    const payload = await parseJson(response);
+    if (!response.ok) throw requestFailure(payload, response);
+    return payload;
+  }
+
   async function getCapabilities(signal?: AbortSignal): Promise<CapabilityCatalogue> {
     const parsed = capabilityCatalogueSchema.safeParse(
       await get(GATEWAY_ROUTES.capabilities, signal),
@@ -153,6 +184,27 @@ export function createGatewayClient(options: GatewayClientOptions = {}): Gateway
   }
 
   return {
+    async explain(request, signal) {
+      const parsedRequest = explanationRequestSchema.safeParse(request);
+      if (!parsedRequest.success) {
+        throw new GatewayClientError(
+          "invalid-request",
+          "The explanation request did not match the shared contract.",
+          false,
+        );
+      }
+      const parsedResult = explanationResultSchema.safeParse(
+        await post(GATEWAY_ROUTES.explain, parsedRequest.data, signal),
+      );
+      if (!parsedResult.success) {
+        throw new GatewayClientError(
+          "invalid-response",
+          "The gateway explanation did not match the shared contract.",
+          true,
+        );
+      }
+      return parsedResult.data;
+    },
     getCapabilities,
     async inspect(signal) {
       const [service, capabilities] = await Promise.all([
@@ -176,30 +228,7 @@ export function createGatewayClient(options: GatewayClientOptions = {}): Gateway
         );
       }
 
-      let response: Response;
-      try {
-        const installationId = await installationIdProvider();
-        response = await fetcher(endpoint(baseUrl, GATEWAY_ROUTES.translate), {
-          body: JSON.stringify(parsedRequest.data),
-          headers: {
-            "Content-Type": "application/json",
-            [ANONYMOUS_INSTALLATION_HEADER]: installationId,
-          },
-          method: "POST",
-          signal,
-        });
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") throw error;
-        throw new GatewayClientError(
-          "network-unavailable",
-          "The local LingoBridge gateway is not running. Start it with pnpm dev:gateway.",
-          true,
-        );
-      }
-
-      const payload = await parseJson(response);
-      if (!response.ok) throw requestFailure(payload, response);
-
+      const payload = await post(GATEWAY_ROUTES.translate, parsedRequest.data, signal);
       const parsedResult = translationResultSchema.safeParse(payload);
       if (!parsedResult.success) {
         throw new GatewayClientError(

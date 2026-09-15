@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   addRecentLanguage,
   normalizePopupPreferences,
+  replaceAvailableFavourites,
   toggleFavouriteLanguage,
 } from "../../apps/extension/lib/popup-preferences";
 
@@ -42,5 +43,13 @@ describe("popup preferences", () => {
     expect(toggleFavouriteLanguage(["ne", "en"], "fr")).toEqual(["fr", "ne", "en"]);
     expect(toggleFavouriteLanguage(["fr", "ne", "en"], "ne")).toEqual(["fr", "en"]);
     expect(toggleFavouriteLanguage(["ne"], "not_real")).toEqual(["ne"]);
+  });
+
+  it("saves several selected favorites together while retaining pins unavailable for this source", () => {
+    expect(replaceAvailableFavourites(["ne", "fr"], ["fr", "hi", "es"], ["hi", "es"])).toEqual([
+      "ne",
+      "hi",
+      "es",
+    ]);
   });
 });

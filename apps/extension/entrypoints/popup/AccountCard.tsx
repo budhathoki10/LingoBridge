@@ -113,9 +113,8 @@ export function AccountCard() {
       <section className="account-card">
         <h2>Dashboard sync</h2>
         <p className="account-card__text">
-          Connect to sync phrases already saved on this device and phrases you save later. They
-          become visible on the web and your other connected devices. Translation works without an
-          account.
+          Sync the phrases you save to your dashboard and other devices. Translation works without
+          an account.
         </p>
         {connecting ? (
           <p className="account-card__text" role="status">

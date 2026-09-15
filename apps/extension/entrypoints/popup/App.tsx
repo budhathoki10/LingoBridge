@@ -1,10 +1,7 @@
 import { AccountCard } from "./AccountCard";
-import { SavedPhrases } from "./SavedPhrases";
 import { SelectionMagicCard } from "./SelectionMagicCard";
 
 export function App() {
-  const version = chrome.runtime.getManifest().version;
-
   return (
     <main className="popup-shell">
       <header className="app-header">
@@ -19,13 +16,7 @@ export function App() {
 
       <SelectionMagicCard />
 
-      <SavedPhrases />
-
       <AccountCard />
-
-      <footer>
-        <span>v{version}</span>
-      </footer>
     </main>
   );
 }

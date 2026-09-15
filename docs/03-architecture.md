@@ -60,7 +60,7 @@ Synchronizes only explicitly saved phrases and approved preferences. It uses sta
 
 ### Cloud database
 
-A PostgreSQL-compatible database stores users, extension sessions, synchronized phrases, sync revisions, approved preferences, deletion state, and content-free operational aggregates. Every user-owned query is scoped by the authenticated user identifier. Complete translation history is not stored.
+A MongoDB database (Atlas in production; see ADR-004) stores users, extension sessions, synchronized phrases, sync revisions, approved preferences, deletion state, and content-free operational aggregates. Every user-owned query is scoped by the authenticated user identifier. Complete translation history is not stored.
 
 ### Admin operations view
 
@@ -165,7 +165,7 @@ The implementation phase should introduce these areas only after explicit approv
 - Shadow DOM isolation for the anchored translator; no dependency on webpage classes or styles.
 - IndexedDB or Chrome local storage for user-controlled local data.
 - A small, independently deployable TypeScript gateway; it is not a public Next.js page and is the only application allowed to hold translation-provider credentials.
-- A PostgreSQL-compatible database with migrations and encrypted transport/storage.
+- A MongoDB Atlas replica set with append-only migrations, schema validation, and encrypted transport/storage.
 - Standards-based OAuth or OpenID Connect; authorization code with PKCE for extension connection.
 - Provider adapters so translation vendors can change without rewriting the extension.
 - A capability table, refreshed from reviewed provider documentation, that prevents unsupported fallback routing.
