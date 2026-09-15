@@ -38,9 +38,14 @@ Every provider should return:
 
 ## Romanized Nepali rules
 
-These rules apply only if a later feature gate is accepted; they are not version 1 behaviour.
+Phase 9 accepts a narrow first pass for common Romanized Nepali written in Latin letters. The
+extension may normalize high-confidence dictionary-backed Romanized Nepali into Nepali script
+before a normal Nepali translation request. This is preprocessing, not a separate provider model,
+and it must remain disabled for low-confidence mixed English text.
 
 - Keep transliteration and translation as separate operations.
+- Preserve unknown names and technical words rather than inventing Nepali spellings.
+- Show or record uncertainty when the dictionary coverage is too low.
 - Show uncertainty when the same spelling could represent multiple Nepali words.
 - Prefer common conversational Nepali in Natural mode.
 - Preserve English technical words when a forced Nepali term would reduce understanding.

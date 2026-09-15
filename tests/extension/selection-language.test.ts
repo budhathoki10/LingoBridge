@@ -14,7 +14,7 @@ describe("selection source resolution", () => {
   it("reads the selection's own language instead of guessing English", () => {
     expect(
       resolveSelectionSource("Chaque matin, Sophie prend un café chaud sur son balcon.", nvidia),
-    ).toEqual({ assumed: false, code: "fr" });
+    ).toEqual({ assumed: false, code: "fr", romanizedNepali: null });
   });
 
   it("falls back to the plain code when the catalogue has no regional variant", () => {
@@ -23,17 +23,48 @@ describe("selection source resolution", () => {
         "El perro que está en la casa no quiere salir por la puerta.",
         fakeCapabilityCatalogue,
       ),
-    ).toEqual({ assumed: false, code: "es" });
+    ).toEqual({ assumed: false, code: "es", romanizedNepali: null });
   });
 
   it("prefers Nepali over Hindi when the Devanagari words are Nepali", () => {
     expect(
       resolveSelectionSource("तपाईंलाई कस्तो छ र आज मौसम राम्रो छ", fakeCapabilityCatalogue),
-    ).toEqual({ assumed: false, code: "ne" });
+    ).toEqual({ assumed: false, code: "ne", romanizedNepali: null });
+  });
+
+  it("normalizes common Romanized Nepali before translation", () => {
+    expect(resolveSelectionSource("ma ghar jadai chu", fakeCapabilityCatalogue)).toMatchObject({
+      assumed: false,
+      code: "ne",
+      romanizedNepali: {
+        text: "म घर जाँदै छु",
+      },
+    });
+    expect(resolveSelectionSource("Ma bhaat khadaichu", fakeCapabilityCatalogue)).toMatchObject({
+      code: "ne",
+      romanizedNepali: {
+        text: "म भात खाँदै छु",
+      },
+    });
+    expect(
+      resolveSelectionSource(
+        "Sathi, timro naam k ho ani timilai k xa? Ma aba ghara janxu ani afno kaam garxu",
+        fakeCapabilityCatalogue,
+      ),
+    ).toMatchObject({
+      code: "ne",
+      romanizedNepali: {
+        text: "साथी, तिम्रो नाम के हो अनि तिमीलाई के छ? म अब घर जान्छु अनि आफ्नो काम गर्छु",
+      },
+    });
   });
 
   it("says it is assuming when the text cannot be read", () => {
-    expect(resolveSelectionSource("12345", nvidia)).toEqual({ assumed: true, code: "en" });
+    expect(resolveSelectionSource("12345", nvidia)).toEqual({
+      assumed: true,
+      code: "en",
+      romanizedNepali: null,
+    });
   });
 
   it("says it is assuming when the detected language is not in the catalogue", () => {
@@ -44,7 +75,7 @@ describe("selection source resolution", () => {
         "Dette er en helt almindelig sætning og det er ikke svært at læse",
         fakeCapabilityCatalogue,
       ),
-    ).toEqual({ assumed: true, code: "en" });
+    ).toEqual({ assumed: true, code: "en", romanizedNepali: null });
   });
 });
 
