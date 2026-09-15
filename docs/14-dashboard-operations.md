@@ -13,7 +13,8 @@ secret and configuration store, outside the repository:
 | `LINGOBRIDGE_DASHBOARD_ORIGIN` | Exact HTTPS dashboard origin, with no path. |
 | `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | Google web-client credentials. Both are required in production. |
 | `OIDC_ISSUER` | Optional; defaults to `https://accounts.google.com`. |
-| `DATABASE_URL` | PostgreSQL connection with TLS and least-privilege credentials. |
+| `DATABASE_URL` | MongoDB Atlas `mongodb+srv://` connection string for a `readWrite`-only database user. |
+| `DATABASE_NAME` | Optional; defaults to `lingobridge`. |
 | `LINGOBRIDGE_SESSION_SECRET` | Random secret of at least 32 characters. |
 | `LINGOBRIDGE_ALLOWED_EXTENSION_IDS` | Comma-separated exact IDs of reviewed extension packages. |
 | `LINGOBRIDGE_GATEWAY_URL` | Deployed gateway origin for the admin operations view. |
@@ -34,8 +35,9 @@ in its client ID and secret. Restart `pnpm dev:dashboard` and open `http://127.0
 
 ## Database and retention
 
-The dashboard runs append-only migrations when it opens the database. Back up PostgreSQL before
-deploying a new migration; verify restoration against a separate database before release.
+The dashboard runs append-only migrations when it opens the database, creating collections,
+validators, and indexes. Restrict Atlas network access to the dashboard deployment. Back up the
+Atlas cluster before deploying a new migration; verify restoration against a separate database before release.
 Account deletion immediately removes synchronized phrase content and preferences, revokes web and
 extension sessions, de-identifies the account, and issues a content-free receipt. The de-identified
 account row is due for purge after 30 days. Phrase tombstones are retained for 30 days so offline

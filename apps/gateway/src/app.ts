@@ -2,6 +2,8 @@ import {
   ANONYMOUS_INSTALLATION_HEADER,
   anonymousInstallationIdSchema,
   type CapabilityCatalogue,
+  explanationRequestSchema,
+  explanationResultSchema,
   GATEWAY_API_VERSION,
   GATEWAY_ROUTES,
   gatewayHealthSchema,
@@ -19,6 +21,8 @@ import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
 import { fakeCapabilityCatalogue, supportsTranslation } from "./capabilities.js";
+import type { ExplanationAdapter } from "./explanation-adapter.js";
+import { FakeExplanationAdapter } from "./fake-explanation-adapter.js";
 import { FakeTranslationAdapter } from "./fake-translation-adapter.js";
 import {
   consoleGatewayLogger,
@@ -40,6 +44,10 @@ export interface GatewayDependencies {
   capabilityProvider: {
     get(signal: AbortSignal): Promise<CapabilityCatalogue>;
   };
+  /** Null when no explanation provider is configured; the route then answers 503. */
+  explanationAdapter: ExplanationAdapter | null;
+  /** A general model writes more than a translation, so it gets its own, longer deadline. */
+  explanationTimeoutMilliseconds: number;
   getClientAddress: (context: Context) => string;
   logger: GatewayLogger;
   /** Content-free aggregates for the admin view; null disables recording. */
@@ -56,6 +64,8 @@ export interface GatewayDependencies {
 
 const defaultDependencies: GatewayDependencies = {
   capabilityProvider: { get: async () => fakeCapabilityCatalogue },
+  explanationAdapter: new FakeExplanationAdapter(),
+  explanationTimeoutMilliseconds: 30_000,
   getClientAddress: () => "unknown-network",
   logger: consoleGatewayLogger,
   operationsMetrics: null,
@@ -118,6 +128,96 @@ function checkRateLimit(
       true,
     ),
     429,
+  );
+}
+
+type AcceptedPost =
+  | { ok: true; payload: unknown }
+  | { ok: false; rateLimited: boolean; response: Response };
+
+/** Content type, installation identifier, rate limits, then JSON parsing, in that order. */
+async function acceptJsonPost(
+  context: Context,
+  dependencies: GatewayDependencies,
+): Promise<AcceptedPost> {
+  if (!context.req.header("Content-Type")?.toLowerCase().startsWith("application/json")) {
+    return {
+      ok: false,
+      rateLimited: false,
+      response: invalidRequest(context, "Expected an application/json request body.", 415),
+    };
+  }
+
+  const installationId = anonymousInstallationIdSchema.safeParse(
+    context.req.header(ANONYMOUS_INSTALLATION_HEADER),
+  );
+  if (!installationId.success) {
+    return {
+      ok: false,
+      rateLimited: false,
+      response: invalidRequest(
+        context,
+        "A valid anonymous installation identifier is required.",
+        400,
+      ),
+    };
+  }
+
+  const rateLimitResponse = checkRateLimit(context, dependencies, installationId.data);
+  if (rateLimitResponse) return { ok: false, rateLimited: true, response: rateLimitResponse };
+
+  try {
+    return { ok: true, payload: await context.req.json() };
+  } catch {
+    return {
+      ok: false,
+      rateLimited: false,
+      response: context.json(
+        createError("invalid-request", "Expected a valid JSON request body.", null, false),
+        400,
+      ),
+    };
+  }
+}
+
+function providerFailure(
+  context: Context,
+  error: unknown,
+  requestId: string,
+  work: "translation" | "explanation",
+) {
+  const cancelled = () =>
+    context.json(
+      createError("cancelled", `The ${work} request was cancelled.`, requestId, true),
+      408,
+    );
+  const timedOut = () =>
+    context.json(
+      createError("timeout", `The ${work} provider took too long to respond.`, requestId, true),
+      504,
+    );
+
+  if (error instanceof ProviderInterruptedError) {
+    return error.reason === "timeout" ? timedOut() : cancelled();
+  }
+  if (error instanceof TranslationAdapterError) {
+    if (error.code === "timeout") return timedOut();
+    return context.json(
+      createError(
+        error.code,
+        // Adapter messages are content-free; explanations surface them so a refusal is not
+        // reported as an outage. Translation keeps its established wording.
+        work === "explanation" ? error.message : `The ${work} provider is temporarily unavailable.`,
+        requestId,
+        error.retryable,
+      ),
+      503,
+    );
+  }
+  if (error instanceof DOMException && error.name === "AbortError") return cancelled();
+  return context.json(
+    createError("internal-error", `The gateway could not complete the ${work}.`, requestId, true),
+    500,
   );
 }
 
@@ -252,36 +352,12 @@ export function createGatewayApp(dependencies: Partial<GatewayDependencies> = {}
         invalidRequest(context, "The translation request body is too large.", 413),
     }),
     async (context) => {
-      if (!context.req.header("Content-Type")?.toLowerCase().startsWith("application/json")) {
-        return invalidRequest(context, "Expected an application/json request body.", 415);
+      const accepted = await acceptJsonPost(context, resolvedDependencies);
+      if (!accepted.ok) {
+        if (accepted.rateLimited) recordRejected("rate-limited");
+        return accepted.response;
       }
-
-      const installationId = anonymousInstallationIdSchema.safeParse(
-        context.req.header(ANONYMOUS_INSTALLATION_HEADER),
-      );
-      if (!installationId.success) {
-        return invalidRequest(
-          context,
-          "A valid anonymous installation identifier is required.",
-          400,
-        );
-      }
-
-      const rateLimitResponse = checkRateLimit(context, resolvedDependencies, installationId.data);
-      if (rateLimitResponse) {
-        recordRejected("rate-limited");
-        return rateLimitResponse;
-      }
-
-      let payload: unknown;
-      try {
-        payload = await context.req.json();
-      } catch {
-        return context.json(
-          createError("invalid-request", "Expected a valid JSON request body.", null, false),
-          400,
-        );
-      }
+      const payload = accepted.payload;
 
       const parsedRequest = translationRequestSchema.safeParse(payload);
       if (!parsedRequest.success) {
@@ -357,64 +433,72 @@ export function createGatewayApp(dependencies: Partial<GatewayDependencies> = {}
         }
         return context.json(parsedResult.data);
       } catch (error) {
-        if (error instanceof ProviderInterruptedError) {
-          if (error.reason === "timeout") {
-            return context.json(
-              createError(
-                "timeout",
-                "The translation provider took too long to respond.",
-                request.requestId,
-                true,
-              ),
-              504,
-            );
-          }
-          return context.json(
-            createError(
-              "cancelled",
-              "The translation request was cancelled.",
-              request.requestId,
-              true,
-            ),
-            408,
-          );
-        }
+        return providerFailure(context, error, request.requestId, "translation");
+      }
+    },
+  );
 
-        if (error instanceof TranslationAdapterError) {
-          return context.json(
-            createError(
-              error.code,
-              error.code === "timeout"
-                ? "The translation provider took too long to respond."
-                : "The translation provider is temporarily unavailable.",
-              request.requestId,
-              error.retryable,
-            ),
-            error.code === "timeout" ? 504 : 503,
-          );
-        }
+  // Explaining is a second deliberate click on a result the reader already has. It carries its
+  // own provider consent and never stores the text.
+  app.post(
+    GATEWAY_ROUTES.explain,
+    bodyLimit({
+      maxSize: MAX_GATEWAY_REQUEST_BYTES,
+      onError: (context) =>
+        invalidRequest(context, "The explanation request body is too large.", 413),
+    }),
+    async (context) => {
+      const accepted = await acceptJsonPost(context, resolvedDependencies);
+      if (!accepted.ok) return accepted.response;
 
-        if (error instanceof DOMException && error.name === "AbortError") {
-          return context.json(
-            createError(
-              "cancelled",
-              "The translation request was cancelled.",
-              request.requestId,
-              true,
-            ),
-            408,
-          );
-        }
-
+      const parsedRequest = explanationRequestSchema.safeParse(accepted.payload);
+      if (!parsedRequest.success) {
         return context.json(
           createError(
-            "internal-error",
-            "The gateway could not complete the translation.",
-            request.requestId,
-            true,
+            "invalid-request",
+            "The explanation request did not match the supported contract.",
+            safeRequestId(accepted.payload),
+            false,
           ),
-          500,
+          400,
         );
+      }
+      const request = parsedRequest.data;
+
+      const adapter = resolvedDependencies.explanationAdapter;
+      if (!adapter) {
+        return context.json(
+          createError(
+            "provider-unavailable",
+            "Explanations are not set up on this gateway yet.",
+            request.requestId,
+            false,
+          ),
+          503,
+        );
+      }
+
+      try {
+        const result = await runWithProviderDeadline(
+          (signal) => adapter.explain(request, signal),
+          context.req.raw.signal,
+          resolvedDependencies.explanationTimeoutMilliseconds,
+        );
+        const parsedResult = explanationResultSchema.safeParse(result);
+        if (!parsedResult.success) {
+          return context.json(
+            createError(
+              "provider-unavailable",
+              "The explanation provider returned an unusable response.",
+              request.requestId,
+              true,
+            ),
+            502,
+          );
+        }
+        return context.json(parsedResult.data);
+      } catch (error) {
+        return providerFailure(context, error, request.requestId, "explanation");
       }
     },
   );

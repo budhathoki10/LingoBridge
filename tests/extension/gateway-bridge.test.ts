@@ -73,6 +73,9 @@ function createFakeBackground(delayMilliseconds = 0) {
       if (parsed.operation === "inspect-service") {
         return { data: await client.inspectService(controller.signal), ok: true };
       }
+      if (parsed.operation === "explain") {
+        return { data: await client.explain(parsed.request, controller.signal), ok: true };
+      }
       return {
         data: await client.translate(parsed.request as TranslationRequest, controller.signal),
         ok: true,
@@ -109,6 +112,37 @@ describe("gateway bridge", () => {
     expect(snapshot.capabilities.languages.some((language) => language.code === "es")).toBe(true);
     expect(result.translatedText).toBe("Thank you");
     expect(result.requestId).toBe(request.requestId);
+  });
+
+  it("explains a translated phrase through the background worker", async () => {
+    const background = createFakeBackground();
+    const client = createBridgeGatewayClient(background.transport);
+    const explained = await client.explain(
+      {
+        consent: {
+          acceptedAt: "2026-09-15T00:00:00.000Z",
+          nvidia: true,
+          version: "fake-gateway",
+        },
+        operation: "explain",
+        requestId: "7c1f0b52-3a8e-4f5d-9b6a-2d4c8e1f0a93",
+        sourceLanguage: "es",
+        sourceText: "Gracias",
+        targetLanguage: "en",
+        translatedText: "Thank you",
+      },
+      new AbortController().signal,
+    );
+    expect(explained.provider).toBe("nvidia");
+    expect(explained.examples.length).toBeGreaterThan(0);
+    expect(
+      parseGatewayBridgeRequest({
+        id: "a",
+        operation: "explain",
+        request: { sourceText: "no consent" },
+        type: "lingobridge:gateway:request",
+      }),
+    ).toBeNull();
   });
 
   it("rejects malformed and unknown bridge messages before any gateway call", () => {

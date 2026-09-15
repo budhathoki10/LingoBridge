@@ -26,10 +26,20 @@
       </section>
 
       <section>
+        <h2>Explain</h2>
+        <p>
+          When you click Explain on a translation, the gateway sends only that selected text, its
+          translation, and the two language codes to NVIDIA Nemotron 3 Super to write a short,
+          simple explanation with examples in the language you translated into. Explain asks for its own permission the first time,
+          works only on short phrases, and is never used unless you click it.
+        </p>
+      </section>
+
+      <section>
         <h2>What LingoBridge keeps</h2>
         <p>
           The gateway does not create translation history and its operational logs do not contain
-          source or translated text. A random installation identifier is stored only in the
+          source, translated, or explained text. Explanations are not saved. A random installation identifier is stored only in the
           extension and used for abuse limits.
         </p>
       </section>
@@ -55,6 +65,12 @@
         and Google's
         <a href="https://cloud.google.com/translate/data-usage" rel="noreferrer" target="_blank"
           >Cloud Translation data usage terms</a
+        >. Explanations use NVIDIA's
+        <a
+          href="https://build.nvidia.com/nvidia/nemotron-3-super-120b-a12b/modelcard"
+          rel="noreferrer"
+          target="_blank"
+          >Nemotron 3 Super model</a
         >.
       </p>
     </main>

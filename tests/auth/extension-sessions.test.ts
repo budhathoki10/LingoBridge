@@ -45,6 +45,12 @@ function connectionParams(verifier: string, overrides: Record<string, string> = 
   });
 }
 
+async function deleteAllUsers() {
+  for (const name of ["users", "preferences", "extensionAuthorizationCodes"]) {
+    await dashboard.database.db.collection(name).deleteMany({});
+  }
+}
+
 async function issueCode(verifier = createCodeVerifier()) {
   const user = await createUser(dashboard.database, "ext@example.test", dashboard.clock.now());
   const parsed = parseConnectionRequest(
@@ -117,7 +123,7 @@ describe("user-triggered connection", () => {
       );
 
     const countCodes = async () =>
-      (await dashboard.database.query("select 1 from extension_authorization_codes")).rows.length;
+      dashboard.database.db.collection("extensionAuthorizationCodes").countDocuments();
 
     expect((await decide("approve", "forged")).status).toBe(403);
     expect((await decide("approve", csrfToken, "https://evil.test")).status).toBe(403);
@@ -151,16 +157,14 @@ describe("user-triggered connection", () => {
     const replay = await exchangeExtensionToken(dashboard.services.extensionAuth, request);
     expect(replay).toEqual({ error: "invalid-grant", ok: false });
 
-    const sessions = await dashboard.database.query("select id from extension_sessions");
-    expect(sessions.rows).toHaveLength(1);
+    const sessions = dashboard.database.db.collection("extensionSessions");
+    expect(await sessions.countDocuments()).toBe(1);
 
     if (!first.ok) throw new Error("exchange failed");
-    const stored = await dashboard.database.query<Record<string, string>>(
-      "select access_token_hash, refresh_token_hash from extension_sessions",
-    );
-    expect(stored.rows[0]?.access_token_hash).toBe(hashToken(first.response.accessToken));
-    expect(JSON.stringify(stored.rows)).not.toContain(first.response.accessToken);
-    expect(JSON.stringify(stored.rows)).not.toContain(first.response.refreshToken);
+    const stored = await sessions.find({}).toArray();
+    expect(stored[0]?.accessTokenHash).toBe(hashToken(first.response.accessToken));
+    expect(JSON.stringify(stored)).not.toContain(first.response.accessToken);
+    expect(JSON.stringify(stored)).not.toContain(first.response.refreshToken);
   });
 
   it("rejects a wrong verifier, a different redirect URI, or an expired code", async () => {
@@ -174,7 +178,7 @@ describe("user-triggered connection", () => {
       }),
     ).resolves.toEqual({ error: "invalid-grant", ok: false });
 
-    await dashboard.database.query("delete from users");
+    await deleteAllUsers();
     const wrongRedirect = await issueCode();
     await expect(
       exchangeExtensionToken(dashboard.services.extensionAuth, {
@@ -185,7 +189,7 @@ describe("user-triggered connection", () => {
       }),
     ).resolves.toEqual({ error: "invalid-grant", ok: false });
 
-    await dashboard.database.query("delete from users");
+    await deleteAllUsers();
     const expired = await issueCode();
     dashboard.clock.advance(AUTH_POLICY.extensionAuthorizationCodeMilliseconds + 1);
     await expect(

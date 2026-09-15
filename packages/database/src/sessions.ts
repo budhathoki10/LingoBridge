@@ -1,5 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { type SqlClient, toIsoString, toNullableIsoString } from "./client.js";
+import {
+  collection,
+  type DbClient,
+  type ExtensionSessionDocument,
+  inSession,
+  toIsoString,
+  toNullableIsoString,
+  type WebSessionDocument,
+} from "./client.js";
+import { findUserById } from "./users.js";
 
 /* ---------------------------------------------------------------------------------------------
  * Sign-in attempts. The state value travels through the identity provider; the browser binding
@@ -17,63 +26,59 @@ export interface LoginAttempt {
 }
 
 export async function createLoginAttempt(
-  client: SqlClient,
+  client: DbClient,
   input: LoginAttempt & { browserBindingHash: string; expiresAt: Date; stateHash: string },
   now: Date,
 ): Promise<void> {
-  await client.query(
-    `insert into login_attempts (id, state_hash, browser_binding_hash, nonce, code_verifier,
-                                 purpose, return_to, user_id, created_at, expires_at)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-    [
-      randomUUID(),
-      input.stateHash,
-      input.browserBindingHash,
-      input.nonce,
-      input.codeVerifier,
-      input.purpose,
-      input.returnTo,
-      input.userId,
-      now,
-      input.expiresAt,
-    ],
+  await collection(client, "loginAttempts").insertOne(
+    {
+      _id: randomUUID(),
+      browserBindingHash: input.browserBindingHash,
+      codeVerifier: input.codeVerifier,
+      consumedAt: null,
+      createdAt: now,
+      expiresAt: input.expiresAt,
+      nonce: input.nonce,
+      purpose: input.purpose,
+      returnTo: input.returnTo,
+      stateHash: input.stateHash,
+      userId: input.userId,
+    },
+    inSession(client),
   );
 }
 
-/** Single use: the row is consumed atomically, so a replayed callback finds nothing. */
+/** Single use: the document is consumed atomically, so a replayed callback finds nothing. */
 export async function consumeLoginAttempt(
-  client: SqlClient,
+  client: DbClient,
   stateHash: string,
   browserBindingHash: string,
   now: Date,
 ): Promise<LoginAttempt | null> {
-  const { rows } = await client.query<{
-    code_verifier: string;
-    nonce: string;
-    purpose: LoginPurpose;
-    return_to: string;
-    user_id: string | null;
-  }>(
-    `update login_attempts set consumed_at = $3
-     where state_hash = $1 and browser_binding_hash = $2
-       and consumed_at is null and expires_at > $3
-     returning nonce, code_verifier, purpose, return_to, user_id`,
-    [stateHash, browserBindingHash, now],
+  const attempt = await collection(client, "loginAttempts").findOneAndUpdate(
+    { browserBindingHash, consumedAt: null, expiresAt: { $gt: now }, stateHash },
+    { $set: { consumedAt: now } },
+    { ...inSession(client), returnDocument: "after" },
   );
-  const row = rows[0];
-  if (!row) return null;
+  if (!attempt) return null;
   return {
-    codeVerifier: row.code_verifier,
-    nonce: row.nonce,
-    purpose: row.purpose,
-    returnTo: row.return_to,
-    userId: row.user_id,
+    codeVerifier: attempt.codeVerifier,
+    nonce: attempt.nonce,
+    purpose: attempt.purpose,
+    returnTo: attempt.returnTo,
+    userId: attempt.userId,
   };
 }
 
-export async function purgeExpiredLoginAttempts(client: SqlClient, now: Date): Promise<void> {
-  await client.query("delete from login_attempts where expires_at <= $1", [now]);
-  await client.query("delete from extension_authorization_codes where expires_at <= $1", [now]);
+export async function purgeExpiredLoginAttempts(client: DbClient, now: Date): Promise<void> {
+  await collection(client, "loginAttempts").deleteMany(
+    { expiresAt: { $lte: now } },
+    inSession(client),
+  );
+  await collection(client, "extensionAuthorizationCodes").deleteMany(
+    { expiresAt: { $lte: now } },
+    inSession(client),
+  );
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -88,26 +93,18 @@ export interface WebSession {
   userId: string;
 }
 
-interface WebSessionRow {
-  absolute_expires_at: unknown;
-  authenticated_at: unknown;
-  id: string;
-  idle_expires_at: unknown;
-  user_id: string;
-}
-
-function toWebSession(row: WebSessionRow): WebSession {
+function toWebSession(document: WebSessionDocument): WebSession {
   return {
-    absoluteExpiresAt: toIsoString(row.absolute_expires_at),
-    authenticatedAt: toIsoString(row.authenticated_at),
-    id: row.id,
-    idleExpiresAt: toIsoString(row.idle_expires_at),
-    userId: row.user_id,
+    absoluteExpiresAt: toIsoString(document.absoluteExpiresAt),
+    authenticatedAt: toIsoString(document.authenticatedAt),
+    id: document._id,
+    idleExpiresAt: toIsoString(document.idleExpiresAt),
+    userId: document.userId,
   };
 }
 
 export async function createWebSession(
-  client: SqlClient,
+  client: DbClient,
   input: {
     absoluteExpiresAt: Date;
     authenticatedAt: Date;
@@ -117,71 +114,79 @@ export async function createWebSession(
   },
   now: Date,
 ): Promise<WebSession> {
-  const { rows } = await client.query<WebSessionRow>(
-    `insert into web_sessions (id, user_id, token_hash, created_at, last_seen_at,
-                               idle_expires_at, absolute_expires_at, authenticated_at)
-     values ($1, $2, $3, $4, $4, $5, $6, $7)
-     returning id, user_id, idle_expires_at, absolute_expires_at, authenticated_at`,
-    [
-      randomUUID(),
-      input.userId,
-      input.tokenHash,
-      now,
-      input.idleExpiresAt,
-      input.absoluteExpiresAt,
-      input.authenticatedAt,
-    ],
-  );
-  if (!rows[0]) throw new Error("Web session insert returned no row.");
-  return toWebSession(rows[0]);
+  const document: WebSessionDocument = {
+    _id: randomUUID(),
+    absoluteExpiresAt: input.absoluteExpiresAt,
+    authenticatedAt: input.authenticatedAt,
+    createdAt: now,
+    idleExpiresAt: input.idleExpiresAt,
+    lastSeenAt: now,
+    revokedAt: null,
+    tokenHash: input.tokenHash,
+    userId: input.userId,
+  };
+  await collection(client, "webSessions").insertOne(document, inSession(client));
+  return toWebSession(document);
 }
 
 /**
- * Finds a live session and slides its idle expiry forward in the same statement. The idle window
+ * Finds a live session and slides its idle expiry forward in the same update. The idle window
  * never extends past the absolute expiry, and a deleted account's sessions never match.
  */
 export async function touchWebSession(
-  client: SqlClient,
+  client: DbClient,
   tokenHash: string,
   idleMilliseconds: number,
   now: Date,
 ): Promise<WebSession | null> {
-  const { rows } = await client.query<WebSessionRow>(
-    `update web_sessions s
-        set last_seen_at = $2,
-            idle_expires_at = least(s.absolute_expires_at, $3::timestamptz)
-       from users u
-      where s.token_hash = $1 and u.id = s.user_id and u.deleted_at is null
-        and s.revoked_at is null and s.idle_expires_at > $2 and s.absolute_expires_at > $2
-      returning s.id, s.user_id, s.idle_expires_at, s.absolute_expires_at, s.authenticated_at`,
-    [tokenHash, now, new Date(now.getTime() + idleMilliseconds)],
+  const session = await collection(client, "webSessions").findOneAndUpdate(
+    {
+      absoluteExpiresAt: { $gt: now },
+      idleExpiresAt: { $gt: now },
+      revokedAt: null,
+      tokenHash,
+    },
+    [
+      {
+        $set: {
+          idleExpiresAt: {
+            $min: ["$absoluteExpiresAt", new Date(now.getTime() + idleMilliseconds)],
+          },
+          lastSeenAt: now,
+        },
+      },
+    ],
+    { ...inSession(client), returnDocument: "after" },
   );
-  return rows[0] ? toWebSession(rows[0]) : null;
+  if (!session) return null;
+  if (!(await findUserById(client, session.userId))) return null;
+  return toWebSession(session);
 }
 
 export async function markWebSessionReauthenticated(
-  client: SqlClient,
+  client: DbClient,
   sessionId: string,
   userId: string,
   now: Date,
 ): Promise<void> {
-  await client.query(
-    `update web_sessions set authenticated_at = $3
-     where id = $1 and user_id = $2 and revoked_at is null`,
-    [sessionId, userId, now],
+  await collection(client, "webSessions").updateOne(
+    { _id: sessionId, revokedAt: null, userId },
+    { $set: { authenticatedAt: now } },
+    inSession(client),
   );
 }
 
 export async function revokeWebSession(
-  client: SqlClient,
+  client: DbClient,
   tokenHash: string,
   now: Date,
 ): Promise<string | null> {
-  const { rows } = await client.query<{ user_id: string }>(
-    "update web_sessions set revoked_at = $2 where token_hash = $1 and revoked_at is null returning user_id",
-    [tokenHash, now],
+  const session = await collection(client, "webSessions").findOneAndUpdate(
+    { revokedAt: null, tokenHash },
+    { $set: { revokedAt: now } },
+    inSession(client),
   );
-  return rows[0]?.user_id ?? null;
+  return session?.userId ?? null;
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -197,55 +202,44 @@ export interface ExtensionAuthorizationCode {
 }
 
 export async function createExtensionAuthorizationCode(
-  client: SqlClient,
+  client: DbClient,
   input: ExtensionAuthorizationCode & { codeHash: string; expiresAt: Date },
   now: Date,
 ): Promise<void> {
-  await client.query(
-    `insert into extension_authorization_codes
-       (code_hash, user_id, extension_id, redirect_uri, code_challenge, device_label,
-        created_at, expires_at)
-     values ($1, $2, $3, $4, $5, $6, $7, $8)`,
-    [
-      input.codeHash,
-      input.userId,
-      input.extensionId,
-      input.redirectUri,
-      input.codeChallenge,
-      input.deviceLabel,
-      now,
-      input.expiresAt,
-    ],
+  await collection(client, "extensionAuthorizationCodes").insertOne(
+    {
+      _id: input.codeHash,
+      codeChallenge: input.codeChallenge,
+      consumedAt: null,
+      createdAt: now,
+      deviceLabel: input.deviceLabel,
+      expiresAt: input.expiresAt,
+      extensionId: input.extensionId,
+      redirectUri: input.redirectUri,
+      userId: input.userId,
+    },
+    inSession(client),
   );
 }
 
 export async function consumeExtensionAuthorizationCode(
-  client: SqlClient,
+  client: DbClient,
   codeHash: string,
   now: Date,
 ): Promise<ExtensionAuthorizationCode | null> {
-  const { rows } = await client.query<{
-    code_challenge: string;
-    device_label: string;
-    extension_id: string;
-    redirect_uri: string;
-    user_id: string;
-  }>(
-    `update extension_authorization_codes c set consumed_at = $2
-       from users u
-      where c.code_hash = $1 and u.id = c.user_id and u.deleted_at is null
-        and c.consumed_at is null and c.expires_at > $2
-      returning c.user_id, c.extension_id, c.redirect_uri, c.code_challenge, c.device_label`,
-    [codeHash, now],
+  const code = await collection(client, "extensionAuthorizationCodes").findOneAndUpdate(
+    { _id: codeHash, consumedAt: null, expiresAt: { $gt: now } },
+    { $set: { consumedAt: now } },
+    { ...inSession(client), returnDocument: "after" },
   );
-  const row = rows[0];
-  if (!row) return null;
+  if (!code) return null;
+  if (!(await findUserById(client, code.userId))) return null;
   return {
-    codeChallenge: row.code_challenge,
-    deviceLabel: row.device_label,
-    extensionId: row.extension_id,
-    redirectUri: row.redirect_uri,
-    userId: row.user_id,
+    codeChallenge: code.codeChallenge,
+    deviceLabel: code.deviceLabel,
+    extensionId: code.extensionId,
+    redirectUri: code.redirectUri,
+    userId: code.userId,
   };
 }
 
@@ -264,39 +258,23 @@ export interface ExtensionSession {
   userId: string;
 }
 
-interface ExtensionSessionRow {
-  access_expires_at: unknown;
-  created_at: unknown;
-  device_label: string;
-  expires_at: unknown;
-  extension_id: string;
-  id: string;
-  last_used_at: unknown;
-  revoked_at: unknown;
-  revoked_reason: ExtensionSessionRevocationReason | null;
-  user_id: string;
-}
-
-const EXTENSION_SESSION_COLUMNS = `s.id, s.user_id, s.extension_id, s.device_label,
-  s.access_expires_at, s.created_at, s.last_used_at, s.expires_at, s.revoked_at, s.revoked_reason`;
-
-function toExtensionSession(row: ExtensionSessionRow): ExtensionSession {
+function toExtensionSession(document: ExtensionSessionDocument): ExtensionSession {
   return {
-    accessExpiresAt: toIsoString(row.access_expires_at),
-    createdAt: toIsoString(row.created_at),
-    deviceLabel: row.device_label,
-    expiresAt: toIsoString(row.expires_at),
-    extensionId: row.extension_id,
-    id: row.id,
-    lastUsedAt: toIsoString(row.last_used_at),
-    revokedAt: toNullableIsoString(row.revoked_at),
-    revokedReason: row.revoked_reason,
-    userId: row.user_id,
+    accessExpiresAt: toIsoString(document.accessExpiresAt),
+    createdAt: toIsoString(document.createdAt),
+    deviceLabel: document.deviceLabel,
+    expiresAt: toIsoString(document.expiresAt),
+    extensionId: document.extensionId,
+    id: document._id,
+    lastUsedAt: toIsoString(document.lastUsedAt),
+    revokedAt: toNullableIsoString(document.revokedAt),
+    revokedReason: document.revokedReason,
+    userId: document.userId,
   };
 }
 
 export async function createExtensionSession(
-  client: SqlClient,
+  client: DbClient,
   input: {
     accessExpiresAt: Date;
     accessTokenHash: string;
@@ -308,26 +286,22 @@ export async function createExtensionSession(
   },
   now: Date,
 ): Promise<ExtensionSession> {
-  const { rows } = await client.query<ExtensionSessionRow>(
-    `insert into extension_sessions as s
-       (id, user_id, extension_id, device_label, access_token_hash, access_expires_at,
-        refresh_token_hash, created_at, last_used_at, expires_at)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9)
-     returning ${EXTENSION_SESSION_COLUMNS}`,
-    [
-      randomUUID(),
-      input.userId,
-      input.extensionId,
-      input.deviceLabel,
-      input.accessTokenHash,
-      input.accessExpiresAt,
-      input.refreshTokenHash,
-      now,
-      input.expiresAt,
-    ],
-  );
-  if (!rows[0]) throw new Error("Extension session insert returned no row.");
-  return toExtensionSession(rows[0]);
+  const document: ExtensionSessionDocument = {
+    _id: randomUUID(),
+    accessExpiresAt: input.accessExpiresAt,
+    accessTokenHash: input.accessTokenHash,
+    createdAt: now,
+    deviceLabel: input.deviceLabel,
+    expiresAt: input.expiresAt,
+    extensionId: input.extensionId,
+    lastUsedAt: now,
+    refreshTokenHash: input.refreshTokenHash,
+    revokedAt: null,
+    revokedReason: null,
+    userId: input.userId,
+  };
+  await collection(client, "extensionSessions").insertOne(document, inSession(client));
+  return toExtensionSession(document);
 }
 
 export type AccessTokenLookup =
@@ -337,27 +311,21 @@ export type AccessTokenLookup =
   | { kind: "unknown" };
 
 export async function authenticateExtensionAccessToken(
-  client: SqlClient,
+  client: DbClient,
   accessTokenHash: string,
   now: Date,
 ): Promise<AccessTokenLookup> {
-  const { rows } = await client.query<ExtensionSessionRow & { user_deleted_at: unknown }>(
-    `select ${EXTENSION_SESSION_COLUMNS}, u.deleted_at as user_deleted_at
-       from extension_sessions s join users u on u.id = s.user_id
-      where s.access_token_hash = $1`,
-    [accessTokenHash],
-  );
-  const row = rows[0];
-  if (!row) return { kind: "unknown" };
-  if (row.revoked_at !== null || row.user_deleted_at !== null) return { kind: "revoked" };
-  const session = toExtensionSession(row);
+  const sessions = collection(client, "extensionSessions");
+  const document = await sessions.findOne({ accessTokenHash }, inSession(client));
+  if (!document) return { kind: "unknown" };
+  if (document.revokedAt !== null || !(await findUserById(client, document.userId))) {
+    return { kind: "revoked" };
+  }
+  const session = toExtensionSession(document);
   if (Date.parse(session.accessExpiresAt) <= now.getTime()) return { kind: "expired" };
   if (Date.parse(session.expiresAt) <= now.getTime()) return { kind: "expired" };
 
-  await client.query("update extension_sessions set last_used_at = $2 where id = $1", [
-    session.id,
-    now,
-  ]);
+  await sessions.updateOne({ _id: session.id }, { $set: { lastUsedAt: now } }, inSession(client));
   return { kind: "active", session: { ...session, lastUsedAt: now.toISOString() } };
 }
 
@@ -373,7 +341,7 @@ export type RefreshRotation =
  * is legitimate.
  */
 export async function rotateExtensionRefreshToken(
-  client: SqlClient,
+  client: DbClient,
   input: {
     accessExpiresAt: Date;
     newAccessTokenHash: string;
@@ -382,84 +350,89 @@ export async function rotateExtensionRefreshToken(
   },
   now: Date,
 ): Promise<RefreshRotation> {
-  const { rows } = await client.query<ExtensionSessionRow>(
-    `update extension_sessions s
-        set previous_refresh_token_hash = s.refresh_token_hash,
-            refresh_token_hash = $2,
-            access_token_hash = $3,
-            access_expires_at = least(s.expires_at, $4::timestamptz),
-            last_used_at = $5
-       from users u
-      where s.refresh_token_hash = $1 and u.id = s.user_id and u.deleted_at is null
-        and s.revoked_at is null and s.expires_at > $5
-      returning ${EXTENSION_SESSION_COLUMNS}`,
+  const sessions = collection(client, "extensionSessions");
+  const rotated = await sessions.findOneAndUpdate(
+    { expiresAt: { $gt: now }, refreshTokenHash: input.presentedRefreshTokenHash, revokedAt: null },
     [
-      input.presentedRefreshTokenHash,
-      input.newRefreshTokenHash,
-      input.newAccessTokenHash,
-      input.accessExpiresAt,
-      now,
+      {
+        $set: {
+          accessExpiresAt: { $min: ["$expiresAt", input.accessExpiresAt] },
+          accessTokenHash: input.newAccessTokenHash,
+          lastUsedAt: now,
+          previousRefreshTokenHash: "$refreshTokenHash",
+          refreshTokenHash: input.newRefreshTokenHash,
+        },
+      },
     ],
+    { ...inSession(client), returnDocument: "after" },
   );
-  if (rows[0]) return { kind: "rotated", session: toExtensionSession(rows[0]) };
+  if (rotated) {
+    // Account deletion revokes every session in the same transaction, so this is a backstop.
+    if (!(await findUserById(client, rotated.userId))) return { kind: "revoked" };
+    return { kind: "rotated", session: toExtensionSession(rotated) };
+  }
 
-  const reused = await client.query<{ id: string }>(
-    `update extension_sessions set revoked_at = $2, revoked_reason = 'refresh-reuse'
-      where previous_refresh_token_hash = $1 and revoked_at is null
-      returning id`,
-    [input.presentedRefreshTokenHash, now],
+  const reused = await sessions.updateMany(
+    { previousRefreshTokenHash: input.presentedRefreshTokenHash, revokedAt: null },
+    { $set: { revokedAt: now, revokedReason: "refresh-reuse" } },
+    inSession(client),
   );
-  if (reused.rows.length > 0) return { kind: "reuse-detected" };
+  if (reused.modifiedCount > 0) return { kind: "reuse-detected" };
 
-  const revoked = await client.query<{ id: string }>(
-    `select id from extension_sessions
-      where (refresh_token_hash = $1 or previous_refresh_token_hash = $1)
-        and revoked_at is not null`,
-    [input.presentedRefreshTokenHash],
+  const revoked = await sessions.findOne(
+    {
+      $or: [
+        { refreshTokenHash: input.presentedRefreshTokenHash },
+        { previousRefreshTokenHash: input.presentedRefreshTokenHash },
+      ],
+      revokedAt: { $ne: null },
+    },
+    inSession(client),
   );
-  return revoked.rows.length > 0 ? { kind: "revoked" } : { kind: "invalid" };
+  return revoked ? { kind: "revoked" } : { kind: "invalid" };
 }
 
 export async function listExtensionSessions(
-  client: SqlClient,
+  client: DbClient,
   userId: string,
 ): Promise<ExtensionSession[]> {
-  const { rows } = await client.query<ExtensionSessionRow>(
-    `select ${EXTENSION_SESSION_COLUMNS} from extension_sessions s
-      where s.user_id = $1
-      order by s.revoked_at is not null, s.last_used_at desc`,
-    [userId],
-  );
-  return rows.map(toExtensionSession);
+  const documents = await collection(client, "extensionSessions")
+    .find({ userId }, inSession(client))
+    .toArray();
+  return documents
+    .sort(
+      (a, b) =>
+        Number(a.revokedAt !== null) - Number(b.revokedAt !== null) ||
+        b.lastUsedAt.getTime() - a.lastUsedAt.getTime(),
+    )
+    .map(toExtensionSession);
 }
 
-/** Ownership is part of the predicate: another user's session id matches nothing. */
+/** Ownership is part of the filter: another user's session id matches nothing. */
 export async function revokeExtensionSession(
-  client: SqlClient,
+  client: DbClient,
   userId: string,
   sessionId: string,
   now: Date,
 ): Promise<boolean> {
-  const { rows } = await client.query<{ id: string }>(
-    `update extension_sessions set revoked_at = $3, revoked_reason = 'user'
-      where id = $1 and user_id = $2 and revoked_at is null
-      returning id`,
-    [sessionId, userId, now],
+  const result = await collection(client, "extensionSessions").updateOne(
+    { _id: sessionId, revokedAt: null, userId },
+    { $set: { revokedAt: now, revokedReason: "user" } },
+    inSession(client),
   );
-  return rows.length > 0;
+  return result.modifiedCount > 0;
 }
 
 export async function revokeAllExtensionSessions(
-  client: SqlClient,
+  client: DbClient,
   userId: string,
   reason: ExtensionSessionRevocationReason,
   now: Date,
 ): Promise<number> {
-  const { rows } = await client.query<{ id: string }>(
-    `update extension_sessions set revoked_at = $2, revoked_reason = $3
-      where user_id = $1 and revoked_at is null
-      returning id`,
-    [userId, now, reason],
+  const result = await collection(client, "extensionSessions").updateMany(
+    { revokedAt: null, userId },
+    { $set: { revokedAt: now, revokedReason: reason } },
+    inSession(client),
   );
-  return rows.length;
+  return result.modifiedCount;
 }

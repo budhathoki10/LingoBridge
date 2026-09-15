@@ -1,8 +1,13 @@
-import type {
-  CapabilityCatalogue,
-  OnlineConsent,
-  TranslationRequest,
-  TranslationResult,
+import {
+  type CapabilityCatalogue,
+  type ExplanationConsent,
+  type ExplanationRegister,
+  type ExplanationRequest,
+  type ExplanationResult,
+  MAX_EXPLANATION_SOURCE_CODE_POINTS,
+  type OnlineConsent,
+  type TranslationRequest,
+  type TranslationResult,
 } from "@lingobridge/contracts";
 import {
   catalogueToPreviewLanguages,
@@ -13,13 +18,16 @@ import {
   loadCachedCapabilityCatalogue,
   saveCachedCapabilityCatalogue,
 } from "../lib/capability-cache";
+import { acceptExplanationConsent, loadExplanationConsent } from "../lib/explanation-consent";
 import { createBridgeGatewayClient, GATEWAY_BRIDGE_PORT } from "../lib/gateway-bridge";
+import { ensurePanelFont } from "../lib/panel-font";
 import { GatewayClientError } from "../lib/gateway-client";
 import { acceptOnlineProviderConsent, loadOnlineProviderConsent } from "../lib/online-consent";
 import {
   DEFAULT_POPUP_PREFERENCES,
   loadPopupPreferences,
   type PopupPreferences,
+  replaceAvailableFavourites,
   savePopupPreferences,
   toggleFavouriteLanguage,
 } from "../lib/popup-preferences";
@@ -54,6 +62,20 @@ import {
 // message, and disconnecting cancels the call.
 const gatewayPorts = new Map<string, Browser.runtime.Port>();
 
+const EXTENSION_UPDATED_MESSAGE = "LingoBridge was updated. Reload this page to keep translating.";
+
+/**
+ * Reloading or updating the extension leaves this script running in already-open tabs, cut off
+ * from the new background worker. Chrome signals that by clearing the runtime id.
+ */
+function extensionContextInvalidated(): boolean {
+  try {
+    return !browser.runtime?.id;
+  } catch {
+    return true;
+  }
+}
+
 const gatewayClient = createBridgeGatewayClient({
   abort(message) {
     gatewayPorts.get(message.id)?.disconnect();
@@ -61,6 +83,10 @@ const gatewayClient = createBridgeGatewayClient({
   },
   send(message) {
     return new Promise((resolve, reject) => {
+      if (extensionContextInvalidated()) {
+        reject(new GatewayClientError("network-unavailable", EXTENSION_UPDATED_MESSAGE, false));
+        return;
+      }
       let port: Browser.runtime.Port;
       try {
         port = browser.runtime.connect({ name: GATEWAY_BRIDGE_PORT });
@@ -94,6 +120,21 @@ const FAKE_CONSENT: OnlineConsent = {
   nvidia: true,
   version: "phase-3.1-fake-gateway",
 };
+
+const FAKE_EXPLANATION_CONSENT: ExplanationConsent = {
+  acceptedAt: "2026-09-15T00:00:00.000Z",
+  nvidia: true,
+  version: "fake-gateway",
+};
+
+const REGISTER_LABELS: Record<ExplanationRegister, string> = {
+  casual: "Casual",
+  formal: "Formal",
+  neutral: "Neutral",
+  slang: "Slang",
+};
+
+type ExplanationState = "idle" | "consent" | "loading" | "error" | "ready";
 
 interface CapturedSelection {
   editable: boolean;
@@ -146,13 +187,16 @@ const SURFACE_CSS = `
     all: initial;
     color-scheme: light;
     contain: layout style;
-    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: "LingoBridge Roboto", Roboto, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
   *, *::before, *::after { box-sizing: border-box; }
-  button, select { color: inherit; font: inherit; }
+  /* The host element is reset with an inline "all: initial !important", which also clears a font
+     set on :host, so the font is applied to the surface itself. */
+  .magic, .panel { font-family: "LingoBridge Roboto", Roboto, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  button, input, select { color: inherit; font: inherit; }
   button { cursor: pointer; }
   button:disabled { cursor: not-allowed; opacity: .58; }
-  button:focus-visible, select:focus-visible { outline: 3px solid rgba(35, 99, 235, .3); outline-offset: 2px; }
+  button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 3px solid rgba(35, 99, 235, .3); outline-offset: 2px; }
   .magic {
     display: grid; width: 38px; height: 38px; padding: 0; place-items: center;
     border: 1px solid rgba(255,255,255,.78); border-radius: 10px;
@@ -194,6 +238,18 @@ const SURFACE_CSS = `
   .favorites button { min-height: 27px; padding: 4px 7px; border: 1px solid #cfd2d5; border-radius: 6px; color: #394450; background: #fff; font-size: 11px; font-weight: 600; }
   .favorites button:hover { border-color: #2363eb; color: #1d4ed8; }
   .favorites button[aria-pressed="true"] { border-color: #b9ccef; color: #174fbd; background: #edf3ff; }
+  .favorite-picker { border: 1px solid #dedfdd; border-radius: 8px; background: #fff; }
+  .favorite-picker[hidden] { display: none; }
+  .favorite-picker summary { padding: 8px 10px; color: #1d4ed8; cursor: pointer; font-size: 11px; font-weight: 700; }
+  .favorite-picker__body { display: grid; gap: 8px; padding: 0 10px 10px; }
+  .favorite-picker__search { width: 100%; min-height: 34px; padding: 6px 9px; border: 1px solid #cfd2d5; border-radius: 7px; background: #fff; font-size: 12px; }
+  .favorite-picker__list { display: grid; gap: 2px; max-height: 170px; overflow: auto; }
+  .favorite-picker__item { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 4px 2px; color: #394450; cursor: pointer; font-size: 11px; font-weight: 600; text-transform: none; letter-spacing: normal; }
+  .favorite-picker__item[hidden] { display: none; }
+  .favorite-picker__item input { width: 15px; height: 15px; margin: 0; accent-color: #2363eb; }
+  .favorite-picker__footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .favorite-picker__count { color: #66707a; font-size: 10px; }
+  .favorite-picker__save { min-height: 31px; padding: 5px 9px; border: 1px solid #2363eb; border-radius: 7px; color: #fff; background: #2363eb; font-size: 11px; font-weight: 700; }
   label { display: grid; min-width: 0; gap: 4px; color: #66707a; font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .02em; }
   .source-language { display: flex; min-width: 0; height: 38px; align-items: center; overflow: hidden; padding: 0 9px; border: 1px solid #d8dadd; border-radius: 7px; background: #f1f2f0; color: #3c454f; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
   select {
@@ -229,10 +285,27 @@ const SURFACE_CSS = `
   .privacy { color: #51627a; font-size: 10px; line-height: 1.45; }
   .privacy a { color: #1d4ed8; }
   .meta { display: flex; flex-wrap: wrap; gap: 5px; color: #707981; font-size: 10px; }
+  .explain { display: grid; gap: 8px; padding: 10px 11px; border: 1px solid #d9e3f7; border-radius: 8px; background: #f5f8ff; }
+  .explain--error { border-color: #efc6c0; background: #fff7f6; }
+  .explain__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .explain__title { color: #1f3f86; font-size: 11px; font-weight: 700; letter-spacing: .01em; }
+  .explain__badge { padding: 1px 7px; border: 1px solid #c9d6f2; border-radius: 999px; color: #34518f; background: #fff; font-size: 10px; font-weight: 650; }
+  .explain p { margin: 0; overflow-wrap: anywhere; }
+  .explain__meaning { color: #19212b; font-size: 13px; line-height: 1.5; }
+  .explain__note { color: #4d5660; font-size: 11px; line-height: 1.45; }
+  .explain__examples { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+  .explain__examples li { display: grid; gap: 1px; padding: 6px 8px; border-radius: 6px; background: #fff; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+  .explain__examples span:last-child { color: #5c6570; }
+  .explain__status { display: flex; align-items: center; gap: 8px; color: #405070; font-size: 11px; }
+  .explain__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+  .explain__actions button { min-height: 30px; padding: 5px 10px; border: 1px solid #2363eb; border-radius: 7px; color: #fff; background: #2363eb; font-size: 11px; font-weight: 700; }
+  .explain__actions button:hover { background: #1d4ed8; }
+  .explain__actions .secondary { border-color: #c7cacf; color: #4e5862; background: #fff; }
+  .explain__actions .secondary:hover { border-color: #969da4; background: #f8f8f6; }
   .spinner { width: 14px; height: 14px; flex: none; border: 2px solid #cbd7ef; border-top-color: #2363eb; border-radius: 50%; animation: spin .75s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .magic { transition: none; } .spinner { animation-duration: 1.5s; } }
-  @media (max-width: 280px) { .language-row { grid-template-columns: 1fr; } .arrow { display: none; } .actions { justify-content: stretch; } .actions button { flex: 1; } }
+  @media (max-width: 280px) { .language-row { grid-template-columns: 1fr; } .arrow { display: none; } .actions { justify-content: stretch; } .actions button { flex: 1; } .favorite-picker__footer { display: grid; } .favorite-picker__save { width: 100%; } }
 `;
 
 function sparkSvg(): SVGSVGElement {
@@ -471,6 +544,12 @@ function createController(): InstalledController {
   let speaking = false;
   let voicesRequested = false;
   let replaceFeedback: "stale" | null = null;
+  let explanation: ExplanationResult | null = null;
+  let explanationState: ExplanationState = "idle";
+  let explanationError = "";
+  let explanationRetryable = false;
+  let explanationController: AbortController | null = null;
+  let explanationSequence = 0;
   let lastFingerprint: string | null = null;
   let stabilityTimer: number | null = null;
   let expiryTimer: number | null = null;
@@ -504,6 +583,7 @@ function createController(): InstalledController {
 
   function ensureHost(): ShadowRoot {
     if (host && shadow) return shadow;
+    ensurePanelFont();
     host = document.createElement(HOST_TAG);
     host.setAttribute(HOST_MARKER, "");
     host.style.setProperty("all", "initial", "important");
@@ -544,6 +624,7 @@ function createController(): InstalledController {
     savePending = false;
     copyFeedback = null;
     replaceFeedback = null;
+    resetExplanation();
     stopSpeaking();
     activeSelection = null;
   }
@@ -582,6 +663,7 @@ function createController(): InstalledController {
     body: HTMLDivElement;
     favoriteToggle: HTMLButtonElement;
     favorites: HTMLDivElement;
+    favoritePicker: HTMLDetailsElement;
     sourceName: HTMLSpanElement;
     status: HTMLParagraphElement;
     targetSelect: HTMLSelectElement;
@@ -647,6 +729,9 @@ function createController(): InstalledController {
     const favorites = document.createElement("div");
     favorites.className = "favorites";
     favorites.setAttribute("aria-label", "Favorite target languages");
+    const favoritePicker = document.createElement("details");
+    favoritePicker.className = "favorite-picker";
+    favoritePicker.setAttribute("aria-label", "Choose favorite languages");
 
     const source = document.createElement("p");
     source.className = "source";
@@ -657,10 +742,19 @@ function createController(): InstalledController {
     status.setAttribute("aria-live", "polite");
     const actions = document.createElement("div");
     actions.className = "actions";
-    body.append(languageRow, favorites, source, status, actions);
+    body.append(languageRow, favorites, favoritePicker, source, status, actions);
     panel.append(head, body);
     renderBase(panel);
-    return { actions, body, favoriteToggle, favorites, sourceName, status, targetSelect };
+    return {
+      actions,
+      body,
+      favoriteToggle,
+      favorites,
+      favoritePicker,
+      sourceName,
+      status,
+      targetSelect,
+    };
   }
 
   function sourceLanguageName(): string {
@@ -683,6 +777,7 @@ function createController(): InstalledController {
     targetSelect: HTMLSelectElement,
     favoriteToggle: HTMLButtonElement,
     favorites: HTMLDivElement,
+    favoritePicker: HTMLDetailsElement,
   ): void {
     if (!context) return;
     const name = sourceLanguageName();
@@ -749,6 +844,93 @@ function createController(): InstalledController {
       });
       favorites.append(button);
     }
+    fillFavoritePicker(favoritePicker, targets);
+  }
+
+  function fillFavoritePicker(picker: HTMLDetailsElement, targets: Set<string>): void {
+    if (!context) return;
+    const available = context.languages.filter((language) => targets.has(language.code));
+    const availableCodes = available.map((language) => language.code);
+    const selected = new Set(context.favouriteLanguageCodes.filter((code) => targets.has(code)));
+    const unavailableCount = context.favouriteLanguageCodes.filter(
+      (code) => !targets.has(code),
+    ).length;
+    const summary = document.createElement("summary");
+    summary.textContent = "Manage favorites";
+    summary.setAttribute("aria-label", "Manage favorite languages");
+    const body = document.createElement("div");
+    body.className = "favorite-picker__body";
+    const search = document.createElement("input");
+    search.className = "favorite-picker__search";
+    search.type = "search";
+    search.placeholder = "Search languages";
+    search.setAttribute("aria-label", "Search favorite languages");
+    const list = document.createElement("div");
+    list.className = "favorite-picker__list";
+    const checkboxes: HTMLInputElement[] = [];
+    for (const language of available) {
+      const row = document.createElement("label");
+      row.className = "favorite-picker__item";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = language.code;
+      checkbox.checked = selected.has(language.code);
+      checkbox.setAttribute("aria-label", `Favorite ${language.name}`);
+      row.append(checkbox, document.createTextNode(language.name));
+      list.append(row);
+      checkboxes.push(checkbox);
+    }
+    const footer = document.createElement("div");
+    footer.className = "favorite-picker__footer";
+    const count = document.createElement("span");
+    count.className = "favorite-picker__count";
+    const save = document.createElement("button");
+    save.className = "favorite-picker__save";
+    save.type = "button";
+    save.textContent = "Save favorites";
+    save.setAttribute("aria-label", "Save favorite languages");
+    save.addEventListener("pointerdown", (event) => event.preventDefault());
+    function refreshChecklist(): void {
+      const total = unavailableCount + selected.size;
+      count.textContent = `${total} of 12 favorites selected`;
+      for (const checkbox of checkboxes) checkbox.disabled = total >= 12 && !checkbox.checked;
+    }
+    for (const checkbox of checkboxes) {
+      checkbox.addEventListener("change", () => {
+        if (checkbox.checked) selected.add(checkbox.value);
+        else selected.delete(checkbox.value);
+        refreshChecklist();
+      });
+    }
+    search.addEventListener("input", () => {
+      const query = search.value.trim().toLocaleLowerCase();
+      for (const row of list.children) {
+        if (row instanceof HTMLElement)
+          row.hidden = !row.textContent?.toLocaleLowerCase().includes(query);
+      }
+    });
+    save.addEventListener("click", () => {
+      if (!context) return;
+      const choices = [...selected];
+      context.favouriteLanguageCodes = replaceAvailableFavourites(
+        context.favouriteLanguageCodes,
+        availableCodes,
+        choices,
+      );
+      void persistPreferenceChange((preferences) => ({
+        ...preferences,
+        favouriteLanguageCodes: replaceAvailableFavourites(
+          preferences.favouriteLanguageCodes,
+          availableCodes,
+          choices,
+        ),
+      }));
+      renderPanel();
+    });
+    footer.append(count, save);
+    body.append(search, list, footer);
+    picker.append(summary, body);
+    refreshChecklist();
   }
 
   function statusContent(
@@ -776,12 +958,21 @@ function createController(): InstalledController {
   }
 
   function renderPanel(): void {
-    const { actions, body, favoriteToggle, favorites, sourceName, status, targetSelect } =
-      createPanel();
-    fillLanguageControls(sourceName, targetSelect, favoriteToggle, favorites);
+    const {
+      actions,
+      body,
+      favoriteToggle,
+      favorites,
+      favoritePicker,
+      sourceName,
+      status,
+      targetSelect,
+    } = createPanel();
+    fillLanguageControls(sourceName, targetSelect, favoriteToggle, favorites, favoritePicker);
     const languageControlsReady = Boolean(context);
     targetSelect.disabled = !languageControlsReady || state === "loading" || state === "preparing";
     favoriteToggle.disabled = targetSelect.disabled;
+    favoritePicker.hidden = targetSelect.disabled;
 
     if (state === "preparing") {
       statusContent(status, "Preparing your preferred language…");
@@ -894,6 +1085,12 @@ function createController(): InstalledController {
         statusContent(status, "That text changed on the page, so nothing was replaced.", "warning");
       }
 
+      if (explanationState !== "idle") body.insertBefore(renderExplanation(), actions);
+
+      if (explanationState === "idle") {
+        actions.append(actionButton("Explain", () => void requestExplanation(), true));
+      }
+
       actions.append(
         actionButton(
           copyFeedback === "copied" ? "Copied" : copyFeedback === "failed" ? "Copy failed" : "Copy",
@@ -927,9 +1124,231 @@ function createController(): InstalledController {
     }
 
     if (state === "error") {
+      // A retry cannot reach a replaced background worker; only a page reload loads the new script.
+      if (extensionContextInvalidated()) {
+        statusContent(status, EXTENSION_UPDATED_MESSAGE, "error");
+        actions.append(actionButton("Reload page", () => window.location.reload()));
+        return;
+      }
       statusContent(status, errorMessage, "error");
       if (errorRetryable) actions.append(actionButton("Retry", () => void runTranslation()));
     }
+  }
+
+  function resetExplanation(): void {
+    explanationSequence += 1;
+    explanationController?.abort();
+    explanationController = null;
+    explanation = null;
+    explanationState = "idle";
+    explanationError = "";
+    explanationRetryable = false;
+  }
+
+  /** Explanations cover words, phrases, and paragraphs; longer selections are told why not. */
+  function canExplain(): boolean {
+    return (
+      Boolean(activeSelection) &&
+      Array.from(activeSelection?.text.trim() ?? "").length <= MAX_EXPLANATION_SOURCE_CODE_POINTS
+    );
+  }
+
+  function renderExplanation(): HTMLElement {
+    const card = document.createElement("section");
+    card.className = explanationState === "error" ? "explain explain--error" : "explain";
+    card.setAttribute("aria-label", "Explanation");
+    card.setAttribute("aria-live", "polite");
+
+    const head = document.createElement("div");
+    head.className = "explain__head";
+    const title = document.createElement("span");
+    title.className = "explain__title";
+    title.textContent = "In simple words";
+    head.append(title);
+    card.append(head);
+
+    if (explanationState === "consent") {
+      const note = document.createElement("p");
+      note.className = "explain__note";
+      note.append(
+        "Explain sends this selected text and its translation to NVIDIA’s Nemotron model to write a short explanation. Nothing is saved. ",
+      );
+      const link = document.createElement("a");
+      link.href = browser.runtime.getURL("/privacy.html");
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.textContent = "Privacy details";
+      note.append(link);
+      const buttons = document.createElement("div");
+      buttons.className = "explain__actions";
+      buttons.append(
+        actionButton(
+          "Not now",
+          () => {
+            resetExplanation();
+            renderPanel();
+          },
+          true,
+        ),
+        actionButton("Allow and explain", () => void acceptConsentAndExplain()),
+      );
+      card.append(note, buttons);
+      return card;
+    }
+
+    if (explanationState === "loading") {
+      const status = document.createElement("p");
+      status.className = "explain__status";
+      status.append(
+        Object.assign(document.createElement("span"), { className: "spinner" }),
+        "Explaining in simple words…",
+      );
+      card.append(status);
+      return card;
+    }
+
+    if (explanationState === "error") {
+      const message = document.createElement("p");
+      message.className = "explain__note";
+      message.setAttribute("role", "alert");
+      message.textContent = explanationError;
+      card.append(message);
+      if (explanationRetryable) {
+        const buttons = document.createElement("div");
+        buttons.className = "explain__actions";
+        buttons.append(actionButton("Try again", () => void runExplanation(), true));
+        card.append(buttons);
+      }
+      return card;
+    }
+
+    if (!explanation || !result) return card;
+    const badge = document.createElement("span");
+    badge.className = "explain__badge";
+    badge.textContent = REGISTER_LABELS[explanation.register];
+    head.append(badge);
+
+    const targetDirection =
+      getPreviewLanguage(result.targetLanguage, context?.languages)?.textDirection ?? "auto";
+    const meaning = document.createElement("p");
+    meaning.className = "explain__meaning";
+    meaning.lang = result.targetLanguage;
+    meaning.dir = targetDirection;
+    meaning.textContent = explanation.meaning;
+    card.append(meaning);
+
+    if (explanation.usageNote) {
+      const note = document.createElement("p");
+      note.className = "explain__note";
+      note.lang = result.targetLanguage;
+      note.dir = targetDirection;
+      note.textContent = explanation.usageNote;
+      card.append(note);
+    }
+
+    const examples = document.createElement("ul");
+    examples.className = "explain__examples";
+    examples.setAttribute("aria-label", "Examples");
+    const sourceLanguage = result.detectedSourceLanguage ?? context?.sourceLanguage ?? "";
+    for (const example of explanation.examples) {
+      const item = document.createElement("li");
+      const original = document.createElement("span");
+      original.lang = sourceLanguage;
+      original.dir = "auto";
+      original.textContent = example.source;
+      const translated = document.createElement("span");
+      translated.lang = result.targetLanguage;
+      translated.dir = targetDirection;
+      translated.textContent = example.translation;
+      item.append(original, translated);
+      examples.append(item);
+    }
+    card.append(examples);
+    return card;
+  }
+
+  async function requestExplanation(): Promise<void> {
+    if (!context || !result) return;
+    // The button stays visible for long selections so the limit is explained, not hidden.
+    if (!canExplain()) {
+      explanationState = "error";
+      explanationError = `Explain works on up to ${MAX_EXPLANATION_SOURCE_CODE_POINTS.toLocaleString()} characters. Select a shorter part of the text to explain it.`;
+      explanationRetryable = false;
+      renderPanel();
+      return;
+    }
+    if (context.gatewayMode === "live") {
+      const consent = await loadExplanationConsent().catch(() => null);
+      if (!consent) {
+        explanationState = "consent";
+        renderPanel();
+        return;
+      }
+    }
+    await runExplanation();
+  }
+
+  async function acceptConsentAndExplain(): Promise<void> {
+    try {
+      await acceptExplanationConsent();
+    } catch {
+      explanationState = "error";
+      explanationError = "Permission could not be saved. Nothing was sent.";
+      explanationRetryable = false;
+      renderPanel();
+      return;
+    }
+    await runExplanation();
+  }
+
+  async function runExplanation(): Promise<void> {
+    if (!activeSelection || !context || !result) return;
+    const consent =
+      context.gatewayMode === "live"
+        ? await loadExplanationConsent().catch(() => null)
+        : FAKE_EXPLANATION_CONSENT;
+    if (!consent) {
+      explanationState = "consent";
+      renderPanel();
+      return;
+    }
+
+    explanationSequence += 1;
+    const sequence = explanationSequence;
+    explanationController?.abort();
+    explanationController = new AbortController();
+    explanationState = "loading";
+    renderPanel();
+
+    const request: ExplanationRequest = {
+      consent,
+      operation: "explain",
+      requestId: crypto.randomUUID(),
+      sourceLanguage: result.detectedSourceLanguage ?? context.sourceLanguage,
+      sourceText: activeSelection.text.trim(),
+      targetLanguage: result.targetLanguage,
+      translatedText: result.translatedText,
+    };
+    try {
+      const explained = await gatewayClient.explain(request, explanationController.signal);
+      if (sequence !== explanationSequence) return;
+      explanation = explained;
+      explanationState = "ready";
+    } catch (error) {
+      if (sequence !== explanationSequence) return;
+      explanationState = "error";
+      explanationError =
+        error instanceof GatewayClientError
+          ? error.message
+          : "The explanation could not be loaded. Your translation is unchanged.";
+      explanationRetryable = error instanceof GatewayClientError ? error.retryable : true;
+    } finally {
+      if (sequence === explanationSequence) explanationController = null;
+    }
+    if (state !== "success") return;
+    renderPanel();
+    // The panel scrolls; bring the answer into view instead of leaving it below the fold.
+    shadow?.querySelector(".explain")?.scrollIntoView({ block: "nearest" });
   }
 
   function availableVoices(): SpeechSynthesisVoice[] {
@@ -1187,6 +1606,7 @@ function createController(): InstalledController {
     savedPhraseId = null;
     copyFeedback = null;
     replaceFeedback = null;
+    resetExplanation();
     state = "loading";
     renderPanel();
     const request: TranslationRequest = {

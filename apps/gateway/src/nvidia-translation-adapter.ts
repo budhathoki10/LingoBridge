@@ -4,7 +4,7 @@ import { type TranslationAdapter, TranslationAdapterError } from "./translation-
 
 export interface NvidiaChatCompletionRequest {
   max_tokens: number;
-  messages: Array<{ content: string; role: "system" | "user" }>;
+  messages: Array<{ content: string; role: "assistant" | "system" | "user" }>;
   model: string;
   temperature: number;
   top_p: number;

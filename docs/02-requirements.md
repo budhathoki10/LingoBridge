@@ -23,7 +23,7 @@
 - Allow explicit source and target language choices.
 - Offer automatic source-language detection.
 - Remember the preferred target language.
-- Let users pin multiple target languages locally and switch among supported favourites in the translator; one target remains the default.
+- Let users choose several supported target languages together in a favorites picker, save those pins locally, and switch among them in the translator; one target remains the default. Managing pins does not start translation.
 - Support copy, listen, clear, swap languages, and save phrase actions.
 
 ### Language coverage

@@ -15,7 +15,6 @@ import { SparkIcon } from "./Icons";
 type CardState =
   | { kind: "loading" }
   | {
-      allSitesGranted: boolean;
       currentOrigin: string | null;
       currentSiteGranted: boolean;
       settings: SelectionMagicSettings;
@@ -41,7 +40,6 @@ async function readState(): Promise<Extract<CardState, { kind: "ready" }>> {
   const origins = permissions.origins ?? [];
   const currentPattern = currentOrigin ? originToMatchPattern(currentOrigin) : null;
   return {
-    allSitesGranted: ALL_SITE_PATTERNS.every((pattern) => origins.includes(pattern)),
     currentOrigin,
     currentSiteGranted: Boolean(
       currentPattern &&
@@ -57,6 +55,11 @@ async function readState(): Promise<Extract<CardState, { kind: "ready" }>> {
   };
 }
 
+/**
+ * Compact site-access row. It is the only surface that asks Chrome for webpage access, and it keeps
+ * the per-site disable and global turn-off (with permission revocation) that ADR-002 requires.
+ * Chrome's own pages cannot be granted, so the row is hidden there.
+ */
 export function SelectionMagicCard() {
   const [state, setState] = useState<CardState>({ kind: "loading" });
   const [busy, setBusy] = useState(false);
@@ -65,7 +68,7 @@ export function SelectionMagicCard() {
     try {
       setState(await readState());
     } catch {
-      setState({ kind: "error", message: "Selection access could not be checked." });
+      setState({ kind: "error", message: "Site access could not be checked." });
     }
   }, []);
 
@@ -99,19 +102,7 @@ export function SelectionMagicCard() {
         ),
         enabled: true,
       });
-    }, "Chrome did not grant access to this site. Popup translation still works.");
-  }
-
-  function enableAllSites(): void {
-    if (state.kind !== "ready") return;
-    void apply(async () => {
-      const granted = await browser.permissions.request({ origins: [...ALL_SITE_PATTERNS] });
-      if (!granted) throw new Error("Permission denied");
-      await saveSelectionMagicSettings({
-        disabledOrigins: state.settings.disabledOrigins,
-        enabled: true,
-      });
-    }, "Chrome did not grant access to all sites. You can enable one site instead.");
+    }, "Chrome didn’t grant access to this site.");
   }
 
   function disableCurrentSite(): void {
@@ -122,7 +113,7 @@ export function SelectionMagicCard() {
           disabledOrigins: [...state.settings.disabledOrigins, state.currentOrigin as string],
           enabled: state.settings.enabled,
         }).then(() => undefined),
-      "This site could not be disabled.",
+      "This site couldn’t be disabled.",
     );
   }
 
@@ -138,33 +129,20 @@ export function SelectionMagicCard() {
       if (removable.length > 0) {
         await browser.permissions.remove({ origins: removable });
       }
-    }, "Selection Magic could not be turned off completely.");
+    }, "Selection Magic couldn’t be turned off completely.");
   }
 
-  if (state.kind === "loading") {
-    return (
-      <section aria-busy="true" className="selection-magic-card">
-        <span className="selection-magic-card__icon">
-          <SparkIcon />
-        </span>
-        <div>
-          <strong>Selection Magic</strong>
-          <p>Checking site access…</p>
-        </div>
-      </section>
-    );
-  }
+  if (state.kind === "loading") return null;
 
   if (state.kind === "error") {
     return (
-      <section className="selection-magic-card selection-magic-card--error">
-        <span className="selection-magic-card__icon">
+      <section className="site-access site-access--error">
+        <span aria-hidden="true" className="site-access__icon">
           <SparkIcon />
         </span>
-        <div>
-          <strong>Selection Magic</strong>
-          <p>{state.message}</p>
-        </div>
+        <p className="site-access__label" role="alert">
+          {state.message}
+        </p>
         <button disabled={busy} onClick={() => void refresh()} type="button">
           Retry
         </button>
@@ -172,58 +150,38 @@ export function SelectionMagicCard() {
     );
   }
 
-  const currentDisabled = Boolean(
-    state.currentOrigin && state.settings.disabledOrigins.includes(state.currentOrigin),
-  );
+  if (!state.currentOrigin) return null;
+
+  const currentDisabled = state.settings.disabledOrigins.includes(state.currentOrigin);
   const readyHere = state.settings.enabled && state.currentSiteGranted && !currentDisabled;
 
   return (
-    <section className="selection-magic-card">
-      <span className="selection-magic-card__icon">
+    <section aria-label="Selection Magic" className="site-access">
+      <span aria-hidden="true" className="site-access__icon">
         <SparkIcon />
       </span>
-      <div className="selection-magic-card__copy">
+      <p className="site-access__label">
         <strong>Selection Magic</strong>
-        <p>
-          {!state.currentOrigin
-            ? "Unavailable on this Chrome page."
-            : readyHere
-              ? "Ready here — select text, then click the magic icon."
-              : "Show a magic icon beside selected webpage text."}
-        </p>
-      </div>
-      {state.currentOrigin ? (
-        <div className="selection-magic-card__actions">
-          {readyHere ? (
-            <button disabled={busy} onClick={disableCurrentSite} type="button">
-              Disable here
-            </button>
-          ) : (
-            <button disabled={busy} onClick={enableCurrentSite} type="button">
-              {currentDisabled ? "Enable here" : "Enable this site"}
-            </button>
-          )}
-          {!state.allSitesGranted ? (
-            <button
-              className="selection-magic-card__quiet"
-              disabled={busy}
-              onClick={enableAllSites}
-              type="button"
-            >
-              All sites
-            </button>
-          ) : null}
-          {state.settings.enabled ? (
-            <button
-              className="selection-magic-card__quiet"
-              disabled={busy}
-              onClick={turnOff}
-              type="button"
-            >
-              Turn off
-            </button>
-          ) : null}
-        </div>
+        <span>{readyHere ? "On for this site" : "Off for this site"}</span>
+      </p>
+      {readyHere ? (
+        <button
+          className="site-access__quiet"
+          disabled={busy}
+          onClick={disableCurrentSite}
+          type="button"
+        >
+          Disable here
+        </button>
+      ) : (
+        <button disabled={busy} onClick={enableCurrentSite} type="button">
+          Enable here
+        </button>
+      )}
+      {state.settings.enabled ? (
+        <button className="site-access__off" disabled={busy} onClick={turnOff} type="button">
+          Turn off everywhere
+        </button>
       ) : null}
     </section>
   );

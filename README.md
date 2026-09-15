@@ -53,7 +53,7 @@ pnpm build
 
 Run one surface with `pnpm dev:dashboard`, `pnpm dev:extension`, or `pnpm dev:gateway`. For the translator, keep `pnpm dev:gateway` running in one terminal and `pnpm dev:extension` in another. The safe default remains the fake gateway on `http://127.0.0.1:8787`; every translation request is contract-validated, bounded, rate-limited by anonymous installation and network, and subject to a provider deadline. The unpacked production extension is generated at `apps/extension/.output/chrome-mv3`.
 
-The dashboard uses a development-only identity provider and an embedded database locally. Production uses Google OpenID Connect and PostgreSQL with server-only configuration. See [dashboard operations](docs/14-dashboard-operations.md) for the exact environment, maintenance command, and remaining deployment checks.
+The dashboard uses a development-only identity provider and an embedded database locally. Production uses Google OpenID Connect and MongoDB Atlas with server-only configuration. See [dashboard operations](docs/14-dashboard-operations.md) for the exact environment, maintenance command, and remaining deployment checks.
 
 ### Run the NVIDIA-backed gateway locally
 

@@ -11,16 +11,8 @@ import {
   type SyncRequest,
   type SyncResponse,
 } from "@lingobridge/contracts/account";
-import { type Database, type SqlClient, toInteger } from "./client.js";
-import {
-  getPhraseRecord,
-  getPreferences,
-  PHRASE_COLUMNS,
-  PREFERENCE_COLUMNS,
-  type PhraseRow,
-  toPhraseRecord,
-  toSyncedPreferences,
-} from "./phrases.js";
+import { collection, type Database, type DbClient, inSession } from "./client.js";
+import { getPhraseRecord, getPreferences, toPhraseRecord, toSyncedPreferences } from "./phrases.js";
 
 export class AccountUnavailableError extends Error {
   constructor() {
@@ -33,35 +25,28 @@ export const TOMBSTONE_RETENTION_MILLISECONDS = 30 * 24 * 60 * 60 * 1_000;
 export const MUTATION_RECEIPT_RETENTION_MILLISECONDS = 7 * 24 * 60 * 60 * 1_000;
 
 /**
- * Serializes writes for one account. Change sequence numbers are allocated while the lock is held,
- * so a reader can never observe a later change before an earlier one for the same user commits.
+ * Serializes writes for one account. Writing the user document makes any concurrent transaction
+ * on the same account hit a write conflict and retry, so change sequence numbers are allocated
+ * in commit order and a reader never observes a later change before an earlier one.
  */
-export async function lockAccount(client: SqlClient, userId: string): Promise<void> {
-  const { rows } = await client.query<{ id: string }>(
-    "select id from users where id = $1 and deleted_at is null for update",
-    [userId],
+export async function lockAccount(client: DbClient, userId: string): Promise<void> {
+  const result = await collection(client, "users").updateOne(
+    { _id: userId, deletedAt: null },
+    { $inc: { lockVersion: 1 } },
+    inSession(client),
   );
-  if (rows.length === 0) throw new AccountUnavailableError();
+  if (result.matchedCount === 0) throw new AccountUnavailableError();
 }
 
-async function nextChangeSeq(client: SqlClient): Promise<string> {
-  const { rows } = await client.query<{ seq: string }>(
-    "select nextval('sync_change_seq')::text as seq",
+/** Change sequences are per account; cursors are only ever compared within one account. */
+async function nextChangeSeq(client: DbClient, userId: string): Promise<number> {
+  const user = await collection(client, "users").findOneAndUpdate(
+    { _id: userId },
+    { $inc: { changeSeq: 1 } },
+    { ...inSession(client), projection: { changeSeq: 1 }, returnDocument: "after" },
   );
-  if (!rows[0]) throw new Error("Change sequence returned no value.");
-  return rows[0].seq;
-}
-
-async function lockedPhrase(
-  client: SqlClient,
-  userId: string,
-  phraseId: string,
-): Promise<PhraseRecord | null> {
-  const { rows } = await client.query<PhraseRow>(
-    `select ${PHRASE_COLUMNS} from phrases where user_id = $1 and id = $2 for update`,
-    [userId, phraseId],
-  );
-  return rows[0] ? toPhraseRecord(rows[0]) : null;
+  if (!user) throw new AccountUnavailableError();
+  return user.changeSeq;
 }
 
 export interface PhraseWriteOutcome {
@@ -88,43 +73,37 @@ function sameContent(record: PhraseRecord, content: PhraseContent): boolean {
  * - A tombstone always wins. A stale client cannot silently recreate a phrase the user deleted.
  */
 export async function upsertPhrase(
-  client: SqlClient,
+  client: DbClient,
   userId: string,
   input: { baseRevision: number; phrase: PhraseContent },
   now: Date,
 ): Promise<PhraseWriteOutcome> {
-  const existing = await lockedPhrase(client, userId, input.phrase.id);
+  const phrases = collection(client, "phrases");
+  const existing = await getPhraseRecord(client, userId, input.phrase.id);
 
   if (!existing) {
     if (input.baseRevision > 0) return { phrase: null, reason: null, status: "conflict" };
-    const count = await client.query<{ total: unknown }>(
-      "select count(*) as total from phrases where user_id = $1 and deleted_at is null",
-      [userId],
-    );
-    if (toInteger(count.rows[0]?.total ?? 0) >= MAX_SYNCED_PHRASES_PER_USER) {
+    const count = await phrases.countDocuments({ deletedAt: null, userId }, inSession(client));
+    if (count >= MAX_SYNCED_PHRASES_PER_USER) {
       return { phrase: null, reason: "limit-reached", status: "rejected" };
     }
-    const { rows } = await client.query<PhraseRow>(
-      `insert into phrases (user_id, id, source_text, translated_text, source_language,
-                            target_language, provider, note, saved_at, updated_at, revision,
-                            change_seq)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 1, $11)
-       returning ${PHRASE_COLUMNS}`,
-      [
-        userId,
-        input.phrase.id,
-        input.phrase.sourceText,
-        input.phrase.translatedText,
-        input.phrase.sourceLanguage,
-        input.phrase.targetLanguage,
-        input.phrase.provider,
-        input.phrase.note,
-        input.phrase.savedAt,
-        now,
-        await nextChangeSeq(client),
-      ],
-    );
-    return { phrase: rows[0] ? toPhraseRecord(rows[0]) : null, reason: null, status: "applied" };
+    const document = {
+      changeSeq: await nextChangeSeq(client, userId),
+      deletedAt: null,
+      id: input.phrase.id,
+      note: input.phrase.note,
+      provider: input.phrase.provider,
+      revision: 1,
+      savedAt: new Date(input.phrase.savedAt),
+      sourceLanguage: input.phrase.sourceLanguage,
+      sourceText: input.phrase.sourceText,
+      targetLanguage: input.phrase.targetLanguage,
+      translatedText: input.phrase.translatedText,
+      updatedAt: now,
+      userId,
+    };
+    await phrases.insertOne(document, inSession(client));
+    return { phrase: toPhraseRecord(document), reason: null, status: "applied" };
   }
 
   if (existing.state === "deleted") return { phrase: existing, reason: null, status: "conflict" };
@@ -135,26 +114,24 @@ export async function upsertPhrase(
     return { phrase: existing, reason: null, status: "applied" };
   }
 
-  const { rows } = await client.query<PhraseRow>(
-    `update phrases
-        set source_text = $3, translated_text = $4, source_language = $5, target_language = $6,
-            provider = $7, note = $8, updated_at = $9, revision = revision + 1, change_seq = $10
-      where user_id = $1 and id = $2
-      returning ${PHRASE_COLUMNS}`,
-    [
-      userId,
-      input.phrase.id,
-      input.phrase.sourceText,
-      input.phrase.translatedText,
-      input.phrase.sourceLanguage,
-      input.phrase.targetLanguage,
-      input.phrase.provider,
-      input.phrase.note,
-      now,
-      await nextChangeSeq(client),
-    ],
+  const updated = await phrases.findOneAndUpdate(
+    { id: input.phrase.id, userId },
+    {
+      $inc: { revision: 1 },
+      $set: {
+        changeSeq: await nextChangeSeq(client, userId),
+        note: input.phrase.note,
+        provider: input.phrase.provider,
+        sourceLanguage: input.phrase.sourceLanguage,
+        sourceText: input.phrase.sourceText,
+        targetLanguage: input.phrase.targetLanguage,
+        translatedText: input.phrase.translatedText,
+        updatedAt: now,
+      },
+    },
+    { ...inSession(client), returnDocument: "after" },
   );
-  return { phrase: rows[0] ? toPhraseRecord(rows[0]) : null, reason: null, status: "applied" };
+  return { phrase: updated ? toPhraseRecord(updated) : null, reason: null, status: "applied" };
 }
 
 /**
@@ -162,25 +139,34 @@ export async function upsertPhrase(
  * the identifier and revision needed to propagate the deletion, and nothing the user wrote.
  */
 export async function deletePhrase(
-  client: SqlClient,
+  client: DbClient,
   userId: string,
   phraseId: string,
   now: Date,
 ): Promise<PhraseWriteOutcome> {
-  const existing = await lockedPhrase(client, userId, phraseId);
+  const existing = await getPhraseRecord(client, userId, phraseId);
   if (!existing) return { phrase: null, reason: null, status: "applied" };
   if (existing.state === "deleted") return { phrase: existing, reason: null, status: "applied" };
 
-  const { rows } = await client.query<PhraseRow>(
-    `update phrases
-        set source_text = null, translated_text = null, source_language = null,
-            target_language = null, provider = null, note = null, deleted_at = $3,
-            updated_at = $3, revision = revision + 1, change_seq = $4
-      where user_id = $1 and id = $2
-      returning ${PHRASE_COLUMNS}`,
-    [userId, phraseId, now, await nextChangeSeq(client)],
+  const updated = await collection(client, "phrases").findOneAndUpdate(
+    { id: phraseId, userId },
+    {
+      $inc: { revision: 1 },
+      $set: {
+        changeSeq: await nextChangeSeq(client, userId),
+        deletedAt: now,
+        note: null,
+        provider: null,
+        sourceLanguage: null,
+        sourceText: null,
+        targetLanguage: null,
+        translatedText: null,
+        updatedAt: now,
+      },
+    },
+    { ...inSession(client), returnDocument: "after" },
   );
-  return { phrase: rows[0] ? toPhraseRecord(rows[0]) : null, reason: null, status: "applied" };
+  return { phrase: updated ? toPhraseRecord(updated) : null, reason: null, status: "applied" };
 }
 
 export type NoteUpdateOutcome =
@@ -195,7 +181,7 @@ export async function updatePhraseNote(
 ): Promise<NoteUpdateOutcome> {
   return database.transaction(async (client) => {
     await lockAccount(client, userId);
-    const existing = await lockedPhrase(client, userId, input.phraseId);
+    const existing = await getPhraseRecord(client, userId, input.phraseId);
     if (!existing || existing.state === "deleted") return { status: "not-found" };
     const outcome = await upsertPhrase(
       client,
@@ -249,12 +235,11 @@ export async function deleteAllPhrases(
 ): Promise<number> {
   return database.transaction(async (client) => {
     await lockAccount(client, userId);
-    const { rows } = await client.query<{ id: string }>(
-      "select id from phrases where user_id = $1 and deleted_at is null",
-      [userId],
-    );
-    for (const row of rows) await deletePhrase(client, userId, row.id, now);
-    return rows.length;
+    const live = await collection(client, "phrases")
+      .find({ deletedAt: null, userId }, { ...inSession(client), projection: { id: 1 } })
+      .toArray();
+    for (const phrase of live) await deletePhrase(client, userId, phrase.id, now);
+    return live.length;
   });
 }
 
@@ -264,7 +249,7 @@ export interface PreferencesWriteOutcome {
 }
 
 export async function updatePreferences(
-  client: SqlClient,
+  client: DbClient,
   userId: string,
   input: {
     baseRevision: number;
@@ -272,44 +257,36 @@ export async function updatePreferences(
   },
   now: Date,
 ): Promise<PreferencesWriteOutcome> {
-  const { rows } = await client.query<Parameters<typeof toSyncedPreferences>[0]>(
-    `select ${PREFERENCE_COLUMNS} from preferences where user_id = $1 for update`,
-    [userId],
-  );
-  const current = rows[0] ? toSyncedPreferences(rows[0]) : null;
-  if (!current) throw new AccountUnavailableError();
+  const preferences = collection(client, "preferences");
+  const document = await preferences.findOne({ _id: userId }, inSession(client));
+  if (!document) throw new AccountUnavailableError();
+  const current = toSyncedPreferences(document);
   if (current.revision !== input.baseRevision) {
     return { preferences: current, status: "conflict" };
   }
 
-  const next = {
-    phraseSyncEnabled: input.patch.phraseSyncEnabled ?? current.phraseSyncEnabled,
-    preferredTargetLanguage:
-      input.patch.preferredTargetLanguage === undefined
-        ? current.preferredTargetLanguage
-        : input.patch.preferredTargetLanguage,
-    processingPreference:
-      input.patch.processingPreference === undefined
-        ? current.processingPreference
-        : input.patch.processingPreference,
-  };
-  const updated = await client.query<Parameters<typeof toSyncedPreferences>[0]>(
-    `update preferences
-        set preferred_target_language = $2, processing_preference = $3,
-            phrase_sync_enabled = $4, revision = revision + 1, updated_at = $5, change_seq = $6
-      where user_id = $1
-      returning ${PREFERENCE_COLUMNS}`,
-    [
-      userId,
-      next.preferredTargetLanguage,
-      next.processingPreference,
-      next.phraseSyncEnabled,
-      now,
-      await nextChangeSeq(client),
-    ],
+  const updated = await preferences.findOneAndUpdate(
+    { _id: userId },
+    {
+      $inc: { revision: 1 },
+      $set: {
+        changeSeq: await nextChangeSeq(client, userId),
+        phraseSyncEnabled: input.patch.phraseSyncEnabled ?? current.phraseSyncEnabled,
+        preferredTargetLanguage:
+          input.patch.preferredTargetLanguage === undefined
+            ? current.preferredTargetLanguage
+            : input.patch.preferredTargetLanguage,
+        processingPreference:
+          input.patch.processingPreference === undefined
+            ? current.processingPreference
+            : input.patch.processingPreference,
+        updatedAt: now,
+      },
+    },
+    { ...inSession(client), returnDocument: "after" },
   );
-  if (!updated.rows[0]) throw new AccountUnavailableError();
-  return { preferences: toSyncedPreferences(updated.rows[0]), status: "applied" };
+  if (!updated) throw new AccountUnavailableError();
+  return { preferences: toSyncedPreferences(updated), status: "applied" };
 }
 
 export async function updateDashboardPreferences(
@@ -328,7 +305,7 @@ export async function updateDashboardPreferences(
 }
 
 async function applyMutation(
-  client: SqlClient,
+  client: DbClient,
   userId: string,
   mutation: SyncMutation,
   phraseSyncEnabled: boolean,
@@ -367,13 +344,6 @@ function mutationPhraseId(mutation: SyncMutation): string | null {
   return null;
 }
 
-async function tombstonePurgeHorizon(client: SqlClient): Promise<bigint> {
-  const { rows } = await client.query<{ value: string }>(
-    "select value::text as value from sync_metadata where key = 'tombstone_purge_seq'",
-  );
-  return rows[0] ? BigInt(rows[0].value) : 0n;
-}
-
 /**
  * One round trip: apply the client's queued mutations in order, then return everything that
  * changed after its cursor. Replaying a mutation id returns the current state without applying it
@@ -388,26 +358,24 @@ export async function runSync(
   return database.transaction(async (client) => {
     await lockAccount(client, userId);
     const preferencesBefore = await getPreferences(client, userId);
+    const receipts = collection(client, "syncMutations");
 
     const results: SyncMutationResult[] = [];
     for (const mutation of request.mutations) {
-      const receipt = await client.query<{
-        reason: SyncRejectionReason | null;
-        status: SyncMutationResult["status"];
-      }>("select status, reason from sync_mutations where user_id = $1 and mutation_id = $2", [
-        userId,
-        mutation.mutationId,
-      ]);
+      const receipt = await receipts.findOne(
+        { mutationId: mutation.mutationId, userId },
+        inSession(client),
+      );
       const phraseId = mutationPhraseId(mutation);
 
-      if (receipt.rows[0]) {
+      if (receipt) {
         results.push({
           mutationId: mutation.mutationId,
           phrase: phraseId ? await getPhraseRecord(client, userId, phraseId) : null,
           preferences:
             mutation.kind === "update-preferences" ? await getPreferences(client, userId) : null,
-          reason: receipt.rows[0].reason,
-          status: receipt.rows[0].status,
+          reason: receipt.reason as SyncRejectionReason | null,
+          status: receipt.status,
         });
         continue;
       }
@@ -419,10 +387,16 @@ export async function runSync(
         preferencesBefore.phraseSyncEnabled,
         now,
       );
-      await client.query(
-        `insert into sync_mutations (user_id, mutation_id, status, reason, phrase_id, created_at)
-         values ($1, $2, $3, $4, $5, $6)`,
-        [userId, mutation.mutationId, result.status, result.reason, phraseId, now],
+      await receipts.insertOne(
+        {
+          createdAt: now,
+          mutationId: mutation.mutationId,
+          phraseId,
+          reason: result.reason,
+          status: result.status,
+          userId,
+        },
+        inSession(client),
       );
       results.push(result);
     }
@@ -438,32 +412,36 @@ interface ParsedCursor {
   beginsResync: boolean;
   /** True for every page of a resynchronization. */
   resyncing: boolean;
-  seq: bigint;
+  seq: number;
 }
 
-async function parseCursor(client: SqlClient, cursor: string | null): Promise<ParsedCursor> {
-  if (cursor === null) return { beginsResync: true, resyncing: true, seq: 0n };
-  if (cursor.startsWith("r"))
-    return { beginsResync: false, resyncing: true, seq: BigInt(cursor.slice(1)) };
-  const seq = BigInt(cursor);
-  if (seq < (await tombstonePurgeHorizon(client))) {
-    return { beginsResync: true, resyncing: true, seq: 0n };
+function parseCursor(cursor: string | null, purgeHorizon: number): ParsedCursor {
+  if (cursor === null) return { beginsResync: true, resyncing: true, seq: 0 };
+  if (cursor.startsWith("r")) {
+    return { beginsResync: false, resyncing: true, seq: Number(BigInt(cursor.slice(1))) };
   }
+  const seq = Number(BigInt(cursor));
+  if (seq < purgeHorizon) return { beginsResync: true, resyncing: true, seq: 0 };
   return { beginsResync: false, resyncing: false, seq };
 }
 
 async function readChanges(
-  client: SqlClient,
+  client: DbClient,
   userId: string,
   requestedCursor: string | null,
   preferences: SyncedPreferences,
 ): Promise<Omit<SyncResponse, "results">> {
-  const cursor = await parseCursor(client, requestedCursor);
-  const prefsSeqResult = await client.query<{ seq: string }>(
-    "select change_seq::text as seq from preferences where user_id = $1",
-    [userId],
+  const user = await collection(client, "users").findOne(
+    { _id: userId },
+    { ...inSession(client), projection: { tombstonePurgeSeq: 1 } },
   );
-  const preferencesSeq = BigInt(prefsSeqResult.rows[0]?.seq ?? "0");
+  const purgeHorizon = user?.tombstonePurgeSeq ?? 0;
+  const cursor = parseCursor(requestedCursor, purgeHorizon);
+  const preferencesDocument = await collection(client, "preferences").findOne(
+    { _id: userId },
+    { ...inSession(client), projection: { changeSeq: 1 } },
+  );
+  const preferencesSeq = preferencesDocument?.changeSeq ?? 0;
 
   if (!preferences.phraseSyncEnabled) {
     // Phrase changes are withheld, and the cursor does not move past them, so re-enabling sync
@@ -477,19 +455,14 @@ async function readChanges(
     };
   }
 
-  // The text alias must not share the column's name: ORDER BY resolves output aliases first, and
-  // sorting sequence numbers as text ("99" after "100") would make the cursor skip records.
-  const { rows } = await client.query<PhraseRow & { change_seq_text: string }>(
-    `select ${PHRASE_COLUMNS}, change_seq::text as change_seq_text from phrases
-      where user_id = $1 and change_seq > $2::bigint
-      order by phrases.change_seq
-      limit $3`,
-    [userId, cursor.seq.toString(), MAX_SYNC_CHANGES + 1],
-  );
-  const hasMore = rows.length > MAX_SYNC_CHANGES;
-  const page = rows.slice(0, MAX_SYNC_CHANGES);
-  const lastPhraseSeq =
-    page.length > 0 ? BigInt(page[page.length - 1]?.change_seq_text ?? "0") : 0n;
+  const documents = await collection(client, "phrases")
+    .find({ changeSeq: { $gt: cursor.seq }, userId }, inSession(client))
+    .sort({ changeSeq: 1 })
+    .limit(MAX_SYNC_CHANGES + 1)
+    .toArray();
+  const hasMore = documents.length > MAX_SYNC_CHANGES;
+  const page = documents.slice(0, MAX_SYNC_CHANGES);
+  const lastPhraseSeq = page.at(-1)?.changeSeq ?? 0;
 
   const phrases = page
     .map(toPhraseRecord)
@@ -508,10 +481,7 @@ async function readChanges(
 
   // The final cursor also clears the purge horizon; otherwise a client whose newest remaining
   // record predates a purged tombstone would be sent back into resynchronization every time.
-  let upper = cursor.seq;
-  for (const candidate of [lastPhraseSeq, preferencesSeq, await tombstonePurgeHorizon(client)]) {
-    if (candidate > upper) upper = candidate;
-  }
+  const upper = Math.max(cursor.seq, lastPhraseSeq, preferencesSeq, purgeHorizon);
   return {
     changes: {
       phrases,
@@ -530,25 +500,27 @@ async function readChanges(
  */
 export async function purgeSyncMetadata(database: Database, now: Date): Promise<void> {
   await database.transaction(async (client) => {
-    const tombstoneCutoff = new Date(now.getTime() - TOMBSTONE_RETENTION_MILLISECONDS);
-    const purged = await client.query<{ seq: string | null }>(
-      `with removed as (
-         delete from phrases where deleted_at is not null and deleted_at < $1
-         returning change_seq
-       )
-       select max(change_seq)::text as seq from removed`,
-      [tombstoneCutoff],
-    );
-    const seq = purged.rows[0]?.seq;
-    if (seq) {
-      await client.query(
-        `insert into sync_metadata (key, value) values ('tombstone_purge_seq', $1)
-         on conflict (key) do update set value = greatest(sync_metadata.value, excluded.value)`,
-        [seq],
+    const tombstoneFilter = {
+      deletedAt: { $lt: new Date(now.getTime() - TOMBSTONE_RETENTION_MILLISECONDS) },
+    };
+    const phrases = collection(client, "phrases");
+    const horizons = await phrases
+      .aggregate<{ _id: string; seq: number }>(
+        [{ $match: tombstoneFilter }, { $group: { _id: "$userId", seq: { $max: "$changeSeq" } } }],
+        inSession(client),
+      )
+      .toArray();
+    for (const horizon of horizons) {
+      await collection(client, "users").updateOne(
+        { _id: horizon._id },
+        { $max: { tombstonePurgeSeq: horizon.seq } },
+        inSession(client),
       );
     }
-    await client.query("delete from sync_mutations where created_at < $1", [
-      new Date(now.getTime() - MUTATION_RECEIPT_RETENTION_MILLISECONDS),
-    ]);
+    await phrases.deleteMany(tombstoneFilter, inSession(client));
+    await collection(client, "syncMutations").deleteMany(
+      { createdAt: { $lt: new Date(now.getTime() - MUTATION_RECEIPT_RETENTION_MILLISECONDS) } },
+      inSession(client),
+    );
   });
 }

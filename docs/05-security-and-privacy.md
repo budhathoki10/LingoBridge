@@ -165,7 +165,7 @@ The dashboard uses its own restrictive policy, permits network access only to ap
 - Google OpenID Connect is the selected production identity provider. The dashboard verifies the
   authorization-code exchange, PKCE, state, browser binding, nonce, issuer, audience, and ID-token
   signature before creating a web session. The local development identity provider is rejected in
-  production, which also requires a confidential client secret, HTTPS origin, PostgreSQL, an exact
+  production, which also requires a confidential client secret, HTTPS origin, MongoDB, an exact
   extension-ID allowlist, and a server-only session secret. Credentialed Google sign-in remains a
   deployment check.
 - Protected pages re-check the database-backed session during server rendering. Dashboard

@@ -79,3 +79,19 @@ export function toggleFavouriteLanguage(codes: readonly string[], languageCode: 
       )
     : cleanCodes([languageCode, ...codes], 12);
 }
+
+export function replaceAvailableFavourites(
+  codes: readonly string[],
+  availableCodes: readonly string[],
+  selectedCodes: readonly string[],
+): string[] {
+  const available = new Set(availableCodes);
+  const selected = new Set(cleanCodes([...selectedCodes], 12));
+  return cleanCodes(
+    [
+      ...codes.filter((code) => !available.has(code)),
+      ...availableCodes.filter((code) => selected.has(code)),
+    ],
+    12,
+  );
+}

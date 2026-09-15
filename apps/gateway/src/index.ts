@@ -4,11 +4,13 @@ import { createGatewayApp } from "./app.js";
 import { fakeCapabilityCatalogue } from "./capabilities.js";
 import { CapabilityCatalogueService } from "./capability-catalogue-service.js";
 import { loadGatewayRuntimeConfig } from "./config.js";
+import { FakeExplanationAdapter } from "./fake-explanation-adapter.js";
 import { FakeTranslationAdapter } from "./fake-translation-adapter.js";
 import { FileCapabilityCatalogueStore } from "./file-capability-catalogue-store.js";
 import { GoogleCapabilitySource } from "./google-capability-source.js";
 import { createGoogleCloudClient, GoogleTranslationAdapter } from "./google-translation-adapter.js";
 import { OnlineProviderCapabilitySource } from "./nvidia-capabilities.js";
+import { NvidiaExplanationAdapter } from "./nvidia-explanation-adapter.js";
 import { OperationalMetrics, observeTranslationAdapter } from "./operational-metrics.js";
 import {
   createNvidiaTranslationClient,
@@ -68,8 +70,21 @@ const capabilityProvider =
         },
       )
     : { get: async () => fakeCapabilityCatalogue };
+// Live explanations reuse the NVIDIA key and client that translation already requires.
+const explanationAdapter =
+  config.translationMode === "live" && nvidiaClient
+    ? new NvidiaExplanationAdapter(
+        nvidiaClient,
+        config.explanationModel,
+        config.explanationMaxTokens,
+      )
+    : config.translationMode === "fake"
+      ? new FakeExplanationAdapter()
+      : null;
 const app = createGatewayApp({
   capabilityProvider,
+  explanationAdapter,
+  explanationTimeoutMilliseconds: config.explanationTimeoutMilliseconds,
   getClientAddress: (context) => getConnInfo(context).remote.address ?? "unknown-network",
   operationsMetrics,
   operationsMetricsToken: config.operationsMetricsToken,

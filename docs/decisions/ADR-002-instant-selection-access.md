@@ -20,7 +20,7 @@ Persistent access to webpages is sensitive. The product must provide the request
 - Show one small magic-icon button beside an eligible stable selection.
 - Do not detect, transmit, or translate the selection merely because the icon appears.
 - On icon click, open the translator with Detecting and Translating states and load the user's saved preferred target language.
-- The translator may show locally pinned target languages for direct switching after activation. Pinning a language alone does not read or send selected text, and the panel still has one default target.
+- The translator may show locally pinned target languages for direct switching after activation and a checklist to save several pins together. Pinning a language alone does not read or send selected text, and the panel still has one default target.
 - Use Shadow DOM and an isolated extension world so page CSS and scripts do not control the translator interface.
 - Start online translation only after the magic-icon click and separate Online processing consent.
 - Block password fields and forbidden elements; pause transmission for sensitive-looking text until the user confirms.

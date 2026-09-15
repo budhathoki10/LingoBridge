@@ -1,6 +1,9 @@
 import {
   type CapabilityCatalogue,
   capabilityCatalogueSchema,
+  type ExplanationRequest,
+  explanationRequestSchema,
+  explanationResultSchema,
   gatewayHealthSchema,
   gatewayVersionSchema,
   type TranslationError,
@@ -18,7 +21,7 @@ export const GATEWAY_BRIDGE_REQUEST = "lingobridge:gateway:request";
 export const GATEWAY_BRIDGE_ABORT = "lingobridge:gateway:abort";
 export const GATEWAY_BRIDGE_PORT = "lingobridge:gateway:port";
 
-const OPERATIONS = ["capabilities", "inspect-service", "translate"] as const;
+const OPERATIONS = ["capabilities", "explain", "inspect-service", "translate"] as const;
 
 type GatewayBridgeErrorCode = TranslationError["code"] | "invalid-response" | "network-unavailable";
 
@@ -36,12 +39,12 @@ const ERROR_CODES: readonly GatewayBridgeErrorCode[] = [
 
 export type GatewayBridgeOperation = (typeof OPERATIONS)[number];
 
-export interface GatewayBridgeRequest {
-  id: string;
-  operation: GatewayBridgeOperation;
-  request: TranslationRequest | null;
-  type: typeof GATEWAY_BRIDGE_REQUEST;
-}
+export type GatewayBridgeRequest = { id: string; type: typeof GATEWAY_BRIDGE_REQUEST } & (
+  | { operation: "capabilities"; request: null }
+  | { operation: "inspect-service"; request: null }
+  | { operation: "explain"; request: ExplanationRequest }
+  | { operation: "translate"; request: TranslationRequest }
+);
 
 export interface GatewayBridgeAbort {
   id: string;
@@ -80,13 +83,23 @@ export function parseGatewayBridgeRequest(value: unknown): GatewayBridgeRequest 
   if (typeof operation !== "string" || !OPERATIONS.includes(operation as GatewayBridgeOperation)) {
     return null;
   }
+  if (operation === "explain") {
+    const parsedExplanation = explanationRequestSchema.safeParse(value.request);
+    if (!parsedExplanation.success) return null;
+    return {
+      id: value.id,
+      operation: "explain",
+      request: parsedExplanation.data,
+      type: GATEWAY_BRIDGE_REQUEST,
+    };
+  }
   if (operation !== "translate") {
     return {
       id: value.id,
-      operation: operation as GatewayBridgeOperation,
+      operation: operation as "capabilities" | "inspect-service",
       request: null,
       type: GATEWAY_BRIDGE_REQUEST,
-    };
+    } as GatewayBridgeRequest;
   }
   const parsedRequest = translationRequestSchema.safeParse(value.request);
   if (!parsedRequest.success) return null;
@@ -155,7 +168,7 @@ function parseResponse(value: unknown): GatewayBridgeResponse {
 export function createBridgeGatewayClient(transport: GatewayBridgeTransport): GatewayClient {
   async function call(
     operation: GatewayBridgeOperation,
-    request: TranslationRequest | null,
+    request: TranslationRequest | ExplanationRequest | null,
     signal?: AbortSignal,
   ): Promise<unknown> {
     if (signal?.aborted) throw abortError();
@@ -165,7 +178,12 @@ export function createBridgeGatewayClient(transport: GatewayBridgeTransport): Ga
     };
     signal?.addEventListener("abort", forwardAbort, { once: true });
     try {
-      const raw = await transport.send({ id, operation, request, type: GATEWAY_BRIDGE_REQUEST });
+      const raw = await transport.send({
+        id,
+        operation,
+        request,
+        type: GATEWAY_BRIDGE_REQUEST,
+      } as GatewayBridgeRequest);
       const parsed = parseResponse(raw);
       if (parsed.ok) return parsed.data;
       if (parsed.aborted) throw abortError();
@@ -212,6 +230,27 @@ export function createBridgeGatewayClient(transport: GatewayBridgeTransport): Ga
   }
 
   return {
+    async explain(request, signal) {
+      const parsedRequest = explanationRequestSchema.safeParse(request);
+      if (!parsedRequest.success) {
+        throw new GatewayClientError(
+          "invalid-request",
+          "The explanation request did not match the shared contract.",
+          false,
+        );
+      }
+      const parsedResult = explanationResultSchema.safeParse(
+        await call("explain", parsedRequest.data, signal),
+      );
+      if (!parsedResult.success) {
+        throw new GatewayClientError(
+          "invalid-response",
+          "The gateway explanation did not match the shared contract.",
+          true,
+        );
+      }
+      return parsedResult.data;
+    },
     getCapabilities,
     async inspect(signal) {
       const [service, capabilities] = await Promise.all([

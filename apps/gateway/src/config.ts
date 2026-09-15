@@ -13,6 +13,9 @@ export interface GatewayRuntimeConfig {
   capabilityCachePath: string;
   capabilityFreshForMilliseconds: number;
   capabilityRetryAfterFailureMilliseconds: number;
+  explanationMaxTokens: number;
+  explanationModel: string;
+  explanationTimeoutMilliseconds: number;
   googleProjectId: string | null;
   hostname: string;
   nvidiaApiKey: string | null;
@@ -103,6 +106,12 @@ export function loadGatewayRuntimeConfig(environment: GatewayEnvironment): Gatew
     throw new Error("Live mode requires NVIDIA_API_KEY.");
   }
 
+  const explanationModel =
+    environment.NVIDIA_EXPLANATION_MODEL?.trim() || "nvidia/nemotron-3-super-120b-a12b";
+  if (!/^[a-z0-9-]{1,40}\/[a-z0-9._-]{1,100}$/u.test(explanationModel)) {
+    throw new Error("NVIDIA_EXPLANATION_MODEL must be an NVIDIA API catalog model ID.");
+  }
+
   return {
     capabilityCachePath:
       environment.LINGOBRIDGE_CAPABILITY_CACHE_PATH ?? ".data/online-provider-capabilities.json",
@@ -115,6 +124,13 @@ export function loadGatewayRuntimeConfig(environment: GatewayEnvironment): Gatew
       environment,
       "LINGOBRIDGE_CAPABILITY_RETRY_MS",
       5 * 60 * 1_000,
+    ),
+    explanationMaxTokens: readPositiveInteger(environment, "NVIDIA_EXPLANATION_MAX_TOKENS", 2_048),
+    explanationModel,
+    explanationTimeoutMilliseconds: readPositiveInteger(
+      environment,
+      "LINGOBRIDGE_EXPLANATION_TIMEOUT_MS",
+      30_000,
     ),
     googleProjectId: translationMode === "live" ? googleProjectId : null,
     hostname: environment.HOST ?? "127.0.0.1",

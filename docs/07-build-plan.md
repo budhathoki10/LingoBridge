@@ -118,12 +118,13 @@ delete-one removing exactly the intended record, confirmed delete-all, and the e
 Implemented locally on 14 September 2026. The protected Next.js dashboard uses server-validated
 sessions, Google OpenID Connect in production and a development-only identity provider locally.
 Extension connection uses Chrome Identity with a one-time code and PKCE; tokens live only in the
-extension background worker's IndexedDB. PostgreSQL migrations cover users, revocable sessions,
+extension background worker's IndexedDB. Database migrations cover users, revocable sessions,
 explicit phrases, approved preferences, revisions, tombstones, and roles. Local-first sync,
 dashboard management, recent-authenticated deletion receipts, and a role-protected aggregate
 operations view have focused unit, integration, and bundled-Chromium browser coverage. A daily
 maintenance command now purges expired sync metadata and de-identified deleted accounts after the
-documented window. The dashboard's Google client credentials, PostgreSQL deployment, scheduled
+documented window. On 15 September 2026 storage moved from PostgreSQL to MongoDB (ADR-004)
+with the same behaviour and tests. The dashboard's Google client credentials, MongoDB Atlas deployment, scheduled
 maintenance, and exact-store-package connection are deployment evidence still to collect; see
 `docs/14-dashboard-operations.md`.
 

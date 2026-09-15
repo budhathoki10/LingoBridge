@@ -96,6 +96,10 @@ Release targets:
 
 Keep test output, permission review, dependency audit, package inspection, translation-review results, dashboard and authorization test results, database migration evidence, and manual Chrome results with the release record. Clearly separate tested behaviour from planned behaviour.
 
+### Favorite language quick-switch local evidence — 15 September 2026
+
+The extension's locally pinned target-language controls pass five focused preference unit tests and a bundled-Chromium journey for pinning, unpinning, checking and saving several favorites together, removing them together, switching targets, and making no text request before Online consent. The anchored panel and open checklist were visually checked at 320px and 190px widths. Focused extension/test type-checks, source formatting and lint, and the production extension build pass. The older deterministic fake-provider success journey was not confirmed against the currently running live gateway; it reached the expected Online-consent state instead of its fake success fixture. The installed Chrome extension has not yet been reloaded and checked by the user for this feature.
+
 ### Phase 5 local evidence — 10 September 2026
 
 - Repository quality gate: formatting, lint, all workspace type-checks, and 103 unit/integration tests pass.
@@ -120,5 +124,7 @@ Keep test output, permission review, dependency audit, package inspection, trans
   Magic journeys reached Online consent because port 8787 was occupied by an existing live gateway;
   they require an isolated fake gateway for deterministic verification. No consent was given and
   those two tests sent no selected text to the live provider.
-- Credentialed Google identity, PostgreSQL deployment, and packaged-extension-to-dashboard
+- After the MongoDB move (ADR-004), all 231 unit and integration tests passed against an embedded
+  single-node MongoDB replica set, including a new concurrent-sync ordering test.
+- Credentialed Google identity, MongoDB Atlas deployment, and packaged-extension-to-dashboard
   connection remain deployment evidence, separate from these local tests.

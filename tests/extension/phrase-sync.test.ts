@@ -164,10 +164,11 @@ describe("synchronization against the server", () => {
     await device.syncUntilSettled();
     expect(device.state.outbox).toEqual([]);
     expect(device.state.failures).toBe(0);
-    const rows = await database.query<{ id: string; revision: number }>(
-      "select id, revision from phrases order by id",
-    );
-    expect(rows.rows).toEqual([
+    const rows = await database.db
+      .collection("phrases")
+      .find({}, { projection: { _id: 0, id: 1, revision: 1 }, sort: { id: 1 } })
+      .toArray();
+    expect(rows).toEqual([
       { id: "offline-1", revision: 1 },
       { id: "offline-2", revision: 1 },
     ]);
@@ -180,8 +181,11 @@ describe("synchronization against the server", () => {
     await device.sync();
     expect(device.state.outbox).toHaveLength(1);
     await device.syncUntilSettled();
-    const rows = await database.query("select revision from phrases where id = 'lost'");
-    expect(rows.rows).toEqual([{ revision: 1 }]);
+    const rows = await database.db
+      .collection("phrases")
+      .find({ id: "lost" }, { projection: { _id: 0, revision: 1 } })
+      .toArray();
+    expect(rows).toEqual([{ revision: 1 }]);
     expect(device.state.known.lost?.revision).toBe(1);
   });
 
@@ -220,10 +224,8 @@ describe("synchronization against the server", () => {
     await device.syncUntilSettled();
 
     expect(device.phrases).toEqual([]);
-    const row = await database.query<{ deleted_at: unknown }>(
-      "select deleted_at from phrases where id = 'contested'",
-    );
-    expect(row.rows[0]?.deleted_at).not.toBeNull();
+    const row = await database.db.collection("phrases").findOne({ id: "contested" });
+    expect(row?.deletedAt).toBeInstanceOf(Date);
   });
 
   it("adopts the server version on a stale note edit, and keeps both when content truly differs", async () => {
@@ -249,8 +251,15 @@ describe("synchronization against the server", () => {
     expect(device.phrases.find((entry) => entry.id === "note")?.note).toBe("server note");
 
     // Simulate a content conflict: server content differs from the device's copy of the same id.
-    await database.query(
-      "update phrases set translated_text = 'server translation', revision = revision + 1, change_seq = nextval('sync_change_seq') where id = 'fork'",
+    const bumped = await database.db
+      .collection<{ _id: string; changeSeq: number }>("users")
+      .findOneAndUpdate({ _id: userId }, { $inc: { changeSeq: 1 } }, { returnDocument: "after" });
+    await database.db.collection("phrases").updateOne(
+      { id: "fork" },
+      {
+        $inc: { revision: 1 },
+        $set: { changeSeq: bumped?.changeSeq, translatedText: "server translation" },
+      },
     );
     device.phrases = device.phrases.map((entry) =>
       entry.id === "fork" ? { ...entry, note: "force a push" } : entry,
@@ -271,10 +280,11 @@ describe("synchronization against the server", () => {
       "server translation",
       "अनुवाद fork",
     ]);
-    const serverCopies = await database.query(
-      "select id from phrases where source_text = 'Source fork' and deleted_at is null",
-    );
-    expect(serverCopies.rows).toHaveLength(2);
+    const serverCopies = await database.db.collection("phrases").countDocuments({
+      deletedAt: null,
+      sourceText: "Source fork",
+    });
+    expect(serverCopies).toBe(2);
   });
 
   it("uploads never-synced local phrases on first connection and prunes phrases deleted while tombstones expired", async () => {
@@ -282,7 +292,7 @@ describe("synchronization against the server", () => {
     device.phrases = [local("kept"), local("removed-elsewhere")];
     await device.syncUntilSettled();
 
-    await database.query("delete from phrases where id = 'removed-elsewhere'");
+    await database.db.collection("phrases").deleteOne({ id: "removed-elsewhere" });
     device.state = { ...device.state, cursor: null };
     device.phrases = [...device.phrases, local("new-local")];
     await device.syncUntilSettled();
@@ -294,10 +304,8 @@ describe("synchronization against the server", () => {
     const first = new Device();
     first.target = "ne";
     await first.syncUntilSettled();
-    const stored = await database.query<{ preferred_target_language: string }>(
-      "select preferred_target_language from preferences",
-    );
-    expect(stored.rows[0]?.preferred_target_language).toBe("ne");
+    const stored = await database.db.collection("preferences").findOne({});
+    expect(stored?.preferredTargetLanguage).toBe("ne");
 
     const second = new Device();
     second.target = "en";
@@ -376,8 +384,7 @@ describe("background sync service", () => {
     await expect(service.run()).resolves.toBe("synced");
 
     expect((storage.data[SAVED_PHRASES_STORAGE_KEY] as unknown[]).length).toBe(MAX_SAVED_PHRASES);
-    const live = await database.query("select 1 from phrases where deleted_at is null");
-    expect(live.rows).toHaveLength(total);
+    expect(await database.db.collection("phrases").countDocuments({ deletedAt: null })).toBe(total);
   });
 
   it("schedules a retry when offline and marks the connection revoked when the server says so", async () => {

@@ -1,50 +1,47 @@
 import type {
   LivePhraseRecord,
   PhraseRecord,
-  ProcessingPreference,
   SyncedPreferences,
 } from "@lingobridge/contracts/account";
-import { type SqlClient, toInteger, toIsoString, toNullableIsoString } from "./client.js";
+import type { Filter } from "mongodb";
+import {
+  collection,
+  type DbClient,
+  inSession,
+  type PhraseDocument,
+  type PreferencesDocument,
+  toIsoString,
+  toNullableIsoString,
+} from "./client.js";
 
-export interface PhraseRow {
-  deleted_at: unknown;
-  id: string;
-  note: string | null;
-  provider: string | null;
-  revision: unknown;
-  saved_at: unknown;
-  source_language: string | null;
-  source_text: string | null;
-  target_language: string | null;
-  translated_text: string | null;
-  updated_at: unknown;
-}
-
-export const PHRASE_COLUMNS = `id, source_text, translated_text, source_language, target_language,
-  provider, note, saved_at, updated_at, revision, deleted_at`;
-
-export function toPhraseRecord(row: PhraseRow): PhraseRecord {
-  if (row.deleted_at !== null && row.deleted_at !== undefined) {
+export function toPhraseRecord(document: PhraseDocument): PhraseRecord {
+  if (document.deletedAt !== null && document.deletedAt !== undefined) {
     return {
-      deletedAt: toIsoString(row.deleted_at),
-      id: row.id,
-      revision: toInteger(row.revision),
+      deletedAt: toIsoString(document.deletedAt),
+      id: document.id,
+      revision: document.revision,
       state: "deleted",
     };
   }
   return {
-    id: row.id,
-    note: row.note,
-    provider: row.provider as LivePhraseRecord["provider"],
-    revision: toInteger(row.revision),
-    savedAt: toIsoString(row.saved_at),
-    sourceLanguage: row.source_language ?? "",
-    sourceText: row.source_text ?? "",
+    id: document.id,
+    note: document.note,
+    provider: document.provider as LivePhraseRecord["provider"],
+    revision: document.revision,
+    savedAt: toIsoString(document.savedAt),
+    sourceLanguage: document.sourceLanguage ?? "",
+    sourceText: document.sourceText ?? "",
     state: "live",
-    targetLanguage: row.target_language ?? "",
-    translatedText: row.translated_text ?? "",
-    updatedAt: toIsoString(row.updated_at),
+    targetLanguage: document.targetLanguage ?? "",
+    translatedText: document.translatedText ?? "",
+    updatedAt: toIsoString(document.updatedAt),
   };
+}
+
+export function toLivePhraseRecords(documents: readonly PhraseDocument[]): LivePhraseRecord[] {
+  return documents
+    .map(toPhraseRecord)
+    .filter((record): record is LivePhraseRecord => record.state === "live");
 }
 
 export interface PhraseFilters {
@@ -63,62 +60,57 @@ export interface PhrasePage {
   total: number;
 }
 
-function escapeLike(value: string): string {
-  return value.replace(/[\\%_]/gu, (character) => `\\${character}`);
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 /** Every read is scoped by the authenticated user id; filters only ever narrow that set. */
 export async function listPhrases(
-  client: SqlClient,
+  client: DbClient,
   userId: string,
   filters: PhraseFilters,
 ): Promise<PhrasePage> {
-  const conditions = ["user_id = $1", "deleted_at is null"];
-  const params: unknown[] = [userId];
-  const add = (condition: (placeholder: string) => string, value: unknown) => {
-    params.push(value);
-    conditions.push(condition(`$${params.length}`));
-  };
+  const filter: Filter<PhraseDocument> = { deletedAt: null, userId };
 
   const query = filters.query?.trim();
   if (query) {
-    add(
-      (p) => `(source_text ilike ${p} escape '\\' or translated_text ilike ${p} escape '\\')`,
-      `%${escapeLike(query)}%`,
-    );
+    const pattern = { $options: "i", $regex: escapeRegex(query) };
+    filter.$or = [{ sourceText: pattern }, { translatedText: pattern }];
   }
-  if (filters.sourceLanguage) add((p) => `source_language = ${p}`, filters.sourceLanguage);
-  if (filters.targetLanguage) add((p) => `target_language = ${p}`, filters.targetLanguage);
-  if (filters.savedFrom) add((p) => `saved_at >= ${p}`, filters.savedFrom);
-  if (filters.savedTo) add((p) => `saved_at < ${p}`, filters.savedTo);
+  if (filters.sourceLanguage) filter.sourceLanguage = filters.sourceLanguage;
+  if (filters.targetLanguage) filter.targetLanguage = filters.targetLanguage;
+  if (filters.savedFrom || filters.savedTo) {
+    filter.savedAt = {
+      ...(filters.savedFrom ? { $gte: filters.savedFrom } : {}),
+      ...(filters.savedTo ? { $lt: filters.savedTo } : {}),
+    };
+  }
 
-  const where = conditions.join(" and ");
-  const countResult = await client.query<{ total: unknown }>(
-    `select count(*) as total from phrases where ${where}`,
-    params,
-  );
-  const { rows } = await client.query<PhraseRow>(
-    `select ${PHRASE_COLUMNS} from phrases where ${where}
-      order by saved_at ${filters.sort === "oldest" ? "asc" : "desc"}, id
-      limit $${params.length + 1} offset $${params.length + 2}`,
-    [...params, filters.limit, filters.offset],
-  );
-  return {
-    phrases: rows.map(toPhraseRecord).filter((record) => record.state === "live"),
-    total: toInteger(countResult.rows[0]?.total ?? 0),
-  };
+  const phrases = collection(client, "phrases");
+  const total = await phrases.countDocuments(filter, inSession(client));
+  const documents = await phrases
+    .find(filter, inSession(client))
+    // Array form: sort precedence must not depend on object key order.
+    .sort([
+      ["savedAt", filters.sort === "oldest" ? 1 : -1],
+      ["id", 1],
+    ])
+    .skip(filters.offset)
+    .limit(filters.limit)
+    .toArray();
+  return { phrases: toLivePhraseRecords(documents), total };
 }
 
 export async function getPhraseRecord(
-  client: SqlClient,
+  client: DbClient,
   userId: string,
   phraseId: string,
 ): Promise<PhraseRecord | null> {
-  const { rows } = await client.query<PhraseRow>(
-    `select ${PHRASE_COLUMNS} from phrases where user_id = $1 and id = $2`,
-    [userId, phraseId],
+  const document = await collection(client, "phrases").findOne(
+    { id: phraseId, userId },
+    inSession(client),
   );
-  return rows[0] ? toPhraseRecord(rows[0]) : null;
+  return document ? toPhraseRecord(document) : null;
 }
 
 export interface PhraseLanguageSummary {
@@ -128,44 +120,37 @@ export interface PhraseLanguageSummary {
 }
 
 export async function summarizePhraseLanguages(
-  client: SqlClient,
+  client: DbClient,
   userId: string,
 ): Promise<PhraseLanguageSummary> {
-  const { rows } = await client.query<{
-    source_language: string;
-    target_language: string;
-    total: unknown;
-  }>(
-    `select source_language, target_language, count(*) as total from phrases
-      where user_id = $1 and deleted_at is null
-      group by source_language, target_language`,
-    [userId],
-  );
+  const groups = await collection(client, "phrases")
+    .aggregate<{ _id: { source: string; target: string }; total: number }>(
+      [
+        { $match: { deletedAt: null, userId } },
+        {
+          $group: {
+            _id: { source: "$sourceLanguage", target: "$targetLanguage" },
+            total: { $sum: 1 },
+          },
+        },
+      ],
+      inSession(client),
+    )
+    .toArray();
   return {
-    sourceLanguages: [...new Set(rows.map((row) => row.source_language))].sort(),
-    targetLanguages: [...new Set(rows.map((row) => row.target_language))].sort(),
-    total: rows.reduce((sum, row) => sum + toInteger(row.total), 0),
+    sourceLanguages: [...new Set(groups.map((group) => group._id.source))].sort(),
+    targetLanguages: [...new Set(groups.map((group) => group._id.target))].sort(),
+    total: groups.reduce((sum, group) => sum + group.total, 0),
   };
 }
 
-interface PreferencesRow {
-  phrase_sync_enabled: boolean;
-  preferred_target_language: string | null;
-  processing_preference: ProcessingPreference | null;
-  revision: unknown;
-  updated_at: unknown;
-}
-
-export const PREFERENCE_COLUMNS =
-  "preferred_target_language, processing_preference, phrase_sync_enabled, revision, updated_at";
-
-export function toSyncedPreferences(row: PreferencesRow): SyncedPreferences {
+export function toSyncedPreferences(document: PreferencesDocument): SyncedPreferences {
   return {
-    phraseSyncEnabled: row.phrase_sync_enabled,
-    preferredTargetLanguage: row.preferred_target_language,
-    processingPreference: row.processing_preference,
-    revision: toInteger(row.revision),
-    updatedAt: toNullableIsoString(row.updated_at),
+    phraseSyncEnabled: document.phraseSyncEnabled,
+    preferredTargetLanguage: document.preferredTargetLanguage,
+    processingPreference: document.processingPreference,
+    revision: document.revision,
+    updatedAt: toNullableIsoString(document.updatedAt),
   };
 }
 
@@ -177,13 +162,10 @@ export const DEFAULT_PREFERENCES: SyncedPreferences = {
   updatedAt: null,
 };
 
-export async function getPreferences(
-  client: SqlClient,
-  userId: string,
-): Promise<SyncedPreferences> {
-  const { rows } = await client.query<PreferencesRow>(
-    `select ${PREFERENCE_COLUMNS} from preferences where user_id = $1`,
-    [userId],
+export async function getPreferences(client: DbClient, userId: string): Promise<SyncedPreferences> {
+  const document = await collection(client, "preferences").findOne(
+    { _id: userId },
+    inSession(client),
   );
-  return rows[0] ? toSyncedPreferences(rows[0]) : DEFAULT_PREFERENCES;
+  return document ? toSyncedPreferences(document) : DEFAULT_PREFERENCES;
 }

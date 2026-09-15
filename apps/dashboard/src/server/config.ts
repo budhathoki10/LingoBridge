@@ -10,6 +10,8 @@ export interface DashboardConfig {
   /** "*" accepts any unpacked extension id and is refused in production. */
   allowedExtensionIds: ReadonlySet<string> | "any";
   authMode: AuthMode;
+  databaseName: string;
+  /** A mongodb:// or mongodb+srv:// connection string. Never logged or sent to the browser. */
   databaseUrl: string | null;
   embeddedDatabaseDirectory: string | null;
   gatewayUrl: string;
@@ -105,6 +107,13 @@ export function loadDashboardConfig(environment: DashboardEnvironment): Dashboar
 
   const databaseUrl = environment.DATABASE_URL?.trim() || null;
   if (production && !databaseUrl) throw new Error("DATABASE_URL is required in production.");
+  if (databaseUrl && !/^mongodb(\+srv)?:\/\//u.test(databaseUrl)) {
+    throw new Error("DATABASE_URL must be a mongodb:// or mongodb+srv:// connection string.");
+  }
+  const databaseName = environment.DATABASE_NAME?.trim() || "lingobridge";
+  if (!/^[A-Za-z0-9_-]{1,63}$/u.test(databaseName)) {
+    throw new Error("DATABASE_NAME may contain only letters, digits, underscores, and hyphens.");
+  }
 
   const metricsToken = environment.LINGOBRIDGE_OPERATIONS_METRICS_TOKEN?.trim() || null;
   if (metricsToken && metricsToken.length < 32) {
@@ -117,12 +126,13 @@ export function loadDashboardConfig(environment: DashboardEnvironment): Dashboar
     ),
     allowedExtensionIds,
     authMode,
+    databaseName,
     databaseUrl,
     // "memory" keeps the development database in memory, for automated browser tests.
     embeddedDatabaseDirectory:
       databaseUrl || environment.LINGOBRIDGE_EMBEDDED_DATABASE_DIR?.trim() === "memory"
         ? null
-        : environment.LINGOBRIDGE_EMBEDDED_DATABASE_DIR?.trim() || ".data/pglite",
+        : environment.LINGOBRIDGE_EMBEDDED_DATABASE_DIR?.trim() || ".data/mongodb",
     gatewayUrl: (environment.LINGOBRIDGE_GATEWAY_URL?.trim() || "http://127.0.0.1:8787").replace(
       /\/$/u,
       "",

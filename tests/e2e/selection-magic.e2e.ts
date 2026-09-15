@@ -87,7 +87,8 @@ interface ShadowNode {
 
 function findShadowControl(node: ShadowNode, tag: string, label: string): ShadowNode | null {
   const attributes = node.attributes ?? [];
-  const ariaLabel = attributes[attributes.indexOf("aria-label") + 1];
+  const labelIndex = attributes.indexOf("aria-label");
+  const ariaLabel = labelIndex >= 0 ? attributes[labelIndex + 1] : null;
   if (node.nodeName.toLowerCase() === tag && ariaLabel === label) return node;
   for (const child of [...(node.children ?? []), ...(node.shadowRoots ?? [])]) {
     const found = findShadowControl(child, tag, label);
@@ -108,6 +109,11 @@ async function operateClosedShadowControl(
     const node = findShadowControl(root, tag, label);
     if (!node) throw new Error(`Could not find ${label} in the translation panel.`);
     if (action === "click") {
+      const { object } = await cdp.send("DOM.resolveNode", { nodeId: node.nodeId });
+      await cdp.send("Runtime.callFunctionOn", {
+        functionDeclaration: "function() { this.scrollIntoView({ block: 'center' }); }",
+        objectId: object.objectId,
+      });
       const { model } = await cdp.send("DOM.getBoxModel", { nodeId: node.nodeId });
       const quad = model.border;
       const center = (indexes: number[]) =>
@@ -186,6 +192,33 @@ test("favorite targets can be pinned and switched without sending text before co
       .toEqual(["fr", "en"]);
     expect(translateRequests.value).toBe(beforePin);
 
+    await operateClosedShadowControl(page, "summary", "Manage favorite languages", "click");
+    await operateClosedShadowControl(page, "input", "Favorite Hindi", "click");
+    expect(await page.locator(hostSelector).getAttribute("data-lingobridge-state")).toMatch(
+      /^(consent|success)$/u,
+    );
+    await operateClosedShadowControl(page, "input", "Favorite Arabic", "click");
+    await page.screenshot({ path: testInfo.outputPath("favorite-picker.png") });
+    expect(translateRequests.value).toBe(beforePin);
+    expect((await localLanguagePreferences(worker)).favouriteLanguageCodes).toEqual(["fr", "en"]);
+    await operateClosedShadowControl(page, "button", "Save favorite languages", "click");
+    await expect
+      .poll(async () => (await localLanguagePreferences(worker)).favouriteLanguageCodes)
+      .toEqual(expect.arrayContaining(["fr", "en", "hi", "ar"]));
+    expect((await localLanguagePreferences(worker)).favouriteLanguageCodes).toHaveLength(4);
+    expect((await localLanguagePreferences(worker)).targetLanguage).toBe("fr");
+    expect(translateRequests.value).toBe(beforePin);
+
+    await operateClosedShadowControl(page, "summary", "Manage favorite languages", "click");
+    await operateClosedShadowControl(page, "input", "Favorite Hindi", "click");
+    await operateClosedShadowControl(page, "input", "Favorite Arabic", "click");
+    await operateClosedShadowControl(page, "button", "Save favorite languages", "click");
+    await expect
+      .poll(async () => (await localLanguagePreferences(worker)).favouriteLanguageCodes)
+      .toEqual(expect.arrayContaining(["fr", "en"]));
+    expect((await localLanguagePreferences(worker)).favouriteLanguageCodes).toHaveLength(2);
+    expect(translateRequests.value).toBe(beforePin);
+
     await operateClosedShadowControl(page, "select", "Target language", { select: "hi" });
     await expect
       .poll(async () => (await localLanguagePreferences(worker)).targetLanguage)
@@ -197,7 +230,8 @@ test("favorite targets can be pinned and switched without sending text before co
     await operateClosedShadowControl(page, "button", "Add Hindi to favorites", "click");
     await expect
       .poll(async () => (await localLanguagePreferences(worker)).favouriteLanguageCodes)
-      .toEqual(["hi", "fr", "en"]);
+      .toEqual(expect.arrayContaining(["hi", "fr", "en"]));
+    expect((await localLanguagePreferences(worker)).favouriteLanguageCodes).toHaveLength(3);
     expect(translateRequests.value).toBe(beforeHindiPin);
     const bounds = await page.locator(hostSelector).boundingBox();
     expect(bounds).not.toBeNull();
@@ -215,6 +249,8 @@ test("favorite targets can be pinned and switched without sending text before co
     expect(narrowBounds).not.toBeNull();
     expect((narrowBounds?.x ?? 0) + (narrowBounds?.width ?? 0)).toBeLessThanOrEqual(182);
     await page.screenshot({ path: testInfo.outputPath("favorite-targets-narrow.png") });
+    await operateClosedShadowControl(page, "summary", "Manage favorite languages", "click");
+    await page.screenshot({ path: testInfo.outputPath("favorite-picker-narrow.png") });
   } finally {
     await context.close();
   }
@@ -407,19 +443,17 @@ test("popup remains usable at its 200-percent-zoom width without webpage permiss
     const page = await context.newPage();
     await page.setViewportSize({ height: 500, width: 190 });
     await page.goto(`chrome-extension://${extensionId}/popup.html`);
-    const selectionCard = page.locator(".selection-magic-card");
-    await expect(selectionCard).toContainText("Unavailable on this Chrome page.");
+    // Chrome's own pages cannot be granted, so the popup shows only the brand and dashboard card.
+    await expect(page.getByRole("button", { name: "Connect dashboard" })).toBeVisible();
+    await expect(page.locator(".site-access")).toHaveCount(0);
+    await expect(page.getByText("Saved phrases")).toHaveCount(0);
     const narrowLayout = await page.evaluate(() => ({
-      cardWidth:
-        document.querySelector(".selection-magic-card")?.getBoundingClientRect().width ?? 0,
-      copyWidth:
-        document.querySelector(".selection-magic-card__copy")?.getBoundingClientRect().width ?? 0,
+      cardWidth: document.querySelector(".account-card")?.getBoundingClientRect().width ?? 0,
       innerWidth: window.innerWidth,
       scrollWidth: document.documentElement.scrollWidth,
     }));
     expect(narrowLayout.scrollWidth).toBeLessThanOrEqual(narrowLayout.innerWidth);
-    expect(narrowLayout.cardWidth).toBeGreaterThanOrEqual(168);
-    expect(narrowLayout.copyWidth).toBeGreaterThanOrEqual(108);
+    expect(narrowLayout.cardWidth).toBeGreaterThanOrEqual(160);
     await page.screenshot({ fullPage: true, path: testInfo.outputPath("popup-200-percent.png") });
   } finally {
     await context.close();
