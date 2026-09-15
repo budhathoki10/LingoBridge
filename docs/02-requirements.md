@@ -73,7 +73,7 @@
 - Automatic sending of messages or submission of forms.
 - A general chatbot.
 - Grammar tutoring, flashcards, and language courses.
-- Romanized Nepali interpretation, transliteration, ambiguity explanation, and Natural, Literal, Formal, or Simple style modes until they pass the Phase 9 evaluation.
+- Broad Romanized Nepali interpretation, ambiguity explanation, and Natural, Literal, Formal, or Simple style modes until they pass the Phase 9 evaluation. A guarded first-pass Romanized Nepali preprocessor may normalize common dictionary-backed Nepali written in Latin letters before standard translation.
 - Mobile Chrome support, because Chrome desktop extension APIs are the initial platform.
 
 ## Quality requirements

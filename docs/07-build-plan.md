@@ -1,6 +1,6 @@
 # Small phase-by-phase build plan
 
-Status: **Phase 0 through Phase 5, Phase 7, and Phase 8 implementation and focused automated verification completed locally. Phase 6 is deferred by decision: Chrome's on-device translator has no Nepali listing. Phase 9 has not started. Credentialed provider and Google sign-in smoke tests remain deployment evidence.**
+Status: **Phase 0 through Phase 5, Phase 7, and Phase 8 implementation and focused automated verification completed locally. Phase 6 is deferred by decision: Chrome's on-device translator has no Nepali listing. Phase 9 Romanized Nepali preprocessing has a guarded local first pass; style and ambiguity modes have not started. Credentialed provider and Google sign-in smoke tests remain deployment evidence.**
 
 Complete these phases serially after the user explicitly authorizes implementation. Keep each phase as one small reviewable change. Do not start the next phase until the current Done when condition passes.
 
@@ -141,12 +141,12 @@ maintenance, and exact-store-package connection are deployment evidence still to
 
 ## 9 — post-core candidate enhancements
 
-These candidates are disabled for version 1. Accepting one requires explicit scope approval after the evaluation; otherwise Phase 10 proceeds without it.
+Romanized Nepali preprocessing has a guarded local first pass: common dictionary-backed Latin Nepali is detected, normalized to Nepali script, and then sent through the existing Nepali translation route. It does not claim broad Romanized Nepali support, does not use a new model, and keeps style and ambiguity modes disabled until evaluation.
 
 | Phase | Build or decide | Done when |
 | --- | --- | --- |
-| 9.1 | Evaluate Romanized input and Natural, Literal, Formal, Simple, and ambiguity modes. | Two fluent reviewers score the same blinded dataset and a model is accepted or the features are deferred. |
-| 9.2 | Implement only accepted enhancements with separate capability flags. | Unsupported languages remain disabled and prompt-like source text stays inert. |
+| 9.1 | Evaluate Romanized input and Natural, Literal, Formal, Simple, and ambiguity modes. | Romanized Nepali has local dictionary-backed tests for common examples; release approval still requires two fluent reviewers scoring the same blinded dataset. Style and ambiguity modes remain unevaluated. |
+| 9.2 | Implement only accepted enhancements with separate capability flags. | The first Romanized Nepali pass is gated by confidence and falls back to the existing flow for unsupported or low-confidence text. Unsupported languages remain disabled and prompt-like source text stays inert. |
 
 ## 10 — quality and release
 

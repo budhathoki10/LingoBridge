@@ -47,6 +47,12 @@ describe("local language detection", () => {
     expect(detectTextLanguage("Zxqv wmbrt plkgh")).toEqual([]);
   });
 
+  it("detects common Romanized Nepali before falling back to English", () => {
+    expect(top("ma ghar jadai chu")).toBe("ne");
+    expect(top("Sathi, timro naam k ho ani timilai k xa?")).toBe("ne");
+    expect(top("The quick brown fox is jumping over the lazy dog.")).toBe("en");
+  });
+
   it("offers the regional sibling so a one-variant catalogue still matches", () => {
     expect(detectTextLanguage("El perro que está en la casa no quiere salir")).toContain("es-US");
   });

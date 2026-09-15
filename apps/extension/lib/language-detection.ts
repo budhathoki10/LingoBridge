@@ -6,10 +6,14 @@
  * before it can build a request at all. This is a heuristic, not a model: scripts settle most
  * languages outright, and the rest are scored on the function words that carry a sentence.
  *
+ * Romanized Nepali is handled before the Latin profiles. It is still a heuristic: common Nepali
+ * words written in Latin letters must dominate the sentence before Nepali is returned.
+ *
  * Candidates come back in order rather than one at a time, because a script can serve several
  * languages and because a catalogue may carry only one variant of a regional pair. The caller
  * takes the first candidate its catalogue actually offers.
  */
+import { normalizeRomanizedNepali } from "./romanized-nepali";
 
 interface LanguageProfile {
   /** Characters that rarely appear outside this language. */
@@ -187,6 +191,7 @@ export function detectTextLanguage(text: string): string[] {
   if (CYRILLIC.test(normalized)) {
     return [...new Set([...ranked(normalized, CYRILLIC_PROFILES), "ru"])];
   }
+  if (normalizeRomanizedNepali(normalized)) return ["ne"];
 
   // A sentence normally contains several function words. None at all is a guess, not a reading.
   if (topScore(normalized, LATIN_PROFILES) < 8) return [];
