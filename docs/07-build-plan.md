@@ -1,6 +1,6 @@
 # Small phase-by-phase build plan
 
-Status: **Phase 0 through Phase 5 implementation and automated verification completed locally. Phase 6 has not started. Credentialed provider smoke tests remain deployment evidence.**
+Status: **Phase 0 through Phase 5, Phase 7, and Phase 8 implementation and focused automated verification completed locally. Phase 6 is deferred by decision: Chrome's on-device translator has no Nepali listing. Phase 9 has not started. Credentialed provider and Google sign-in smoke tests remain deployment evidence.**
 
 Complete these phases serially after the user explicitly authorizes implementation. Keep each phase as one small reviewable change. Do not start the next phase until the current Done when condition passes.
 
@@ -86,6 +86,27 @@ Completed on 10 September 2026. The popup explains and requests current-site or 
 
 ## 7 — result actions
 
+Phase 7.1 and 7.3 implementation and automated verification completed on 12 September 2026. A
+delivered result offers Copy, Listen and, for an editable selection, Replace. Copy prefers the
+clipboard API and falls back to a carrier inside the panel's own shadow root, so it never adds a
+node to the page. Listen is gated on a voice the browser actually has for the target language,
+because the catalogue carries no speech data and would otherwise hide the action everywhere;
+speech stops when the panel closes. Replace writes only while the captured offsets still hold the
+translated text, refusing with a visible message once the page has rewritten the field, and it
+submits nothing: no form submission, no synthesized key press, and only an `input` event. That
+last guarantee is pinned by tests that read the content script source, so a regression cannot pass
+silently.
+
+Phase 7.2 implementation and automated verification completed on 12 September 2026. The selection
+panel offers Save phrase only on a delivered result, and only a deliberate click stores anything:
+showing, closing, cancelling, or replacing a result saves nothing. Records keep the phrase, its
+direction, the actual provider, and the save time, and deliberately omit the page URL. The store
+normalizes malformed records away, collapses duplicate ids, replaces an earlier save of the same
+text and direction, and is bounded. The popup lists saved phrases with search, delete-one, a
+confirmed delete-all, and JSON export. Unit coverage spans normalization, bounding, search,
+replacement, deletion, and export; bundled-Chromium coverage verifies search without mutation,
+delete-one removing exactly the intended record, confirmed delete-all, and the empty state.
+
 | Phase | Build | Done when |
 | --- | --- | --- |
 | 7.1 | Add Copy and capability-gated Listen. | Neither action modifies or submits webpage content. |
@@ -93,6 +114,18 @@ Completed on 10 September 2026. The popup explains and requests current-site or 
 | 7.3 | Add reviewed replacement for editable selections. | Only the still-valid selected range changes; Send and Submit never trigger. |
 
 ## 8 — dashboard and synchronization
+
+Implemented locally on 14 September 2026. The protected Next.js dashboard uses server-validated
+sessions, Google OpenID Connect in production and a development-only identity provider locally.
+Extension connection uses Chrome Identity with a one-time code and PKCE; tokens live only in the
+extension background worker's IndexedDB. PostgreSQL migrations cover users, revocable sessions,
+explicit phrases, approved preferences, revisions, tombstones, and roles. Local-first sync,
+dashboard management, recent-authenticated deletion receipts, and a role-protected aggregate
+operations view have focused unit, integration, and bundled-Chromium browser coverage. A daily
+maintenance command now purges expired sync metadata and de-identified deleted accounts after the
+documented window. The dashboard's Google client credentials, PostgreSQL deployment, scheduled
+maintenance, and exact-store-package connection are deployment evidence still to collect; see
+`docs/14-dashboard-operations.md`.
 
 | Phase | Build | Done when |
 | --- | --- | --- |

@@ -1,6 +1,6 @@
 # Dashboard design
 
-Status: **Required product surface; implementation has not started**
+Status: **Phase 8 dashboard, identity, and synchronization implemented and focused automated verification complete locally; credentialed Google sign-in and deployment checks pending**
 
 ## Purpose
 
@@ -28,6 +28,7 @@ The dashboard gives signed-in users a safe place to manage information they deli
 ### Preferences
 
 - Preferred target language.
+- The dashboard keeps one synchronized default target; the extension's quick-switch favorite languages remain device-local.
 - Default translation style when that feature is supported.
 - Online or On-device preference.
 - Phrase-sync enabled or disabled.

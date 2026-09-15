@@ -1,3 +1,4 @@
+import type { OperationsThresholds } from "./operational-metrics.js";
 import {
   createOriginPolicy,
   developmentSecurityConfig,
@@ -18,6 +19,8 @@ export interface GatewayRuntimeConfig {
   nvidiaBaseUrl: string;
   nvidiaMaxTokens: number;
   nvidiaModel: string;
+  operationsMetricsToken: string | null;
+  operationsThresholds: OperationsThresholds;
   port: number;
   security: GatewaySecurityConfig;
   serviceVersion: string;
@@ -36,6 +39,23 @@ function readGoogleProjectId(environment: GatewayEnvironment): string | null {
 function readNvidiaApiKey(environment: GatewayEnvironment): string | null {
   const apiKey = environment.NVIDIA_API_KEY?.trim();
   return apiKey ? apiKey : null;
+}
+
+function readOptionalPositiveNumber(environment: GatewayEnvironment, name: string): number | null {
+  const rawValue = environment[name]?.trim();
+  if (!rawValue) return null;
+  const value = Number(rawValue);
+  if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive number.`);
+  return value;
+}
+
+function readOperationsMetricsToken(environment: GatewayEnvironment): string | null {
+  const token = environment.LINGOBRIDGE_OPERATIONS_METRICS_TOKEN?.trim();
+  if (!token) return null;
+  if (token.length < 32) {
+    throw new Error("LINGOBRIDGE_OPERATIONS_METRICS_TOKEN must be at least 32 characters.");
+  }
+  return token;
 }
 
 function readPositiveInteger(
@@ -102,6 +122,15 @@ export function loadGatewayRuntimeConfig(environment: GatewayEnvironment): Gatew
     nvidiaBaseUrl: environment.NVIDIA_BASE_URL ?? "https://integrate.api.nvidia.com/v1",
     nvidiaMaxTokens: readPositiveInteger(environment, "NVIDIA_MAX_TOKENS", 2_048),
     nvidiaModel: environment.NVIDIA_MODEL ?? "nvidia/riva-translate-4b-instruct-v2",
+    operationsMetricsToken: readOperationsMetricsToken(environment),
+    operationsThresholds: {
+      characterQuota: readOptionalPositiveNumber(environment, "LINGOBRIDGE_CHARACTER_QUOTA"),
+      costWarningUsd: readOptionalPositiveNumber(environment, "LINGOBRIDGE_COST_WARNING_USD"),
+      googlePricePerMillionCharactersUsd:
+        readOptionalPositiveNumber(environment, "LINGOBRIDGE_GOOGLE_PRICE_PER_MILLION_USD") ?? 20,
+      nvidiaPricePerMillionCharactersUsd:
+        readOptionalPositiveNumber(environment, "LINGOBRIDGE_NVIDIA_PRICE_PER_MILLION_USD") ?? 0,
+    },
     port: readPositiveInteger(environment, "PORT", 8_787),
     security: {
       installationRateLimit: {

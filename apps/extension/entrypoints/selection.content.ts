@@ -19,8 +19,23 @@ import { acceptOnlineProviderConsent, loadOnlineProviderConsent } from "../lib/o
 import {
   DEFAULT_POPUP_PREFERENCES,
   loadPopupPreferences,
+  type PopupPreferences,
   savePopupPreferences,
+  toggleFavouriteLanguage,
 } from "../lib/popup-preferences";
+import { pickSpeechVoice, rangeStillMatches, replaceRange } from "../lib/result-actions";
+import {
+  loadSavedPhrases,
+  removeSavedPhrase,
+  type SavedPhrase,
+  savePhrase,
+  saveSavedPhrases,
+} from "../lib/saved-phrases";
+import {
+  chooseSelectionTargetLanguage,
+  resolveSelectionSource,
+  supportedTargetsForSource,
+} from "../lib/selection-language";
 import {
   computeAnchoredPosition,
   detectSensitiveSelection,
@@ -29,14 +44,9 @@ import {
   parseSelectionMagicMessage,
   SELECTION_MAGIC_EXPIRY_MS,
   SELECTION_MAGIC_STABILITY_MS,
-  selectionFingerprint,
   type SensitiveSelectionKind,
+  selectionFingerprint,
 } from "../lib/selection-magic";
-import {
-  chooseSelectionTargetLanguage,
-  resolveSelectionSource,
-  supportedTargetsForSource,
-} from "../lib/selection-language";
 
 // Page origins are never allowed by the gateway, and Chrome gives a content-script fetch the
 // page's origin. Every gateway call therefore goes through the background worker, which runs on
@@ -89,6 +99,12 @@ interface CapturedSelection {
   editable: boolean;
   fingerprint: string;
   getRect: () => DOMRect;
+  /**
+   * Writes the translation over the captured range, or refuses. Present only for editable
+   * selections. It re-checks the range at call time: the page may have rewritten the field since
+   * capture, and offsets that no longer hold the translated text must not be overwritten.
+   */
+  replace?: (translation: string) => boolean;
   text: string;
 }
 
@@ -106,6 +122,7 @@ type SurfaceState =
 interface TranslationContext {
   catalogue: CapabilityCatalogue;
   consent: OnlineConsent | null;
+  favouriteLanguageCodes: string[];
   gatewayMode: "fake" | "live";
   languages: PreviewLanguage[];
   sourceAssumed: boolean;
@@ -166,6 +183,17 @@ const SURFACE_CSS = `
   .close svg { width: 17px; height: 17px; }
   .body { display: grid; gap: 11px; padding: 12px; }
   .language-row { display: grid; grid-template-columns: minmax(0, 1fr) 20px minmax(0, 1fr); align-items: end; gap: 8px; }
+  .target-field { display: grid; min-width: 0; gap: 4px; }
+  .target-control { display: grid; grid-template-columns: minmax(0, 1fr) 34px; gap: 5px; }
+  .favorite-toggle { display: grid; width: 34px; height: 38px; padding: 0; place-items: center; border: 1px solid #cfd2d5; border-radius: 7px; color: #6b7480; background: #fff; font-size: 21px; line-height: 1; }
+  .favorite-toggle[aria-pressed="true"] { color: #a66b00; border-color: #e0c47c; background: #fffaf0; }
+  .favorite-toggle:hover { border-color: #969da4; }
+  .favorites { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+  .favorites[hidden] { display: none; }
+  .favorites-label { margin-right: 2px; color: #707981; font-size: 10px; font-weight: 650; }
+  .favorites button { min-height: 27px; padding: 4px 7px; border: 1px solid #cfd2d5; border-radius: 6px; color: #394450; background: #fff; font-size: 11px; font-weight: 600; }
+  .favorites button:hover { border-color: #2363eb; color: #1d4ed8; }
+  .favorites button[aria-pressed="true"] { border-color: #b9ccef; color: #174fbd; background: #edf3ff; }
   label { display: grid; min-width: 0; gap: 4px; color: #66707a; font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .02em; }
   .source-language { display: flex; min-width: 0; height: 38px; align-items: center; overflow: hidden; padding: 0 9px; border: 1px solid #d8dadd; border-radius: 7px; background: #f1f2f0; color: #3c454f; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
   select {
@@ -284,6 +312,35 @@ function usableRect(rect: DOMRect): DOMRect {
   return new DOMRect(rect.left, rect.top, 1, 18);
 }
 
+/**
+ * Writes into a form field without ever letting the page treat it as a submission. No key events
+ * are synthesized and no submit is dispatched: `insertText` is preferred because it keeps the
+ * field's own undo history and notifies frameworks the way typing does, and the manual path still
+ * only sets the value and raises `input`.
+ */
+function writeIntoField(
+  field: HTMLInputElement | HTMLTextAreaElement,
+  start: number,
+  end: number,
+  translation: string,
+): boolean {
+  if (field.disabled || field.readOnly || !field.isConnected) return false;
+  if (!rangeStillMatches(field.value, start, end, field.value.slice(start, end))) return false;
+
+  field.focus({ preventScroll: true });
+  field.setSelectionRange(start, end);
+  if (document.execCommand("insertText", false, translation)) return true;
+
+  const prototype = field instanceof HTMLInputElement ? HTMLInputElement : HTMLTextAreaElement;
+  const setValue = Object.getOwnPropertyDescriptor(prototype.prototype, "value")?.set;
+  const next = replaceRange(field.value, start, end, translation);
+  if (setValue) setValue.call(field, next);
+  else field.value = next;
+  field.setSelectionRange(start, start + translation.length);
+  field.dispatchEvent(new Event("input", { bubbles: true }));
+  return true;
+}
+
 function captureSelection(
   lastFingerprint: string | null,
   providedText?: string,
@@ -310,11 +367,16 @@ function captureSelection(
       text,
     });
     if (!eligibility.eligible) return null;
+    const field = active;
+    const captured = eligibility.text;
     return {
       editable: true,
       fingerprint,
-      getRect: () => usableRect(active.getBoundingClientRect()),
-      text: eligibility.text,
+      getRect: () => usableRect(field.getBoundingClientRect()),
+      replace: (translation) =>
+        rangeStillMatches(field.value, start, end, captured) &&
+        writeIntoField(field, start, end, translation),
+      text: captured,
     };
   }
 
@@ -341,14 +403,34 @@ function captureSelection(
     text,
   });
   if (!eligibility.eligible) return null;
+  const host = element?.closest("[contenteditable='true']");
+  const captured = eligibility.text;
   return {
-    editable: Boolean(element?.closest("[contenteditable='true']")),
+    editable: Boolean(host),
     fingerprint,
     getRect: () => {
       if (!range?.commonAncestorContainer.isConnected) return initialRect;
       return usableRect(range.getBoundingClientRect());
     },
-    text: eligibility.text,
+    replace:
+      host && range
+        ? (translation) => {
+            // The same guard as a form field: the range must still be connected and still hold
+            // exactly the text that was translated.
+            if (!range.commonAncestorContainer.isConnected) return false;
+            if (range.toString() !== captured) return false;
+            const live = window.getSelection();
+            if (!live) return false;
+            live.removeAllRanges();
+            live.addRange(range);
+            if (document.execCommand("insertText", false, translation)) return true;
+            range.deleteContents();
+            range.insertNode(document.createTextNode(translation));
+            host.dispatchEvent(new Event("input", { bubbles: true }));
+            return true;
+          }
+        : undefined,
+    text: captured,
   };
 }
 
@@ -382,12 +464,20 @@ function createController(): InstalledController {
   let errorMessage = "";
   let errorRetryable = false;
   let sensitiveKind: SensitiveSelectionKind | null = null;
+  let savedPhraseId: string | null = null;
+  let savePending = false;
+  let copyFeedback: "copied" | "failed" | null = null;
+  let copyFeedbackTimer: number | null = null;
+  let speaking = false;
+  let voicesRequested = false;
+  let replaceFeedback: "stale" | null = null;
   let lastFingerprint: string | null = null;
   let stabilityTimer: number | null = null;
   let expiryTimer: number | null = null;
   let positionFrame: number | null = null;
   let requestController: AbortController | null = null;
   let requestSequence = 0;
+  let preferenceWrite: Promise<void> = Promise.resolve();
 
   function setHostPosition(width: number, height: number): void {
     if (!host || !activeSelection) return;
@@ -431,6 +521,8 @@ function createController(): InstalledController {
     if (stabilityTimer !== null) window.clearTimeout(stabilityTimer);
     if (expiryTimer !== null) window.clearTimeout(expiryTimer);
     if (positionFrame !== null) cancelAnimationFrame(positionFrame);
+    if (copyFeedbackTimer !== null) window.clearTimeout(copyFeedbackTimer);
+    copyFeedbackTimer = null;
     stabilityTimer = null;
     expiryTimer = null;
     positionFrame = null;
@@ -448,6 +540,11 @@ function createController(): InstalledController {
     context = null;
     result = null;
     sensitiveKind = null;
+    savedPhraseId = null;
+    savePending = false;
+    copyFeedback = null;
+    replaceFeedback = null;
+    stopSpeaking();
     activeSelection = null;
   }
 
@@ -483,6 +580,8 @@ function createController(): InstalledController {
   function createPanel(): {
     actions: HTMLDivElement;
     body: HTMLDivElement;
+    favoriteToggle: HTMLButtonElement;
+    favorites: HTMLDivElement;
     sourceName: HTMLSpanElement;
     status: HTMLParagraphElement;
     targetSelect: HTMLSelectElement;
@@ -527,12 +626,27 @@ function createController(): InstalledController {
     arrow.className = "arrow";
     arrow.setAttribute("aria-hidden", "true");
     arrow.append(arrowSvg());
+    const targetField = document.createElement("div");
+    targetField.className = "target-field";
     const targetLabel = document.createElement("label");
-    targetLabel.append("To");
+    targetLabel.htmlFor = "lingobridge-target-language";
+    targetLabel.textContent = "To";
+    const targetControl = document.createElement("div");
+    targetControl.className = "target-control";
     const targetSelect = document.createElement("select");
+    targetSelect.id = "lingobridge-target-language";
     targetSelect.setAttribute("aria-label", "Target language");
-    targetLabel.append(targetSelect);
-    languageRow.append(sourceLabel, arrow, targetLabel);
+    const favoriteToggle = document.createElement("button");
+    favoriteToggle.className = "favorite-toggle";
+    favoriteToggle.type = "button";
+    favoriteToggle.textContent = "☆";
+    targetControl.append(targetSelect, favoriteToggle);
+    targetField.append(targetLabel, targetControl);
+    languageRow.append(sourceLabel, arrow, targetField);
+
+    const favorites = document.createElement("div");
+    favorites.className = "favorites";
+    favorites.setAttribute("aria-label", "Favorite target languages");
 
     const source = document.createElement("p");
     source.className = "source";
@@ -543,10 +657,10 @@ function createController(): InstalledController {
     status.setAttribute("aria-live", "polite");
     const actions = document.createElement("div");
     actions.className = "actions";
-    body.append(languageRow, source, status, actions);
+    body.append(languageRow, favorites, source, status, actions);
     panel.append(head, body);
     renderBase(panel);
-    return { actions, body, sourceName, status, targetSelect };
+    return { actions, body, favoriteToggle, favorites, sourceName, status, targetSelect };
   }
 
   function sourceLanguageName(): string {
@@ -567,6 +681,8 @@ function createController(): InstalledController {
   function fillLanguageControls(
     sourceName: HTMLSpanElement,
     targetSelect: HTMLSelectElement,
+    favoriteToggle: HTMLButtonElement,
+    favorites: HTMLDivElement,
   ): void {
     if (!context) return;
     const name = sourceLanguageName();
@@ -582,6 +698,57 @@ function createController(): InstalledController {
       void savePreferredTarget(context.targetLanguage);
       void runTranslation();
     });
+
+    const selectedName =
+      getPreviewLanguage(context.targetLanguage, context.languages)?.name ?? context.targetLanguage;
+    const pinned = context.favouriteLanguageCodes.includes(context.targetLanguage);
+    favoriteToggle.textContent = pinned ? "★" : "☆";
+    favoriteToggle.setAttribute("aria-pressed", String(pinned));
+    favoriteToggle.setAttribute(
+      "aria-label",
+      `${pinned ? "Remove" : "Add"} ${selectedName} ${pinned ? "from" : "to"} favorites`,
+    );
+    favoriteToggle.title = pinned ? "Remove from favorites" : "Add to favorites";
+    favoriteToggle.addEventListener("pointerdown", (event) => event.preventDefault());
+    favoriteToggle.addEventListener("click", () => {
+      if (!context) return;
+      const code = context.targetLanguage;
+      context.favouriteLanguageCodes = toggleFavouriteLanguage(
+        context.favouriteLanguageCodes,
+        code,
+      );
+      void persistPreferenceChange((preferences) => ({
+        ...preferences,
+        favouriteLanguageCodes: toggleFavouriteLanguage(preferences.favouriteLanguageCodes, code),
+      }));
+      renderPanel();
+    });
+
+    const compatibleFavorites = context.favouriteLanguageCodes.filter((code) => targets.has(code));
+    favorites.hidden = compatibleFavorites.length === 0;
+    if (compatibleFavorites.length > 0) {
+      const label = document.createElement("span");
+      label.className = "favorites-label";
+      label.textContent = "Favorites";
+      favorites.append(label);
+    }
+    for (const code of compatibleFavorites) {
+      const name = getPreviewLanguage(code, context.languages)?.name ?? code;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = name;
+      button.setAttribute("aria-label", `Translate to ${name}`);
+      button.setAttribute("aria-pressed", String(code === context.targetLanguage));
+      button.disabled = state === "loading" || state === "preparing";
+      button.addEventListener("pointerdown", (event) => event.preventDefault());
+      button.addEventListener("click", () => {
+        if (!context || context.targetLanguage === code) return;
+        context.targetLanguage = code;
+        void savePreferredTarget(code);
+        void runTranslation();
+      });
+      favorites.append(button);
+    }
   }
 
   function statusContent(
@@ -609,10 +776,12 @@ function createController(): InstalledController {
   }
 
   function renderPanel(): void {
-    const { actions, body, sourceName, status, targetSelect } = createPanel();
-    fillLanguageControls(sourceName, targetSelect);
+    const { actions, body, favoriteToggle, favorites, sourceName, status, targetSelect } =
+      createPanel();
+    fillLanguageControls(sourceName, targetSelect, favoriteToggle, favorites);
     const languageControlsReady = Boolean(context);
     targetSelect.disabled = !languageControlsReady || state === "loading" || state === "preparing";
+    favoriteToggle.disabled = targetSelect.disabled;
 
     if (state === "preparing") {
       statusContent(status, "Preparing your preferred language…");
@@ -720,6 +889,40 @@ function createController(): InstalledController {
           ? `Online via ${result.provider}`
           : `Simulated ${result.provider} route`;
       body.insertBefore(meta, actions);
+
+      if (replaceFeedback === "stale") {
+        statusContent(status, "That text changed on the page, so nothing was replaced.", "warning");
+      }
+
+      actions.append(
+        actionButton(
+          copyFeedback === "copied" ? "Copied" : copyFeedback === "failed" ? "Copy failed" : "Copy",
+          copyTranslation,
+          true,
+        ),
+      );
+
+      // Listen appears only when the browser really has a voice for this language. The catalogue
+      // carries no speech data, so asking it would hide the action everywhere.
+      if (pickSpeechVoice(availableVoices(), result.targetLanguage)) {
+        actions.append(actionButton(speaking ? "Stop" : "Listen", toggleSpeaking, true));
+      }
+
+      if (activeSelection?.replace) {
+        actions.append(actionButton("Replace", replaceSelection, true));
+      }
+
+      // Saving happens only here, on a deliberate click. Showing or closing a result never stores
+      // it, which is the promise in docs/02-requirements.md.
+      const saved = savedPhraseId !== null;
+      const save = actionButton(
+        saved ? "Saved" : "Save phrase",
+        () => void togglePhraseSaved(),
+        true,
+      );
+      save.disabled = savePending;
+      save.setAttribute("aria-pressed", saved ? "true" : "false");
+      actions.append(save);
       return;
     }
 
@@ -729,9 +932,155 @@ function createController(): InstalledController {
     }
   }
 
+  function availableVoices(): SpeechSynthesisVoice[] {
+    if (typeof speechSynthesis === "undefined") return [];
+    const voices = speechSynthesis.getVoices();
+    // The list is often empty until the engine warms up. Ask once, and redraw when it arrives so
+    // Listen can appear without the user reopening the panel.
+    if (voices.length === 0 && !voicesRequested) {
+      voicesRequested = true;
+      speechSynthesis.addEventListener(
+        "voiceschanged",
+        () => {
+          if (state === "success") renderPanel();
+        },
+        { once: true },
+      );
+    }
+    return voices;
+  }
+
+  function stopSpeaking(): void {
+    if (typeof speechSynthesis === "undefined") return;
+    speechSynthesis.cancel();
+    speaking = false;
+  }
+
+  function toggleSpeaking(): void {
+    if (!result) return;
+    if (speaking) {
+      stopSpeaking();
+      renderPanel();
+      return;
+    }
+    const voice = pickSpeechVoice(availableVoices(), result.targetLanguage);
+    if (!voice) return;
+    const utterance = new SpeechSynthesisUtterance(result.translatedText);
+    utterance.lang = result.targetLanguage;
+    utterance.voice = voice;
+    utterance.addEventListener("end", () => {
+      speaking = false;
+      if (state === "success") renderPanel();
+    });
+    utterance.addEventListener("error", () => {
+      speaking = false;
+      if (state === "success") renderPanel();
+    });
+    speechSynthesis.cancel();
+    speechSynthesis.speak(utterance);
+    speaking = true;
+    renderPanel();
+  }
+
+  function showCopyFeedback(outcome: "copied" | "failed"): void {
+    copyFeedback = outcome;
+    if (copyFeedbackTimer !== null) window.clearTimeout(copyFeedbackTimer);
+    copyFeedbackTimer = window.setTimeout(() => {
+      copyFeedbackTimer = null;
+      copyFeedback = null;
+      if (state === "success") renderPanel();
+    }, 1_600);
+    renderPanel();
+  }
+
+  /**
+   * The fallback textarea lives inside the panel's own shadow root, so copying never adds a node
+   * to the page or disturbs what the page has selected.
+   */
+  function copyThroughSurface(text: string): boolean {
+    if (!shadow) return false;
+    const carrier = document.createElement("textarea");
+    carrier.setAttribute("aria-hidden", "true");
+    carrier.style.setProperty("position", "absolute");
+    carrier.style.setProperty("opacity", "0");
+    carrier.value = text;
+    shadow.append(carrier);
+    carrier.select();
+    let copied = false;
+    try {
+      copied = document.execCommand("copy");
+    } catch {
+      copied = false;
+    }
+    carrier.remove();
+    return copied;
+  }
+
+  function copyTranslation(): void {
+    if (!result) return;
+    const text = result.translatedText;
+    void navigator.clipboard?.writeText(text).then(
+      () => showCopyFeedback("copied"),
+      () => showCopyFeedback(copyThroughSurface(text) ? "copied" : "failed"),
+    );
+  }
+
+  function replaceSelection(): void {
+    if (!activeSelection?.replace || !result) return;
+    if (activeSelection.replace(result.translatedText)) {
+      stopSpeaking();
+      close();
+      return;
+    }
+    replaceFeedback = "stale";
+    renderPanel();
+  }
+
+  async function togglePhraseSaved(): Promise<void> {
+    if (!activeSelection || !result || !context || savePending) return;
+    savePending = true;
+    renderPanel();
+    const removingId = savedPhraseId;
+    try {
+      if (removingId) {
+        await saveSavedPhrases(removeSavedPhrase(await loadSavedPhrases(), removingId));
+        savedPhraseId = null;
+      } else {
+        const record: SavedPhrase = {
+          id: crypto.randomUUID(),
+          provider: result.provider,
+          savedAt: new Date().toISOString(),
+          sourceLanguage: result.detectedSourceLanguage ?? context.sourceLanguage,
+          sourceText: activeSelection.text,
+          targetLanguage: result.targetLanguage,
+          translatedText: result.translatedText,
+        };
+        await savePhrase(record);
+        savedPhraseId = record.id;
+      }
+    } catch {
+      // Storage refused the write. The button simply returns to its previous state.
+    } finally {
+      savePending = false;
+      renderPanel();
+    }
+  }
+
+  function persistPreferenceChange(
+    change: (preferences: PopupPreferences) => PopupPreferences,
+  ): Promise<void> {
+    const next = preferenceWrite
+      .catch(() => undefined)
+      .then(async () => {
+        const preferences = await loadPopupPreferences().catch(() => DEFAULT_POPUP_PREFERENCES);
+        await savePopupPreferences(change(preferences));
+      });
+    preferenceWrite = next;
+    return next.catch(() => undefined);
+  }
+
   async function savePreferredTarget(targetLanguage: string): Promise<void> {
-    const preferences = await loadPopupPreferences().catch(() => DEFAULT_POPUP_PREFERENCES);
-    await savePopupPreferences({ ...preferences, targetLanguage }).catch(() => undefined);
+    await persistPreferenceChange((preferences) => ({ ...preferences, targetLanguage }));
   }
 
   async function loadContext(): Promise<TranslationContext> {
@@ -763,6 +1112,7 @@ function createController(): InstalledController {
     return {
       catalogue,
       consent,
+      favouriteLanguageCodes: preferences.favouriteLanguageCodes,
       gatewayMode: service.version.translationMode,
       languages,
       sourceAssumed: source.assumed,
@@ -820,6 +1170,11 @@ function createController(): InstalledController {
 
   async function runTranslation(): Promise<void> {
     if (!activeSelection || !context) return;
+    if (context.gatewayMode === "live" && !context.consent) {
+      state = "consent";
+      renderPanel();
+      return;
+    }
     if (!isTranslatablePair()) {
       state = "unsupported-pair";
       renderPanel();
@@ -829,6 +1184,9 @@ function createController(): InstalledController {
     const sequence = requestSequence;
     requestController?.abort();
     requestController = new AbortController();
+    savedPhraseId = null;
+    copyFeedback = null;
+    replaceFeedback = null;
     state = "loading";
     renderPanel();
     const request: TranslationRequest = {

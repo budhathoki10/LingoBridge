@@ -1,14 +1,14 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
+  type BrowserContext,
   chromium,
   expect,
-  test,
-  type BrowserContext,
   type Page,
   type Request,
+  test,
   type Worker,
 } from "@playwright/test";
-import { fileURLToPath } from "node:url";
-import path from "node:path";
 
 const testsDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const extensionPath = path.resolve(testsDirectory, "../apps/extension/.output/chrome-mv3");
@@ -76,6 +76,149 @@ async function clickClosedShadowHost(page: Page): Promise<void> {
   if (!box) throw new Error("Selection Magic host is not visible");
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 }
+
+interface ShadowNode {
+  attributes?: string[];
+  children?: ShadowNode[];
+  nodeId: number;
+  nodeName: string;
+  shadowRoots?: ShadowNode[];
+}
+
+function findShadowControl(node: ShadowNode, tag: string, label: string): ShadowNode | null {
+  const attributes = node.attributes ?? [];
+  const ariaLabel = attributes[attributes.indexOf("aria-label") + 1];
+  if (node.nodeName.toLowerCase() === tag && ariaLabel === label) return node;
+  for (const child of [...(node.children ?? []), ...(node.shadowRoots ?? [])]) {
+    const found = findShadowControl(child, tag, label);
+    if (found) return found;
+  }
+  return null;
+}
+
+async function operateClosedShadowControl(
+  page: Page,
+  tag: string,
+  label: string,
+  action: "click" | { select: string },
+): Promise<void> {
+  const cdp = await page.context().newCDPSession(page);
+  try {
+    const { root } = await cdp.send("DOM.getDocument", { depth: -1, pierce: true });
+    const node = findShadowControl(root, tag, label);
+    if (!node) throw new Error(`Could not find ${label} in the translation panel.`);
+    if (action === "click") {
+      const { model } = await cdp.send("DOM.getBoxModel", { nodeId: node.nodeId });
+      const quad = model.border;
+      const center = (indexes: number[]) =>
+        indexes.reduce((sum, index) => {
+          const coordinate = quad[index];
+          if (coordinate === undefined) throw new Error("The control has no screen position.");
+          return sum + coordinate;
+        }, 0) / 4;
+      await page.mouse.click(center([0, 2, 4, 6]), center([1, 3, 5, 7]));
+    } else {
+      const { object } = await cdp.send("DOM.resolveNode", { nodeId: node.nodeId });
+      await cdp.send("Runtime.callFunctionOn", {
+        functionDeclaration:
+          "function(value) { this.value = value; this.dispatchEvent(new Event('change', { bubbles: true })); }",
+        objectId: object.objectId,
+        arguments: [{ value: action.select }],
+      });
+    }
+  } finally {
+    await cdp.detach();
+  }
+}
+
+async function localLanguagePreferences(worker: Worker): Promise<{
+  favouriteLanguageCodes: string[];
+  targetLanguage: string;
+}> {
+  return worker.evaluate(async () => {
+    const stored = await chrome.storage.local.get("phase2PopupPreferences");
+    return stored.phase2PopupPreferences as {
+      favouriteLanguageCodes: string[];
+      targetLanguage: string;
+    };
+  });
+}
+
+test("favorite targets can be pinned and switched without sending text before consent", async ({
+  browserName: _browserName,
+}, testInfo) => {
+  const context = await chromium.launchPersistentContext("", {
+    channel: "chromium",
+    headless: true,
+    args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`],
+  });
+  try {
+    const worker = await extensionWorker(context);
+    await configureSelectionMagic(worker);
+    await worker.evaluate(async () => {
+      await chrome.storage.local.set({
+        phase2PopupPreferences: {
+          favouriteLanguageCodes: ["fr", "en"],
+          recentLanguageCodes: [],
+          targetLanguage: "fr",
+        },
+      });
+    });
+    const translateRequests = countTranslateRequests(context);
+    const page = await context.newPage();
+    await page.setViewportSize({ width: 320, height: 500 });
+    await page.goto(fixtureUrl);
+    await setAndSelect(page, "Hello, how are you?");
+    await expect(page.locator(hostSelector)).toHaveAttribute("data-lingobridge-state", "icon");
+    await clickClosedShadowHost(page);
+    await expect
+      .poll(() => page.locator(hostSelector).getAttribute("data-lingobridge-state"))
+      .toMatch(/^(consent|success)$/u);
+
+    const beforePin = translateRequests.value;
+    await operateClosedShadowControl(page, "button", "Remove French from favorites", "click");
+    await expect
+      .poll(async () => (await localLanguagePreferences(worker)).favouriteLanguageCodes)
+      .toEqual(["en"]);
+    await operateClosedShadowControl(page, "button", "Add French to favorites", "click");
+    await expect
+      .poll(async () => (await localLanguagePreferences(worker)).favouriteLanguageCodes)
+      .toEqual(["fr", "en"]);
+    expect(translateRequests.value).toBe(beforePin);
+
+    await operateClosedShadowControl(page, "select", "Target language", { select: "hi" });
+    await expect
+      .poll(async () => (await localLanguagePreferences(worker)).targetLanguage)
+      .toBe("hi");
+    await expect
+      .poll(() => page.locator(hostSelector).getAttribute("data-lingobridge-state"))
+      .toMatch(/^(consent|success)$/u);
+    const beforeHindiPin = translateRequests.value;
+    await operateClosedShadowControl(page, "button", "Add Hindi to favorites", "click");
+    await expect
+      .poll(async () => (await localLanguagePreferences(worker)).favouriteLanguageCodes)
+      .toEqual(["hi", "fr", "en"]);
+    expect(translateRequests.value).toBe(beforeHindiPin);
+    const bounds = await page.locator(hostSelector).boundingBox();
+    expect(bounds).not.toBeNull();
+    expect((bounds?.x ?? 0) + (bounds?.width ?? 0)).toBeLessThanOrEqual(312);
+    await page.screenshot({ path: testInfo.outputPath("favorite-targets.png") });
+    await operateClosedShadowControl(page, "button", "Translate to French", "click");
+    await expect
+      .poll(async () => (await localLanguagePreferences(worker)).targetLanguage)
+      .toBe("fr");
+    if ((await page.locator(hostSelector).getAttribute("data-lingobridge-state")) === "consent") {
+      expect(translateRequests.value).toBe(beforePin);
+    }
+    await page.setViewportSize({ width: 190, height: 500 });
+    const narrowBounds = await page.locator(hostSelector).boundingBox();
+    expect(narrowBounds).not.toBeNull();
+    expect((narrowBounds?.x ?? 0) + (narrowBounds?.width ?? 0)).toBeLessThanOrEqual(182);
+    await page.screenshot({ path: testInfo.outputPath("favorite-targets-narrow.png") });
+  } finally {
+    await context.close();
+  }
+});
 
 test("select -> magic icon -> click -> preferred-language translation", async ({
   browserName: _browserName,

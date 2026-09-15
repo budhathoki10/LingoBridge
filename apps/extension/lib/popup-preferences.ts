@@ -69,3 +69,13 @@ export async function savePopupPreferences(preferences: PopupPreferences): Promi
 export function addRecentLanguage(codes: readonly string[], languageCode: string): string[] {
   return cleanCodes([languageCode, ...codes.filter((code) => code !== languageCode)], 5);
 }
+
+export function toggleFavouriteLanguage(codes: readonly string[], languageCode: string): string[] {
+  if (!languageCodeSchema.safeParse(languageCode).success) return cleanCodes([...codes], 12);
+  return codes.includes(languageCode)
+    ? cleanCodes(
+        codes.filter((code) => code !== languageCode),
+        12,
+      )
+    : cleanCodes([languageCode, ...codes], 12);
+}

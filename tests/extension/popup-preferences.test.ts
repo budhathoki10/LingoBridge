@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   addRecentLanguage,
   normalizePopupPreferences,
+  toggleFavouriteLanguage,
 } from "../../apps/extension/lib/popup-preferences";
 
 describe("popup preferences", () => {
@@ -35,5 +36,11 @@ describe("popup preferences", () => {
 
   it("moves a selected language to the front of the recent list", () => {
     expect(addRecentLanguage(["en", "es", "fr"], "es")).toEqual(["es", "en", "fr"]);
+  });
+
+  it("pins several languages without duplicates and lets each be removed", () => {
+    expect(toggleFavouriteLanguage(["ne", "en"], "fr")).toEqual(["fr", "ne", "en"]);
+    expect(toggleFavouriteLanguage(["fr", "ne", "en"], "ne")).toEqual(["fr", "en"]);
+    expect(toggleFavouriteLanguage(["ne"], "not_real")).toEqual(["ne"]);
   });
 });

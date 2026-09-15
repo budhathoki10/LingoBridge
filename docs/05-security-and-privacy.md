@@ -156,8 +156,41 @@ The dashboard uses its own restrictive policy, permits network access only to ap
 - The observer reads only the active, completed selection after a short stability delay. It does not scan, index, or observe the full page, and displaying the magic icon performs no source detection or network request.
 - Empty, whitespace-only, hidden, password-field, oversized, duplicate, and extension-owned selections are rejected before the translation surface opens. Temporary selection state is cleared on close, Escape, a new selection, navigation, permission removal, site disable, or expiry.
 - The magic-icon click is the translation activation boundary. Source inference, capability loading, Online-consent checks, and gateway translation begin only after that explicit gesture. Sensitive-looking secrets, card numbers, identity or health numbers, and one-time codes pause before transmission and require a second confirmation.
+- Favorite target-language codes remain in extension-local preferences. Pinning or unpinning changes only local storage; translating to a pinned language still requires the user's click in the open translator and the usual capability and consent checks.
 - The anchored translator uses a closed Shadow DOM, renders webpage text and provider output only through text nodes, validates extension messages, bounds message text, keeps requests abortable, and communicates only with the configured LingoBridge gateway.
 - Automated unit and bundled-Chromium tests verify permission registration, forbidden selections, sensitive warnings, no request before click, cancellation, viewport bounds, hostile page CSS isolation, narrow and long-content layouts, Escape, replacement by a new selection, and per-site disable. Production-package inspection confirms there is no static content-script declaration or detected provider credential material.
+
+## Phase 8 dashboard, identity, and sync security review
+
+- Google OpenID Connect is the selected production identity provider. The dashboard verifies the
+  authorization-code exchange, PKCE, state, browser binding, nonce, issuer, audience, and ID-token
+  signature before creating a web session. The local development identity provider is rejected in
+  production, which also requires a confidential client secret, HTTPS origin, PostgreSQL, an exact
+  extension-ID allowlist, and a server-only session secret. Credentialed Google sign-in remains a
+  deployment check.
+- Protected pages re-check the database-backed session during server rendering. Dashboard
+  mutations require the same origin and a session-bound CSRF token. Phrase, preference, session,
+  export, and deletion queries derive the user ID from the authenticated server session; admin
+  access requires a server-derived role.
+- Chrome Identity connection requires a user click and signed-in approval. The one-minute,
+  single-use code is bound to an allowlisted Chrome redirect URI and PKCE challenge. Revocable
+  access and rotating refresh tokens are stored in the background worker's IndexedDB, outside
+  content-script messages, webpage DOM, URLs after exchange, and logs. The background accepts
+  account actions only when Chrome reports an extension-owned sender URL; a webpage content script
+  reports its page URL, while a legitimate extension page may still carry a `sender.tab` value.
+- Synchronization includes only explicitly saved phrase records and allowlisted preferences.
+  Local phrases are committed before network work; mutation IDs, revisions, tombstones, bounded
+  queues, and retry backoff protect offline edits. The popup discloses that connecting syncs
+  phrases already saved on that device as well as future saves. Site access, temporary selections,
+  sensitive-text decisions, and unsaved translations are absent from the sync contract.
+- Account deletion requires recent authentication and typed confirmation. Phrase content and
+  preferences are removed and all sessions revoked in one transaction. A daily maintenance command
+  is provided for expired auth records, tombstones, mutation receipts, and de-identified account
+  shells after 30 days; scheduling and backup retention require deployment review.
+- The admin view consumes a strict aggregate-only metrics contract and never queries phrases.
+  Focused automated authorization tests, account/sync tests, and the dashboard Chromium journey
+  pass locally. Production callback, cookie, TLS, scheduler, and exact-package checks remain
+  release evidence.
 
 ## Privacy interface requirements
 

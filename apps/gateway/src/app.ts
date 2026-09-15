@@ -13,6 +13,7 @@ import {
   translationRequestSchema,
   translationResultSchema,
 } from "@lingobridge/contracts";
+import { OPERATIONS_METRICS_ROUTE } from "@lingobridge/contracts/operations";
 import { type Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
@@ -24,6 +25,12 @@ import {
   type GatewayLogger,
   requestAuditMiddleware,
 } from "./gateway-logger.js";
+import { safeEqualSecret } from "./internal-auth.js";
+import {
+  DEFAULT_OPERATIONS_THRESHOLDS,
+  type OperationalMetrics,
+  type OperationsThresholds,
+} from "./operational-metrics.js";
 import { ProviderInterruptedError, runWithProviderDeadline } from "./provider-deadline.js";
 import { MemoryRateLimiter, type RateLimiter } from "./rate-limiter.js";
 import { developmentSecurityConfig, type GatewaySecurityConfig } from "./security.js";
@@ -35,6 +42,11 @@ export interface GatewayDependencies {
   };
   getClientAddress: (context: Context) => string;
   logger: GatewayLogger;
+  /** Content-free aggregates for the admin view; null disables recording. */
+  operationsMetrics: OperationalMetrics | null;
+  operationsThresholds: OperationsThresholds;
+  /** Server-to-server bearer secret for the metrics route; null keeps the route disabled. */
+  operationsMetricsToken: string | null;
   rateLimiter: RateLimiter;
   security: GatewaySecurityConfig;
   serviceVersion: string;
@@ -46,6 +58,9 @@ const defaultDependencies: GatewayDependencies = {
   capabilityProvider: { get: async () => fakeCapabilityCatalogue },
   getClientAddress: () => "unknown-network",
   logger: consoleGatewayLogger,
+  operationsMetrics: null,
+  operationsMetricsToken: null,
+  operationsThresholds: DEFAULT_OPERATIONS_THRESHOLDS,
   rateLimiter: new MemoryRateLimiter(),
   security: developmentSecurityConfig,
   serviceVersion: "0.1.0",
@@ -126,6 +141,12 @@ export function createGatewayApp(dependencies: Partial<GatewayDependencies> = {}
     }),
   );
   app.use("/v1/*", async (context, next) => {
+    // The metrics route is called server to server by the dashboard and authenticates with its
+    // own bearer secret instead of an extension origin.
+    if (context.req.path === OPERATIONS_METRICS_ROUTE) {
+      await next();
+      return;
+    }
     const origin = context.req.header("Origin");
     const hasExtensionInstallationHeader = anonymousInstallationIdSchema.safeParse(
       context.req.header(ANONYMOUS_INSTALLATION_HEADER),
@@ -175,6 +196,36 @@ export function createGatewayApp(dependencies: Partial<GatewayDependencies> = {}
     ),
   );
 
+  app.get(OPERATIONS_METRICS_ROUTE, (context) => {
+    const expected = resolvedDependencies.operationsMetricsToken;
+    const metrics = resolvedDependencies.operationsMetrics;
+    if (!expected || !metrics) return context.json({ error: "not-found" }, 404);
+    const presented = /^Bearer (.+)$/u.exec(context.req.header("Authorization") ?? "")?.[1];
+    if (!presented || !safeEqualSecret(presented, expected)) {
+      return context.json({ error: "unauthorized" }, 401);
+    }
+    return context.json(
+      metrics.snapshot(
+        resolvedDependencies.translationMode,
+        resolvedDependencies.operationsThresholds,
+      ),
+    );
+  });
+
+  const recordRejected = (
+    outcome: "invalid-request" | "rate-limited" | "unsupported-pair",
+    sourceLanguage = "auto",
+    targetLanguage = "",
+  ) =>
+    resolvedDependencies.operationsMetrics?.recordAttempt({
+      characters: 0,
+      latencyMilliseconds: null,
+      outcome,
+      provider: "none",
+      sourceLanguage,
+      targetLanguage,
+    });
+
   app.get(GATEWAY_ROUTES.capabilities, async (context) => {
     try {
       return context.json(
@@ -217,7 +268,10 @@ export function createGatewayApp(dependencies: Partial<GatewayDependencies> = {}
       }
 
       const rateLimitResponse = checkRateLimit(context, resolvedDependencies, installationId.data);
-      if (rateLimitResponse) return rateLimitResponse;
+      if (rateLimitResponse) {
+        recordRejected("rate-limited");
+        return rateLimitResponse;
+      }
 
       let payload: unknown;
       try {
@@ -231,6 +285,7 @@ export function createGatewayApp(dependencies: Partial<GatewayDependencies> = {}
 
       const parsedRequest = translationRequestSchema.safeParse(payload);
       if (!parsedRequest.success) {
+        recordRejected("invalid-request");
         return context.json(
           createError(
             "invalid-request",
@@ -258,6 +313,7 @@ export function createGatewayApp(dependencies: Partial<GatewayDependencies> = {}
         );
       }
       if (!supportsTranslation(capabilities, request.sourceLanguage, request.targetLanguage)) {
+        recordRejected("unsupported-pair", request.sourceLanguage, request.targetLanguage);
         return context.json(
           createError(
             "unsupported-pair",

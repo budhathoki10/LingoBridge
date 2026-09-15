@@ -1,6 +1,6 @@
 # LingoBridge — Context-Aware Text Translator
 
-Status: **Phase 0 through Phase 5 implementation and automated verification are complete locally. Phase 6 has not started. Credentialed provider smoke tests remain deployment evidence.**
+Status: **Phase 0 through Phase 5, Phase 7, and Phase 8 implementation and focused automated verification are complete locally. Phase 6 is deferred; Phase 9 has not started. Credentialed provider and Google sign-in smoke tests remain deployment evidence.**
 
 LingoBridge is a multilingual product with two user-facing surfaces: a Chrome extension for translation where users browse and a web dashboard for saved phrases, preferences, connected extension sessions, export, and account control. LingoBridge exposes every language currently supported by its primary Google provider. English–Nepali receives deeper evaluation, but it is not the complete product boundary.
 
@@ -39,6 +39,7 @@ In Online mode, LingoBridge sends requests to its own gateway. The gateway uses 
 14. [Translation-provider decision](docs/decisions/ADR-001-translation-provider-strategy.md)
 15. [Instant-selection access decision](docs/decisions/ADR-002-instant-selection-access.md)
 16. [Dashboard and sync decision](docs/decisions/ADR-003-dashboard-and-sync.md)
+17. [Dashboard operations](docs/14-dashboard-operations.md)
 
 ## Development quick start
 
@@ -51,6 +52,8 @@ pnpm build
 ```
 
 Run one surface with `pnpm dev:dashboard`, `pnpm dev:extension`, or `pnpm dev:gateway`. For the translator, keep `pnpm dev:gateway` running in one terminal and `pnpm dev:extension` in another. The safe default remains the fake gateway on `http://127.0.0.1:8787`; every translation request is contract-validated, bounded, rate-limited by anonymous installation and network, and subject to a provider deadline. The unpacked production extension is generated at `apps/extension/.output/chrome-mv3`.
+
+The dashboard uses a development-only identity provider and an embedded database locally. Production uses Google OpenID Connect and PostgreSQL with server-only configuration. See [dashboard operations](docs/14-dashboard-operations.md) for the exact environment, maintenance command, and remaining deployment checks.
 
 ### Run the NVIDIA-backed gateway locally
 
@@ -80,4 +83,4 @@ Do not copy a service-account key, ADC file, NVIDIA key, or API key into the ext
 - [Security agent](agents/security-agent.md)
 - [Quality agent](agents/quality-agent.md)
 
-Implementation now proceeds serially from `docs/07-build-plan.md`. Provider credentials must never be committed; real provider integration does not begin until its earlier fake-provider and security gates pass.
+Further work proceeds serially from `docs/07-build-plan.md`. Provider and identity credentials must never be committed; credentialed deployment checks remain separate from local automated verification.
