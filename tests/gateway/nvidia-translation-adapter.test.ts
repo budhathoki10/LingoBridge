@@ -7,7 +7,7 @@ import {
   NvidiaTranslationAdapter,
   type NvidiaTranslationClient,
 } from "../../apps/gateway/src/nvidia-translation-adapter";
-import { NvidiaPrimaryProviderRouter } from "../../apps/gateway/src/provider-router";
+import { MyMemoryPrimaryProviderRouter } from "../../apps/gateway/src/provider-router";
 import { TranslationAdapterError } from "../../apps/gateway/src/translation-adapter";
 import {
   ANONYMOUS_INSTALLATION_HEADER,
@@ -73,6 +73,27 @@ describe("NvidiaTranslationAdapter", () => {
     });
   });
 
+  it("maps reviewed MyMemory regional tags to NVIDIA model tags", async () => {
+    const client = new RecordingNvidiaClient({
+      choices: [{ message: { content: "Ou est la gare ?" } }],
+    });
+    const adapter = new NvidiaTranslationAdapter(
+      client,
+      "nvidia/riva-translate-4b-instruct-v2",
+      512,
+    );
+
+    await adapter.translate(
+      { ...baseRequest, sourceLanguage: "en-GB", targetLanguage: "fr-FR" },
+      new AbortController().signal,
+    );
+
+    expect(client.calls[0]?.request.messages[0]).toEqual({
+      content: "en-fr",
+      role: "system",
+    });
+  });
+
   it("rejects unsupported directions and empty provider output safely", async () => {
     const adapter = new NvidiaTranslationAdapter(
       new RecordingNvidiaClient({ choices: [] }),
@@ -88,38 +109,55 @@ describe("NvidiaTranslationAdapter", () => {
     ).rejects.toMatchObject({ code: "provider-unavailable" });
   });
 
-  it("falls back to Google only when backup consent and adapter are present", async () => {
-    const failingNvidia = {
+  it("falls back to NVIDIA only when backup consent and pair support are present", async () => {
+    const failingMyMemory = {
       async translate() {
-        throw new TranslationAdapterError("provider-unavailable", "nvidia down", true);
+        throw new TranslationAdapterError("provider-unavailable", "mymemory down", true);
       },
     };
-    const google = {
+    const nvidia = {
       async translate(request: TranslationRequest) {
         return translationResultSchema.parse({
           detectedSourceLanguage: request.sourceLanguage,
-          provider: "google",
+          provider: "nvidia",
           requestId: request.requestId,
           targetLanguage: request.targetLanguage,
-          translatedText: "French fallback",
+          translatedText: "NVIDIA fallback",
           warnings: [],
         });
       },
     };
-    const router = new NvidiaPrimaryProviderRouter({ google, nvidia: failingNvidia });
+    const consent = {
+      ...baseRequest.consent,
+      myMemory: true,
+      nvidiaBackup: true,
+    };
+    const router = new MyMemoryPrimaryProviderRouter({ myMemory: failingMyMemory, nvidia });
 
     await expect(
-      router.translate(baseRequest, new AbortController().signal),
-    ).resolves.toMatchObject({ provider: "google", translatedText: "French fallback" });
+      router.translate({ ...baseRequest, consent }, new AbortController().signal),
+    ).resolves.toMatchObject({ provider: "nvidia", translatedText: "NVIDIA fallback" });
     await expect(
       router.translate(
-        { ...baseRequest, consent: { ...baseRequest.consent, googleBackup: false } },
+        { ...baseRequest, consent: { ...consent, nvidiaBackup: false } },
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ code: "provider-unavailable" });
+    await expect(
+      router.translate(
+        { ...baseRequest, consent, targetLanguage: "ne" },
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ code: "provider-unavailable" });
+    await expect(
+      router.translate(
+        { ...baseRequest, consent, sourceLanguage: "en-GB", targetLanguage: "zu-ZA" },
         new AbortController().signal,
       ),
     ).rejects.toMatchObject({ code: "provider-unavailable" });
   });
 
-  it("returns NVIDIA through the protected gateway when only NVIDIA is configured", async () => {
+  it("returns NVIDIA through the protected gateway after a MyMemory failure", async () => {
     const client = new RecordingNvidiaClient({
       choices: [{ message: { content: "Gracias" } }],
     });
@@ -128,15 +166,23 @@ describe("NvidiaTranslationAdapter", () => {
         get: async () => createNvidiaCapabilityCatalogue(new Date("2026-09-08T00:00:00.000Z")),
       },
       logger: { info: () => undefined },
-      translationAdapter: new NvidiaPrimaryProviderRouter({
-        google: null,
+      translationAdapter: new MyMemoryPrimaryProviderRouter({
+        myMemory: {
+          async translate() {
+            throw new TranslationAdapterError("provider-unavailable", "quota", true);
+          },
+        },
         nvidia: new NvidiaTranslationAdapter(client, "nvidia/riva-translate-4b-instruct-v2", 512),
       }),
       translationMode: "live",
     });
 
     const response = await app.request(GATEWAY_ROUTES.translate, {
-      body: JSON.stringify({ ...baseRequest, targetLanguage: "es-ES" }),
+      body: JSON.stringify({
+        ...baseRequest,
+        consent: { ...baseRequest.consent, myMemory: true, nvidiaBackup: true },
+        targetLanguage: "es-ES",
+      }),
       headers: {
         "Content-Type": "application/json",
         [ANONYMOUS_INSTALLATION_HEADER]: "319c4b9c-ddb0-4c86-8292-6682e80f0c8e",

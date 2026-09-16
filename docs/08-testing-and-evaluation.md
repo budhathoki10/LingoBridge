@@ -8,7 +8,7 @@
 - Romanized Nepali transliteration and translation only when a Phase 9 feature gate is under evaluation.
 - Empty, whitespace-only, emoji, mixed-script, multiline, and maximum-size inputs.
 - Network failure, timeout, provider limit, local-model download, and unavailable model.
-- NVIDIA success, NVIDIA-to-Google backup, unsupported NVIDIA pair, double failure, and backup timeout.
+- MyMemory success, segmentation, quota exhaustion, MyMemory-to-NVIDIA fallback, unsupported NVIDIA pair, double failure, and fallback timeout.
 - Selection translation on static pages, dynamic pages, nested elements, and editable fields.
 - Pointer, keyboard, touchpad, double-click, drag, select-all, rapidly changing, repeated, and collapsed selection behaviour.
 - Overlay positioning near every viewport edge, during scroll, resize, zoom, and page navigation.
@@ -43,7 +43,7 @@
 
 - Record network traffic for an On-device translation and confirm that translation text is absent.
 - Record network traffic for Online mode and confirm that only the reviewed request fields are sent.
-- Confirm the interface identifies Google or NVIDIA according to the provider that returned the result.
+- Confirm the interface identifies MyMemory or NVIDIA according to the provider that returned the result.
 - Revoke online consent and confirm that cloud translation cannot proceed silently.
 - Delete saved data and verify that local phrase records are removed.
 - Close a selection flow and verify temporary text expires.

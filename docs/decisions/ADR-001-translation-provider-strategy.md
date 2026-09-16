@@ -1,6 +1,6 @@
 # ADR-001: Translation provider strategy
 
-Status: **Accepted; amended on 8 September 2026 for NVIDIA-primary Phase 4; credentialed deployment and quality validation pending**
+Status: **Accepted; amended on 16 September 2026 for MyMemory primary and NVIDIA fallback; credentialed deployment and quality validation pending**
 Decision date: **6 September 2026**
 
 ## Context
@@ -9,40 +9,43 @@ LingoBridge needs low-friction multilingual translation, strong privacy, and par
 
 ## Decision
 
-Use a user-controlled local mode and an NVIDIA-first online architecture:
+Use a user-controlled local mode and a MyMemory-first online architecture:
 
 - Prefer Chrome's on-device Translator API when the user selects On-device mode and the language pair is supported.
 - Send Online mode only to a LingoBridge-controlled `POST /v1/translate` gateway.
 - Expose every active supported standard translation language and direction through a normalized LingoBridge capability catalogue.
-- Use NVIDIA `riva-translate-4b-instruct-v2` as the primary online provider for reviewed supported directions.
-- Use Google Cloud Translation Advanced `translateText` with the standard `general/nmt` model as an optional backup when configured.
-- Do not use the selected NVIDIA model for Nepali because Nepali is absent from its supported languages; English-Nepali requires Google backup when live credentials are available.
+- Use MyMemory's REST `get` endpoint as the primary online translation service.
+- Ship a reviewed MyMemory compatibility catalogue because MyMemory accepts ISO/RFC 3066 tags but does not expose a machine-readable supported-language endpoint. Represent its all-listed pairing policy with per-language flags rather than a quadratic direction list.
+- Send the configured server-side contact email as MyMemory's `de` parameter on every request. Keep the address out of the extension and logs.
+- Split provider segments at safe boundaries so each MyMemory `q` value is no more than its documented 500 UTF-8 byte limit.
+- If MyMemory fails, reports exhausted quota, or returns an unusable response, use NVIDIA `riva-translate-4b-instruct-v2` for at most one fallback attempt when the direction is reviewed as supported.
+- Keep MyMemory-only languages available for primary translation, but block NVIDIA fallback for every unsupported language or variant. Convert reviewed compatible MyMemory tags to NVIDIA model tags only at the NVIDIA adapter boundary.
+- Do not use the selected NVIDIA model for Nepali because Nepali is absent from its supported languages; English-Nepali therefore has no fallback when MyMemory is unavailable.
 - Put translation vendors behind an internal provider contract.
 - Never place provider secrets in the extension.
 - Never change an On-device request to Online without the user's informed choice.
-- Disclose NVIDIA and the possible Google backup before Online use, and identify the provider that produced each result.
+- Disclose MyMemory, the configured contact email sent in `de`, and the possible NVIDIA fallback before Online use, and identify the provider that produced each result.
 
 ## Endpoint boundaries
 
 - Extension to LingoBridge: `POST /v1/translate` on the configured LingoBridge API origin.
 - Extension to LingoBridge capabilities: `GET /v1/capabilities` on the same origin.
-- LingoBridge to Google: Cloud Translation Advanced `POST https://translation.googleapis.com/v3/projects/{PROJECT_ID}/locations/global:translateText`.
+- LingoBridge to MyMemory: `GET https://api.mymemory.translated.net/get` with `q`, `langpair`, `de`, and `mt=1`.
 - LingoBridge to NVIDIA: the server-configured NIM OpenAI-compatible chat-completions endpoint for `nvidia/riva-translate-4b-instruct-v2`.
 
-The extension knows only the LingoBridge endpoint. Google service-account credentials and the NVIDIA API key remain in the gateway's deployment secret store.
+The extension knows only the LingoBridge endpoint. The MyMemory contact email and NVIDIA API key remain in server-side configuration.
 
 ## Authentication, limits, and retention boundary
 
-- The gateway authenticates Cloud Translation Advanced through Application Default Credentials. Production should prefer workload identity over a downloadable long-lived key; Advanced v3 does not accept a simple API key.
-- The gateway retrieves Google's supported languages and normalizes them behind `GET /v1/capabilities`; the extension never freezes a marketing language count.
-- Version 1 accepts at most 5,000 Unicode code points and 20 KiB of UTF-8 source text per translation request. This follows Google's smaller-request recommendation while leaving room for multilingual byte expansion.
-- Google project quotas and billing alerts provide an outer cost ceiling; LingoBridge adds its own per-installation and network abuse controls before provider calls.
-- LingoBridge does not persist unsaved translation requests or results. Google's current data-usage statement says submitted text is held briefly in memory to provide the service. NVIDIA processing and retention terms must be re-verified before Phase 4 and disclosed before backup consent is enabled.
+- The gateway may retrieve Google's supported languages for capability metadata when configured; Google is not part of the translation route.
+- Version 1 accepts at most 5,000 Unicode code points and 20 KiB of UTF-8 source text per translation request. The gateway segments MyMemory calls to its 500-byte per-`q` limit.
+- MyMemory's quota and NVIDIA API limits provide outer ceilings; LingoBridge adds its own per-installation and network abuse controls before provider calls.
+- LingoBridge does not persist unsaved translation requests or results. MyMemory and NVIDIA processing and retention terms must be re-verified and disclosed before release.
 
 ## Validation criteria
 
 - English–Nepali meaning and fluency scores on LingoBridge's reviewed dataset.
-- Contract smoke tests for every advertised NVIDIA direction and every enabled Google backup direction.
+- Contract smoke tests for MyMemory success, quota, malformed response, and every advertised NVIDIA fallback direction.
 - Romanized Nepali performance.
 - Response time and availability.
 - Clear data-retention and model-training terms.
@@ -53,9 +56,9 @@ The extension knows only the LingoBridge endpoint. Google service-account creden
 
 ## Rejected approaches
 
-### A single anonymous public translation endpoint
+### Calling MyMemory directly from the extension
 
-It creates quota, reliability, privacy, and abuse-control problems and is unsuitable as the production foundation.
+It would expose the contact email, bypass gateway controls, and make fallback behavior inconsistent.
 
 ### A provider key bundled in the extension
 
@@ -71,4 +74,4 @@ It does not currently satisfy the main English–Nepali use case.
 
 ## Consequences
 
-The product needs a small backend, two provider adapters, a versioned capability catalogue, searchable language pickers, and a clear consent experience. Google defines broad standard translation coverage. NVIDIA provides resilience only for exact overlapping pair tags, so some Google languages—including Nepali—still have a single cloud-provider dependency. Provider quality, cost, retention terms, capability drift, and fallback behaviour remain release gates even though the routing decision is accepted.
+The product needs a small backend, two active translation adapters, a versioned capability catalogue, searchable language pickers, and a clear consent experience. NVIDIA provides resilience only for exact reviewed pair tags, so languages including Nepali have a single cloud-provider dependency. Provider quality, quota, retention terms, capability drift, and fallback behaviour remain release gates even though the routing decision is accepted.

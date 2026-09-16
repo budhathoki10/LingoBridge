@@ -10,6 +10,7 @@ export const metadata: Metadata = { title: "Operations" };
 const PROVIDER_NAMES: Record<ProviderOperations["provider"], string> = {
   fake: "Fake provider",
   google: "Google Cloud Translation",
+  mymemory: "MyMemory",
   none: "Rejected before a provider",
   nvidia: "NVIDIA Riva Translate",
 };
@@ -171,7 +172,7 @@ export default async function AdminPage() {
                             </div>
                           </>
                         )}
-                        {provider.provider === "google" ? (
+                        {provider.provider === "nvidia" ? (
                           <div className="metric-row">
                             <dt>Backup attempts</dt>
                             <dd>

@@ -67,7 +67,7 @@ function toContent(phrase: SavedPhrase): PhraseContent | null {
   const parsed = phraseContentSchema.safeParse({
     id: phrase.id,
     note: phrase.note ?? null,
-    provider: ["on-device", "google", "nvidia"].includes(phrase.provider)
+    provider: ["on-device", "mymemory", "google", "nvidia"].includes(phrase.provider)
       ? phrase.provider
       : "unknown",
     savedAt: phrase.savedAt,

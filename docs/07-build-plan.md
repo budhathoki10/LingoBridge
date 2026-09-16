@@ -53,13 +53,13 @@ Phase 3.4 implementation and automated verification completed on 8 September 202
 | 3.3 | Add Google Cloud Translation Advanced standard NMT as primary. | Translation works through the gateway and no credential reaches the extension. |
 | 3.4 | Add the live, versioned Google capability catalogue with last-known-good caching. | Fresh, stale, malformed, and unavailable catalogue tests pass. |
 
-## 4 — NVIDIA primary with Google backup
+## 4 — Online providers
 
 | Phase | Build | Done when |
 | --- | --- | --- |
-| 4.1 | Add the server-side `nvidia/riva-translate-4b-instruct-v2` adapter as the primary online provider for reviewed supported directions. | Reviewed pair tags work and Nepali is rejected before any NVIDIA request. |
-| 4.2 | Add Google backup for qualifying NVIDIA failures and unsupported NVIDIA directions when Google is configured. | Success, unsupported pair, timeout, cancellation, and double-failure tests pass. |
-| 4.3 | Add actual-provider labels and multi-provider consent checks. | Every result truthfully shows On-device, NVIDIA, or Google. |
+| 4.1 | Add the server-side MyMemory adapter as primary, including `de`, 500-byte segmentation, quota handling, and safe errors. | Success, segmentation, quota, timeout, and malformed-response tests pass. |
+| 4.2 | Add `nvidia/riva-translate-4b-instruct-v2` as the one-attempt fallback for reviewed supported directions. | Reviewed fallback tags work and Nepali is rejected before any NVIDIA request. |
+| 4.3 | Add actual-provider labels and multi-provider consent checks. | Every result truthfully shows On-device, MyMemory, or NVIDIA. |
 
 ## 5 — Selection Magic
 
@@ -103,7 +103,7 @@ showing, closing, cancelling, or replacing a result saves nothing. Records keep 
 direction, the actual provider, and the save time, and deliberately omit the page URL. The store
 normalizes malformed records away, collapses duplicate ids, replaces an earlier save of the same
 text and direction, and is bounded. The popup lists saved phrases with search, delete-one, a
-confirmed delete-all, and JSON export. Unit coverage spans normalization, bounding, search,
+confirmed delete-all, and readable text export. Unit coverage spans normalization, bounding, search,
 replacement, deletion, and export; bundled-Chromium coverage verifies search without mutation,
 delete-one removing exactly the intended record, confirmed delete-all, and the empty state.
 

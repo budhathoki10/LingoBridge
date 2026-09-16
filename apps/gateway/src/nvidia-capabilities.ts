@@ -5,6 +5,7 @@ import {
 } from "@lingobridge/contracts";
 import { createHash } from "node:crypto";
 import type { CapabilityCatalogueSource } from "./capability-catalogue-service.js";
+import { MYMEMORY_LANGUAGE_ENTRIES } from "./mymemory-languages.js";
 
 export const NVIDIA_RIVA_MODEL = "nvidia/riva-translate-4b-instruct-v2";
 
@@ -307,36 +308,134 @@ const nvidiaLanguages: LanguageCapability[] = [
   },
 ];
 
+function textDirection(languageCode: string): "ltr" | "rtl" {
+  try {
+    const locale = new Intl.Locale(languageCode) as Intl.Locale & {
+      textInfo?: { direction?: string };
+    };
+    return locale.textInfo?.direction === "rtl" ? "rtl" : "ltr";
+  } catch {
+    return "ltr";
+  }
+}
+
+function nativeLanguageName(languageCode: string, englishName: string): string | null {
+  try {
+    const name = new Intl.DisplayNames([languageCode], { type: "language" }).of(languageCode);
+    if (!name || name === languageCode || name === englishName || name.length > 100) return null;
+    return name;
+  } catch {
+    return null;
+  }
+}
+
+const myMemoryLanguages: LanguageCapability[] = MYMEMORY_LANGUAGE_ENTRIES.map(({ code, name }) => ({
+  code,
+  googleSource: false,
+  googleTarget: false,
+  myMemorySource: true,
+  myMemoryTarget: true,
+  name,
+  nativeName: nativeLanguageName(code, name),
+  textDirection: textDirection(code),
+}));
+
+const legacyMyMemoryAliases: LanguageCapability[] = [
+  {
+    code: "ne",
+    googleSource: false,
+    googleTarget: false,
+    myMemorySource: true,
+    myMemoryTarget: true,
+    name: "Nepali",
+    nativeName: "नेपाली",
+    textDirection: "ltr",
+  },
+];
+
+// Keep the existing model tags as provider-compatible aliases for saved preferences and detection.
+const onlineLanguages = [
+  ...new Map(
+    [
+      ...myMemoryLanguages,
+      ...legacyMyMemoryAliases,
+      ...nvidiaLanguages.map((language) => ({
+        ...language,
+        myMemorySource: true,
+        myMemoryTarget: true,
+      })),
+    ].map((language) => [language.code, language]),
+  ).values(),
+].sort(
+  (left, right) => left.name.localeCompare(right.name, "en") || left.code.localeCompare(right.code),
+);
+
+const MYMEMORY_TO_NVIDIA_LANGUAGE = new Map<string, string>([
+  ["ar-SA", "ar"],
+  ["bg-BG", "bg"],
+  ["cs-CZ", "cs"],
+  ["da-DK", "da"],
+  ["de-DE", "de"],
+  ["el-GR", "el"],
+  ["en-GB", "en"],
+  ["et-EE", "et"],
+  ["fi-FI", "fi"],
+  ["fr-FR", "fr"],
+  ["hi-IN", "hi"],
+  ["hr-HR", "hr"],
+  ["hu-HU", "hu"],
+  ["id-ID", "id"],
+  ["it-IT", "it"],
+  ["ja-JP", "ja"],
+  ["ko-KR", "ko"],
+  ["lt-LT", "lt"],
+  ["lv-LV", "lv"],
+  ["nb-NO", "no"],
+  ["nl-NL", "nl"],
+  ["pl-PL", "pl"],
+  ["ro-RO", "ro"],
+  ["ru-RU", "ru"],
+  ["sk-SK", "sk"],
+  ["sl-SI", "sl"],
+  ["sv-SE", "sv"],
+  ["th-TH", "th"],
+  ["tr-TR", "tr"],
+  ["uk-UA", "uk"],
+  ["vi-VN", "vi"],
+]);
+
 export const NVIDIA_LANGUAGE_CODES = new Set(nvidiaLanguages.map((language) => language.code));
+
+export function toNvidiaLanguageCode(languageCode: string): string | null {
+  if (NVIDIA_LANGUAGE_CODES.has(languageCode)) return languageCode;
+  const mapped = MYMEMORY_TO_NVIDIA_LANGUAGE.get(languageCode);
+  return mapped && NVIDIA_LANGUAGE_CODES.has(mapped) ? mapped : null;
+}
 
 export function supportsNvidiaTranslationPair(sourceLanguage: string, targetLanguage: string) {
   if (sourceLanguage === "auto") return false;
-  if (sourceLanguage === targetLanguage) return false;
+  const source = toNvidiaLanguageCode(sourceLanguage);
+  const target = toNvidiaLanguageCode(targetLanguage);
+  if (!source || !target || source === target) return false;
   return (
-    (sourceLanguage === "en" && NVIDIA_LANGUAGE_CODES.has(targetLanguage)) ||
-    (targetLanguage === "en" && NVIDIA_LANGUAGE_CODES.has(sourceLanguage))
+    (source === "en" && NVIDIA_LANGUAGE_CODES.has(target)) ||
+    (target === "en" && NVIDIA_LANGUAGE_CODES.has(source))
   );
 }
 
-function nvidiaDirections() {
-  return nvidiaLanguages
-    .filter((language) => language.code !== "en")
-    .flatMap((language) => [
-      {
+function nvidiaDirections(languages: readonly LanguageCapability[]) {
+  return languages.flatMap((source) =>
+    languages
+      .filter((target) => supportsNvidiaTranslationPair(source.code, target.code))
+      .map((target) => ({
         google: false,
+        myMemory: true,
         nvidia: true,
-        nvidiaBackup: false,
-        sourceLanguage: "en",
-        targetLanguage: language.code,
-      },
-      {
-        google: false,
-        nvidia: true,
-        nvidiaBackup: false,
-        sourceLanguage: language.code,
-        targetLanguage: "en",
-      },
-    ]);
+        nvidiaBackup: true,
+        sourceLanguage: source.code,
+        targetLanguage: target.code,
+      })),
+  );
 }
 
 function catalogueVersion(languages: readonly LanguageCapability[]) {
@@ -351,13 +450,13 @@ function catalogueVersion(languages: readonly LanguageCapability[]) {
 export function createNvidiaCapabilityCatalogue(now = new Date()): CapabilityCatalogue {
   const timestamp = now.toISOString();
   return capabilityCatalogueSchema.parse({
-    catalogueVersion: catalogueVersion(nvidiaLanguages),
-    directions: nvidiaDirections(),
+    catalogueVersion: `mymemory-${catalogueVersion(onlineLanguages)}`,
+    directions: nvidiaDirections(onlineLanguages),
     freshness: "fresh",
     generatedAt: timestamp,
-    googlePairing: "explicit",
-    languages: nvidiaLanguages,
-    source: "nvidia-riva",
+    googlePairing: "all-listed",
+    languages: onlineLanguages,
+    source: "hybrid-online",
     verifiedAt: timestamp,
   });
 }
@@ -367,25 +466,18 @@ export function mergeNvidiaWithGoogleCatalogue(
   now = new Date(),
 ): CapabilityCatalogue {
   const byCode = new Map<string, LanguageCapability>();
-  for (const language of googleCatalogue.languages) byCode.set(language.code, language);
-  for (const language of nvidiaLanguages) {
-    const googleLanguage = byCode.get(language.code);
-    byCode.set(language.code, googleLanguage ? { ...language, ...googleLanguage } : language);
+  for (const language of onlineLanguages) byCode.set(language.code, language);
+  for (const googleLanguage of googleCatalogue.languages) {
+    const myMemoryLanguage = byCode.get(googleLanguage.code);
+    if (myMemoryLanguage) {
+      byCode.set(googleLanguage.code, {
+        ...myMemoryLanguage,
+        googleSource: googleLanguage.googleSource,
+        googleTarget: googleLanguage.googleTarget,
+      });
+    }
   }
 
-  const nvidiaCodes = new Set(nvidiaLanguages.map((language) => language.code));
-  const googleDirections = googleCatalogue.directions.map((direction) => ({
-    ...direction,
-    nvidia: supportsNvidiaTranslationPair(direction.sourceLanguage, direction.targetLanguage),
-    nvidiaBackup: false,
-  }));
-  const googleDirectionKeys = new Set(
-    googleDirections.map((direction) => `${direction.sourceLanguage}:${direction.targetLanguage}`),
-  );
-  const explicitNvidiaDirections = nvidiaDirections().filter(
-    (direction) =>
-      !googleDirectionKeys.has(`${direction.sourceLanguage}:${direction.targetLanguage}`),
-  );
   const languages = [...byCode.values()].sort((first, second) =>
     first.name.localeCompare(second.name),
   );
@@ -396,19 +488,28 @@ export function mergeNvidiaWithGoogleCatalogue(
       .update(
         JSON.stringify({
           google: googleCatalogue.catalogueVersion,
-          nvidia: [...nvidiaCodes].sort(),
+          myMemory: MYMEMORY_LANGUAGE_ENTRIES.map(({ code }) => code),
+          nvidia: [...NVIDIA_LANGUAGE_CODES].sort(),
         }),
       )
       .digest("hex")
       .slice(0, 24)}`,
-    directions: [...googleDirections, ...explicitNvidiaDirections],
+    directions: nvidiaDirections(languages),
     freshness: "fresh",
     generatedAt: timestamp,
-    googlePairing: googleCatalogue.googlePairing,
+    googlePairing: "all-listed",
     languages,
     source: "hybrid-online",
     verifiedAt: timestamp,
   });
+}
+
+export function isCurrentOnlineCapabilityCatalogue(catalogue: CapabilityCatalogue): boolean {
+  return (
+    catalogue.source === "hybrid-online" &&
+    catalogue.googlePairing === "all-listed" &&
+    catalogue.languages.some((language) => language.myMemorySource && language.myMemoryTarget)
+  );
 }
 
 export class OnlineProviderCapabilitySource implements CapabilityCatalogueSource {

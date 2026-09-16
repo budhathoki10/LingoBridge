@@ -163,7 +163,7 @@ export function PreferencesForm({
             />
             <span>
               Online
-              <small>NVIDIA first, Google as a backup where you allowed it.</small>
+              <small>MyMemory first, with NVIDIA backup for supported directions.</small>
             </span>
           </label>
           <label className="radio">

@@ -80,24 +80,43 @@ describe("selection source resolution", () => {
 });
 
 describe("selection target rules", () => {
-  it("offers only English as a target for a non-English source", () => {
-    expect(supportedTargetsForSource(nvidia, "fr")).toEqual(["en"]);
+  it("exposes the complete reviewed MyMemory compatibility catalogue", () => {
+    expect(nvidia.googlePairing).toBe("all-listed");
+    expect(nvidia.languages.length).toBeGreaterThanOrEqual(322);
+    expect(nvidia.languages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "ace-ID", myMemorySource: true, myMemoryTarget: true }),
+        expect.objectContaining({ code: "ne-NP", myMemorySource: true, myMemoryTarget: true }),
+        expect.objectContaining({ code: "zu-ZA", myMemorySource: true, myMemoryTarget: true }),
+      ]),
+    );
   });
 
-  it("offers many targets for an English source", () => {
+  it("offers MyMemory targets for a non-English source", () => {
+    const targets = supportedTargetsForSource(nvidia, "fr");
+    expect(targets.length).toBeGreaterThanOrEqual(321);
+    expect(targets).toContain("en");
+    expect(targets).toContain("ne");
+    expect(targets).not.toContain("fr");
+  });
+
+  it("offers the complete MyMemory target list for an English source", () => {
     const targets = supportedTargetsForSource(nvidia, "en");
-    expect(targets.length).toBeGreaterThan(30);
+    expect(targets.length).toBeGreaterThan(300);
     expect(targets).toContain("hi");
+    expect(targets).toContain("ne-NP");
+    expect(targets).toContain("zu-ZA");
     expect(targets).not.toContain("en");
   });
 
   it("keeps a saved target that the source can actually reach", () => {
     expect(chooseSelectionTargetLanguage(nvidia, "hi", "en")).toBe("hi");
+    expect(chooseSelectionTargetLanguage(nvidia, "hi", "fr")).toBe("hi");
     expect(isSupportedSelectionTarget(fakeCapabilityCatalogue, "ne")).toBe(true);
   });
 
-  it("replaces a saved target the source cannot reach", () => {
-    expect(chooseSelectionTargetLanguage(nvidia, "hi", "fr")).toBe("en");
-    expect(chooseSelectionTargetLanguage(nvidia, "ne", "en")).not.toBe("ne");
+  it("replaces a saved target that matches the source", () => {
+    expect(chooseSelectionTargetLanguage(nvidia, "fr", "fr")).not.toBe("fr");
+    expect(chooseSelectionTargetLanguage(nvidia, "ne", "en")).toBe("ne");
   });
 });

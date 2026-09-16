@@ -152,6 +152,26 @@ describe("CapabilityCatalogueService", () => {
     await expect(registry.get(new AbortController().signal)).resolves.toEqual(fresh);
   });
 
+  it("refreshes a valid stored snapshot rejected by the active provider generation", async () => {
+    const now = Date.parse("2026-09-07T12:00:00.000Z");
+    const stored = catalogue(new Date(now).toISOString());
+    const fresh = { ...stored, catalogueVersion: "mymemory-current" };
+    const source = new QueueSource([fresh]);
+    const registry = new CapabilityCatalogueService(
+      source,
+      new MemoryStore(stored),
+      {
+        acceptStoredCatalogue: (candidate) => candidate.catalogueVersion.startsWith("mymemory-"),
+        freshForMilliseconds: 60_000,
+        retryAfterFailureMilliseconds: 10_000,
+      },
+      () => now,
+    );
+
+    await expect(registry.get(new AbortController().signal)).resolves.toEqual(fresh);
+    expect(source.calls).toBe(1);
+  });
+
   it("uses the last-known-good snapshot when provider metadata is malformed", async () => {
     const now = Date.parse("2026-09-07T12:00:00.000Z");
     const source = new QueueSource([{ unexpected: true } as unknown as CapabilityCatalogue]);

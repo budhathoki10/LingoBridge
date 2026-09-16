@@ -45,19 +45,21 @@ export const translationTextSchema = z.string().superRefine((text, context) => {
   }
 });
 
-export const providerSchema = z.enum(["on-device", "google", "nvidia"]);
+export const providerSchema = z.enum(["on-device", "mymemory", "google", "nvidia"]);
 
 export const onlineConsentSchema = z
   .object({
     acceptedAt: z.string().datetime({ offset: true }),
     google: z.boolean(),
     googleBackup: z.boolean(),
+    myMemory: z.boolean().optional(),
     nvidia: z.boolean(),
+    nvidiaBackup: z.boolean().optional(),
     version: z.string().min(1).max(40),
   })
   .strict()
   .superRefine((consent, context) => {
-    if (!consent.google && !consent.nvidia) {
+    if (!consent.myMemory && !consent.google && !consent.nvidia) {
       context.addIssue({
         code: "custom",
         message: "Online consent must allow at least one provider",
@@ -69,6 +71,13 @@ export const onlineConsentSchema = z
         code: "custom",
         message: "Google backup requires Google consent",
         path: ["googleBackup"],
+      });
+    }
+    if (consent.nvidiaBackup && !consent.nvidia) {
+      context.addIssue({
+        code: "custom",
+        message: "NVIDIA backup requires NVIDIA consent",
+        path: ["nvidiaBackup"],
       });
     }
   });
@@ -145,8 +154,7 @@ export const explanationResultSchema = z
           })
           .strict(),
       )
-      .min(1)
-      .max(3),
+      .length(1),
     meaning: z.string().trim().min(1).max(700),
     provider: z.literal("nvidia"),
     register: explanationRegisterSchema,
@@ -205,6 +213,8 @@ export const languageCapabilitySchema = z
     code: languageCodeSchema,
     googleSource: z.boolean(),
     googleTarget: z.boolean(),
+    myMemorySource: z.boolean().optional(),
+    myMemoryTarget: z.boolean().optional(),
     name: z.string().min(1).max(100),
     nativeName: z.string().min(1).max(100).nullable(),
     textDirection: z.enum(["ltr", "rtl"]),
@@ -214,6 +224,7 @@ export const languageCapabilitySchema = z
 export const directionCapabilitySchema = z
   .object({
     google: z.boolean(),
+    myMemory: z.boolean().optional(),
     nvidia: z.boolean(),
     nvidiaBackup: z.boolean(),
     sourceLanguage: languageCodeSchema,

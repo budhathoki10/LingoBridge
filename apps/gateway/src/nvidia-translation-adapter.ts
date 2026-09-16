@@ -1,8 +1,9 @@
 import { type TranslationRequest, translationResultSchema } from "@lingobridge/contracts";
-import { supportsNvidiaTranslationPair } from "./nvidia-capabilities.js";
+import { supportsNvidiaTranslationPair, toNvidiaLanguageCode } from "./nvidia-capabilities.js";
 import { type TranslationAdapter, TranslationAdapterError } from "./translation-adapter.js";
 
 export interface NvidiaChatCompletionRequest {
+  chat_template_kwargs?: { enable_thinking: boolean };
   max_tokens: number;
   messages: Array<{ content: string; role: "assistant" | "system" | "user" }>;
   model: string;
@@ -79,7 +80,10 @@ function providerError(error: unknown): TranslationAdapterError {
 }
 
 function languageTag(sourceLanguage: string, targetLanguage: string) {
-  return `${sourceLanguage}-${targetLanguage}`.toLowerCase();
+  const source = toNvidiaLanguageCode(sourceLanguage);
+  const target = toNvidiaLanguageCode(targetLanguage);
+  if (!source || !target) return null;
+  return `${source}-${target}`.toLowerCase();
 }
 
 export class NvidiaTranslationAdapter implements TranslationAdapter {
@@ -104,6 +108,14 @@ export class NvidiaTranslationAdapter implements TranslationAdapter {
         false,
       );
     }
+    const promptLanguageTag = languageTag(request.sourceLanguage, request.targetLanguage);
+    if (!promptLanguageTag) {
+      throw new TranslationAdapterError(
+        "provider-unavailable",
+        "NVIDIA does not support this language direction.",
+        false,
+      );
+    }
 
     let response: NvidiaChatCompletionResponse;
     try {
@@ -112,7 +124,7 @@ export class NvidiaTranslationAdapter implements TranslationAdapter {
           max_tokens: this.maxTokens,
           messages: [
             {
-              content: languageTag(request.sourceLanguage, request.targetLanguage),
+              content: promptLanguageTag,
               role: "system",
             },
             { content: request.text, role: "user" },

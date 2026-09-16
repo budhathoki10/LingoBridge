@@ -8,8 +8,8 @@ import type {
 } from "./nvidia-translation-adapter.js";
 import { TranslationAdapterError } from "./translation-adapter.js";
 
-export const DEFAULT_EXPLANATION_MODEL = "nvidia/nemotron-3-super-120b-a12b";
-const MAX_EXAMPLES = 2;
+export const DEFAULT_EXPLANATION_MODEL = "nvidia/nemotron-3-ultra-550b-a55b";
+const MAX_EXAMPLES = 1;
 
 /** What the model is asked to return. Length limits are enforced by the shared contract. */
 const modelOutputSchema = z.object({
@@ -37,12 +37,12 @@ Good and bad, for a passage that tells new freelancers to message friends and lo
 - Good meaning (in English): "It says your first customers often come from people you already know. Tell them what you made and how it can help them."
 
 Reply with one JSON object and nothing else, with exactly these keys:
-{"meaning": string, "register": "formal" | "neutral" | "casual" | "slang", "usageNote": string, "examples": [{"source": string, "translation": string}, {"source": string, "translation": string}]}
+{"meaning": string, "register": "formal" | "neutral" | "casual" | "slang", "usageNote": string, "examples": [{"source": string, "translation": string}]}
 
 - meaning: for a word or phrase, one or two short sentences with the idea and the feeling behind it. For a passage, two or three short sentences with only the main point in plain words, not a summary of every sentence. If the machine translation misses an idiom or nuance, say so plainly.
 - register: how the selected text sounds in the source language.
 - usageNote: one short, practical tip in easy words: when people use it, a common mistake, or (for a passage) what the reader could actually do. Use "" if there is nothing useful to add.
-- examples: two short, everyday sentences. "source" is in the source language and uses the selected text, or for a passage its most useful expression; "translation" is that sentence in the reader's language.
+- examples: exactly one short contextual sentence. Never copy the selected text as the example. Put it into a useful frame such as "The textbook says that...", "The article explains that...", or another natural context. "source" is in the source language and "translation" is that complete sentence in the reader's language.
 
 No markdown, no code fences, no text before or after the JSON.`;
 
@@ -70,10 +70,23 @@ function buildUserMessage(request: ExplanationRequest): string {
 
 /** Asked once when the first answer only restates the translation. */
 export const SIMPLER_WORDS_NUDGE =
-  "Your meaning mostly repeats the translation. The reader already has it. Rewrite the JSON so the meaning explains the idea in different, simpler, everyday words, following every rule above.";
+  "The answer repeats material the reader already has. Rewrite the JSON so the meaning uses different, simpler words and the single example adds a natural context instead of copying the selected text or its translation.";
 
 function normalizeForComparison(text: string): string {
-  return text.toLocaleLowerCase().replace(/[p{P}p{S}s]+/gu, "");
+  return text.toLocaleLowerCase().replace(/[\p{P}\p{S}\s]+/gu, "");
+}
+
+function contextualExamples(
+  examples: Array<{ source: string; translation: string }>,
+  request: ExplanationRequest,
+) {
+  const selectedText = normalizeForComparison(request.sourceText);
+  const translatedText = normalizeForComparison(request.translatedText);
+  return examples.filter((example) => {
+    const source = normalizeForComparison(example.source);
+    const translation = normalizeForComparison(example.translation);
+    return source && translation && source !== selectedText && translation !== translatedText;
+  });
 }
 
 function bigrams(text: string): Map<string, number> {
@@ -163,7 +176,11 @@ export class NvidiaExplanationAdapter implements ExplanationAdapter {
 
     // A meaning that restates the translation gives the reader nothing new. Ask once more for
     // simpler, different words; if the second answer is unusable, keep the first.
-    if (output.success && looksLikeRestatement(output.data.meaning, request.translatedText)) {
+    if (
+      output.success &&
+      (looksLikeRestatement(output.data.meaning, request.translatedText) ||
+        contextualExamples(output.data.examples, request).length === 0)
+    ) {
       conversation.push(
         { content: answer, role: "assistant" },
         { content: SIMPLER_WORDS_NUDGE, role: "user" },
@@ -182,9 +199,7 @@ export class NvidiaExplanationAdapter implements ExplanationAdapter {
     }
 
     const parsed = explanationResultSchema.safeParse({
-      examples: output.data.examples
-        .filter((example) => example.source.trim() && example.translation.trim())
-        .slice(0, MAX_EXAMPLES),
+      examples: contextualExamples(output.data.examples, request).slice(0, MAX_EXAMPLES),
       meaning: output.data.meaning,
       provider: "nvidia",
       register: output.data.register,
@@ -211,6 +226,7 @@ export class NvidiaExplanationAdapter implements ExplanationAdapter {
         {
           // Room for a possible reasoning preamble before the short JSON answer.
           max_tokens: this.maxTokens,
+          chat_template_kwargs: { enable_thinking: false },
           messages: [...messages],
           model: this.model,
           temperature: 0.3,

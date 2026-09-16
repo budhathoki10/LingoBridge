@@ -18,6 +18,8 @@ export interface GatewayRuntimeConfig {
   explanationTimeoutMilliseconds: number;
   googleProjectId: string | null;
   hostname: string;
+  myMemoryBaseUrl: string;
+  myMemoryContactEmail: string | null;
   nvidiaApiKey: string | null;
   nvidiaBaseUrl: string;
   nvidiaMaxTokens: number;
@@ -42,6 +44,15 @@ function readGoogleProjectId(environment: GatewayEnvironment): string | null {
 function readNvidiaApiKey(environment: GatewayEnvironment): string | null {
   const apiKey = environment.NVIDIA_API_KEY?.trim();
   return apiKey ? apiKey : null;
+}
+
+function readMyMemoryContactEmail(environment: GatewayEnvironment): string | null {
+  const email = environment.MYMEMORY_CONTACT_EMAIL?.trim();
+  if (!email) return null;
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email)) {
+    throw new Error("MYMEMORY_CONTACT_EMAIL must be a valid email address.");
+  }
+  return email;
 }
 
 function readOptionalPositiveNumber(environment: GatewayEnvironment, name: string): number | null {
@@ -101,13 +112,17 @@ export function loadGatewayRuntimeConfig(environment: GatewayEnvironment): Gatew
     throw new Error("Live mode requires at least one exact extension origin.");
   }
   const googleProjectId = readGoogleProjectId(environment);
+  const myMemoryContactEmail = readMyMemoryContactEmail(environment);
   const nvidiaApiKey = readNvidiaApiKey(environment);
+  if (translationMode === "live" && !myMemoryContactEmail) {
+    throw new Error("Live mode requires MYMEMORY_CONTACT_EMAIL.");
+  }
   if (translationMode === "live" && !nvidiaApiKey) {
     throw new Error("Live mode requires NVIDIA_API_KEY.");
   }
 
   const explanationModel =
-    environment.NVIDIA_EXPLANATION_MODEL?.trim() || "nvidia/nemotron-3-super-120b-a12b";
+    environment.NVIDIA_EXPLANATION_MODEL?.trim() || "nvidia/nemotron-3-ultra-550b-a55b";
   if (!/^[a-z0-9-]{1,40}\/[a-z0-9._-]{1,100}$/u.test(explanationModel)) {
     throw new Error("NVIDIA_EXPLANATION_MODEL must be an NVIDIA API catalog model ID.");
   }
@@ -125,15 +140,17 @@ export function loadGatewayRuntimeConfig(environment: GatewayEnvironment): Gatew
       "LINGOBRIDGE_CAPABILITY_RETRY_MS",
       5 * 60 * 1_000,
     ),
-    explanationMaxTokens: readPositiveInteger(environment, "NVIDIA_EXPLANATION_MAX_TOKENS", 2_048),
+    explanationMaxTokens: readPositiveInteger(environment, "NVIDIA_EXPLANATION_MAX_TOKENS", 4_096),
     explanationModel,
     explanationTimeoutMilliseconds: readPositiveInteger(
       environment,
       "LINGOBRIDGE_EXPLANATION_TIMEOUT_MS",
-      30_000,
+      90_000,
     ),
     googleProjectId: translationMode === "live" ? googleProjectId : null,
     hostname: environment.HOST ?? "127.0.0.1",
+    myMemoryBaseUrl: environment.MYMEMORY_BASE_URL ?? "https://api.mymemory.translated.net",
+    myMemoryContactEmail: translationMode === "live" ? myMemoryContactEmail : null,
     nvidiaApiKey: translationMode === "live" ? nvidiaApiKey : null,
     nvidiaBaseUrl: environment.NVIDIA_BASE_URL ?? "https://integrate.api.nvidia.com/v1",
     nvidiaMaxTokens: readPositiveInteger(environment, "NVIDIA_MAX_TOKENS", 2_048),

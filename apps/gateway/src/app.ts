@@ -65,7 +65,7 @@ export interface GatewayDependencies {
 const defaultDependencies: GatewayDependencies = {
   capabilityProvider: { get: async () => fakeCapabilityCatalogue },
   explanationAdapter: new FakeExplanationAdapter(),
-  explanationTimeoutMilliseconds: 30_000,
+  explanationTimeoutMilliseconds: 90_000,
   getClientAddress: () => "unknown-network",
   logger: consoleGatewayLogger,
   operationsMetrics: null,

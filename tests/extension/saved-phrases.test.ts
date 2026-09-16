@@ -96,13 +96,15 @@ describe("saving, searching and deleting", () => {
     expect(removeSavedPhrase(records, "missing")).toHaveLength(2);
   });
 
-  it("exports readable JSON carrying every saved phrase", () => {
-    const exported = JSON.parse(serializeSavedPhrases([phrase()])) as {
-      phrases: SavedPhrase[];
-      version: number;
-    };
-    expect(exported.version).toBe(1);
-    expect(exported.phrases).toEqual([phrase()]);
+  it("exports a readable text file carrying every saved phrase", () => {
+    const exported = serializeSavedPhrases([phrase()]);
+    expect(exported).toBe("Source:\nGood morning\n\nTranslation:\nशुभ प्रभात\n");
+    expect(exported).toContain("Source:\nGood morning");
+    expect(exported).toContain("Translation:\nशुभ प्रभात");
+    expect(exported).not.toContain("LingoBridge Saved Phrases");
+    expect(exported).not.toContain("Languages: en -> ne");
+    expect(exported).not.toContain("Provider:");
+    expect(exported).not.toContain('{"phrases"');
   });
 });
 

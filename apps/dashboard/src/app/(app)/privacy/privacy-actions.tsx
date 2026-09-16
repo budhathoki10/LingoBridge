@@ -105,8 +105,8 @@ export function PrivacyActions({
           <div className="setting__text">
             <h3>Download account data</h3>
             <p>
-              Your account details, preferences, saved phrases, and connected-extension history, as
-              JSON.
+              Your account details, preferences, saved phrases, and connected-extension history in a
+              readable text file.
             </p>
           </div>
           <div className="setting__control setting__control--end">

@@ -19,7 +19,7 @@ export const operationOutcomeSchema = z.enum([
   "invalid-request",
 ]);
 
-export const metricProviderSchema = z.enum(["nvidia", "google", "fake", "none"]);
+export const metricProviderSchema = z.enum(["mymemory", "nvidia", "google", "fake", "none"]);
 
 const countSchema = z.number().int().min(0);
 const latencySchema = z.number().int().min(0).nullable();

@@ -29,9 +29,11 @@ describe("online provider consent", () => {
     expect(await repository.load()).toBeNull();
     const consent = await repository.accept();
     expect(consent).toMatchObject({
-      google: true,
-      googleBackup: true,
+      google: false,
+      googleBackup: false,
+      myMemory: true,
       nvidia: true,
+      nvidiaBackup: true,
       version: ONLINE_PROVIDER_CONSENT_VERSION,
     });
     expect(await repository.load()).toEqual(consent);

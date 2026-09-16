@@ -19,9 +19,10 @@
       <section>
         <h2>Who processes the text?</h2>
         <p>
-          In Phase 4, the gateway sends the chosen text to NVIDIA Riva Translate 4B Instruct v2
-          first for supported directions. Google Cloud Translation Advanced is used only as a
-          backup when it is configured and the requested direction is supported.
+          The gateway sends the chosen text and language pair to MyMemory first. Every MyMemory
+          request also includes the gateway owner's configured contact email in the provider's
+          <code>de</code> parameter. If MyMemory fails or reaches its quota, NVIDIA Riva Translate
+          4B Instruct v2 is attempted once only for a supported language direction.
         </p>
       </section>
 
@@ -29,7 +30,7 @@
         <h2>Explain</h2>
         <p>
           When you click Explain on a translation, the gateway sends only that selected text, its
-          translation, and the two language codes to NVIDIA Nemotron 3 Super to write a short,
+          translation, and the two language codes to NVIDIA Nemotron 3 Ultra to write a short,
           simple explanation with examples in the language you translated into. Explain asks for its own permission the first time,
           works only on short phrases, and is never used unless you click it.
         </p>
@@ -55,22 +56,25 @@
       </section>
 
       <p class="provider-link">
-        Read NVIDIA's
+        Read MyMemory's
+        <a href="https://mymemory.translated.net/doc/spec.php" rel="noreferrer" target="_blank"
+          >API specification</a
+        >, its
+        <a href="https://mymemory.translated.net/terms-and-conditions" rel="noreferrer" target="_blank"
+          >terms</a
+        >, and NVIDIA's
         <a
           href="https://build.nvidia.com/nvidia/riva-translate-4b-instruct-v2/modelcard"
           rel="noreferrer"
           target="_blank"
           >model card</a
         >
-        and Google's
-        <a href="https://cloud.google.com/translate/data-usage" rel="noreferrer" target="_blank"
-          >Cloud Translation data usage terms</a
-        >. Explanations use NVIDIA's
+        . Explanations use NVIDIA's
         <a
-          href="https://build.nvidia.com/nvidia/nemotron-3-super-120b-a12b/modelcard"
+          href="https://build.nvidia.com/nvidia/nemotron-3-ultra-550b-a55b/modelcard"
           rel="noreferrer"
           target="_blank"
-          >Nemotron 3 Super model</a
+          >Nemotron 3 Ultra model</a
         >.
       </p>
     </main>

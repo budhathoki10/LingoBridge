@@ -31,7 +31,7 @@
 ## Privacy
 
 - A public privacy policy identifies all processed data and providers.
-- The policy names NVIDIA as primary for supported directions and Google as a possible backup.
+- The policy names MyMemory as primary, discloses the configured contact email sent as `de`, and names NVIDIA as a possible fallback for supported directions.
 - Store disclosures match actual network behaviour.
 - First online use requests informed consent.
 - Sensitive-text warnings prevent silent automatic transmission.
@@ -47,7 +47,7 @@
 - The security review in `docs/05-security-and-privacy.md` is complete.
 - Provider keys exist only in deployment secrets.
 - Gateway validation, limits, timeouts, and safe logging are verified.
-- NVIDIA is pair-allowlisted and impossible for Nepali with the selected model; Google backup is limited to one attempt.
+- NVIDIA is pair-allowlisted and impossible for Nepali with the selected model; fallback is limited to one attempt.
 - Dependencies and the final archive have been reviewed.
 - OAuth/OIDC redirect URLs, PKCE, state, nonce, token rotation, expiry, and revocation are verified in production configuration.
 - Dashboard cookies, CSRF controls, CSP, origin rules, authorization checks, and rate limits are verified.
@@ -67,7 +67,7 @@
 
 - Required automated checks pass.
 - English and Nepali review targets pass.
-- Automated request-contract smoke tests pass for every advertised NVIDIA direction and every enabled Google backup route.
+- Automated request-contract smoke tests pass for MyMemory success and quota cases and every advertised NVIDIA fallback direction.
 - Keyboard and zoom checks pass.
 - Chrome stable is tested on Windows.
 - Installation, update, disable, re-enable, and uninstall flows are tested.

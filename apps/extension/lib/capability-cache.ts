@@ -20,15 +20,27 @@ export function markCapabilityCatalogueStale(catalogue: CapabilityCatalogue): Ca
   return capabilityCatalogueSchema.parse({ ...catalogue, freshness: "stale" });
 }
 
+export function isCurrentCapabilityCatalogue(catalogue: CapabilityCatalogue): boolean {
+  if (catalogue.source === "fake") return true;
+  return (
+    catalogue.source === "hybrid-online" &&
+    catalogue.googlePairing === "all-listed" &&
+    catalogue.languages.some((language) => language.myMemorySource && language.myMemoryTarget)
+  );
+}
+
 export function createCapabilityCache(storage: CapabilityCacheStorage) {
   return {
     async load(): Promise<CapabilityCatalogue | null> {
       const stored = await storage.get(STORAGE_KEY);
       const parsed = capabilityCatalogueSchema.safeParse(stored[STORAGE_KEY]);
-      return parsed.success ? parsed.data : null;
+      return parsed.success && isCurrentCapabilityCatalogue(parsed.data) ? parsed.data : null;
     },
     async save(catalogue: CapabilityCatalogue): Promise<void> {
       const validated = capabilityCatalogueSchema.parse(catalogue);
+      if (!isCurrentCapabilityCatalogue(validated)) {
+        throw new Error("The language catalogue predates MyMemory support.");
+      }
       await storage.set({ [STORAGE_KEY]: validated });
     },
   };

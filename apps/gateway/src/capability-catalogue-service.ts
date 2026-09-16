@@ -10,6 +10,7 @@ export interface CapabilityCatalogueStore {
 }
 
 export interface CapabilityCatalogueServiceOptions {
+  acceptStoredCatalogue?: (catalogue: CapabilityCatalogue) => boolean;
   freshForMilliseconds: number;
   retryAfterFailureMilliseconds: number;
 }
@@ -94,7 +95,13 @@ export class CapabilityCatalogueService {
     this.initialized = true;
     try {
       const parsed = capabilityCatalogueSchema.safeParse(await this.store.load());
-      if (parsed.success && parsed.data.source !== "fake") this.cached = parsed.data;
+      if (
+        parsed.success &&
+        parsed.data.source !== "fake" &&
+        (this.options.acceptStoredCatalogue?.(parsed.data) ?? true)
+      ) {
+        this.cached = parsed.data;
+      }
     } catch {
       this.cached = null;
     }

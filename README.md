@@ -2,11 +2,11 @@
 
 Status: **Phase 0 through Phase 5, Phase 7, and Phase 8 implementation and focused automated verification are complete locally. Phase 6 is deferred; Phase 9 has not started. Credentialed provider and Google sign-in smoke tests remain deployment evidence.**
 
-LingoBridge is a multilingual product with two user-facing surfaces: a Chrome extension for translation where users browse and a web dashboard for saved phrases, preferences, connected extension sessions, export, and account control. LingoBridge exposes every language currently supported by its primary Google provider. English–Nepali receives deeper evaluation, but it is not the complete product boundary.
+LingoBridge is a multilingual product with two user-facing surfaces: a Chrome extension for translation where users browse and a web dashboard for saved phrases, preferences, connected extension sessions, export, and account control. LingoBridge exposes the complete reviewed MyMemory compatibility catalogue. English–Nepali receives deeper evaluation, but it is not the complete product boundary.
 
 The product is deliberately focused. It translates text selected by the user; it does not continuously read browsing history or automatically rewrite complete websites.
 
-In Online mode, LingoBridge sends requests to its own gateway. The gateway uses NVIDIA Riva Translate 4B Instruct v2 as the primary provider for reviewed supported directions and may use Google Cloud Translation as a disclosed backup when Google is configured. The selected provider is never called directly from the extension.
+In Online mode, LingoBridge sends requests to its own gateway. The gateway uses MyMemory as the primary translation service and falls back once to NVIDIA Riva Translate 4B Instruct v2 when MyMemory fails or reports exhausted quota and NVIDIA supports the requested direction. The selected provider is never called directly from the extension.
 
 ## Why it is useful
 
@@ -55,18 +55,19 @@ Run one surface with `pnpm dev:dashboard`, `pnpm dev:extension`, or `pnpm dev:ga
 
 The dashboard uses a development-only identity provider and an embedded database locally. Production uses Google OpenID Connect and MongoDB Atlas with server-only configuration. See [dashboard operations](docs/14-dashboard-operations.md) for the exact environment, maintenance command, and remaining deployment checks.
 
-### Run the NVIDIA-backed gateway locally
+### Run the live gateway locally
 
-NVIDIA live mode uses a gateway-only API key. Load the unpacked extension once, copy its ID from `chrome://extensions`, and start the gateway with exact configuration:
+MyMemory uses a configured contact email in its `de` parameter, and NVIDIA fallback uses a gateway-only API key. Load the unpacked extension once, copy its ID from `chrome://extensions`, and start the gateway with exact configuration:
 
 ```powershell
 $env:LINGOBRIDGE_TRANSLATION_MODE = "live"
 $env:LINGOBRIDGE_ALLOWED_EXTENSION_ORIGINS = "chrome-extension://YOUR_EXTENSION_ID"
+$env:MYMEMORY_CONTACT_EMAIL = "YOUR_CONTACT_EMAIL"
 $env:NVIDIA_API_KEY = "YOUR_NVIDIA_API_KEY"
 pnpm dev:gateway
 ```
 
-Google backup remains optional. After enabling Cloud Translation for your Google Cloud project and establishing ADC outside this repository, add:
+Google capability metadata remains optional. After enabling Cloud Translation for your Google Cloud project and establishing ADC outside this repository, add:
 
 ```powershell
 $env:GOOGLE_CLOUD_PROJECT = "YOUR_GOOGLE_CLOUD_PROJECT_ID"

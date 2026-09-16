@@ -139,9 +139,9 @@ export class OperationalMetrics {
     }
   }
 
-  recordFallback(succeeded: boolean): void {
+  recordFallback(provider: MetricProvider, succeeded: boolean): void {
     this.#rollIfNeeded();
-    const bucket = this.#bucket("google");
+    const bucket = this.#bucket(provider);
     bucket.fallbackAttempts += 1;
     if (succeeded) bucket.fallbackSuccesses += 1;
   }

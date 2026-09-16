@@ -6,7 +6,7 @@ Status: **Phase 3 live-catalogue implementation and automated verification compl
 
 LingoBridge is multilingual. Online mode exposes every source and target language currently supported by the active online capability catalogue instead of limiting the product to English and Nepali.
 
-This promise applies to standard text translation. Enhanced capabilities such as on-device processing, Google backup, transliteration, speech, Romanized input, and translation styles have their own smaller support matrices.
+This promise applies to standard text translation. Enhanced capabilities such as NVIDIA fallback, on-device processing, transliteration, speech, Romanized input, and translation styles have their own smaller support matrices.
 
 ## Capability catalogue
 
@@ -20,15 +20,21 @@ The extension reads a normalized catalogue from the LingoBridge gateway through 
 - transliteration, romanization, speech, and style availability;
 - catalogue version and last verification time.
 
-The gateway builds its Google catalogue from Cloud Translation's supported-language capability and keeps a reviewed last-known-good snapshot. The extension caches the last valid LingoBridge catalogue so the language picker can still open during a temporary capability-service failure.
+The gateway ships the reviewed MyMemory catalogue and may enrich exact matching tags with Google capability metadata when configured. It keeps a validated last-known-good snapshot, and the extension caches the last valid LingoBridge catalogue so the language picker can still open during a temporary capability-service failure.
 
-## NVIDIA primary coverage
+## MyMemory primary coverage
 
-NVIDIA Riva Translate 4B Instruct v2 is the primary provider for reviewed supported directions exposed by the active catalogue. Current implementation enables English-pivot directions only, matching the model-card benchmark shape rather than inferring every possible pair. The selected NVIDIA model does not include Nepali.
+MyMemory is attempted first for every distinct source-target pair in LingoBridge's reviewed MyMemory compatibility catalogue. MyMemory's API accepts ISO or RFC 3066 language tags but does not publish a machine-readable language-catalogue endpoint, so the checked-in catalogue is reviewed from the maintained MyMemory integration list and carries a verification date. Provider rejection remains a safe failure or eligible NVIDIA fallback. Each MyMemory segment is limited to 500 UTF-8 bytes.
 
-## Google backup coverage
+The all-listed pairing policy is encoded with per-language `myMemorySource` and `myMemoryTarget` flags instead of expanding the catalogue into tens of thousands of duplicate direction rows. Regional and script variants remain separate picker entries when MyMemory exposes separate tags for them.
 
-Google Cloud Translation is an optional backup provider when the gateway is configured with a Google project and Application Default Credentials. Google general NMT's documented all-supported-source-to-all-supported-target behavior is represented compactly by source and target flags on each listed language; it is not expanded into a quadratic response. The architecture does not hard-code a language count because Google can add or change languages.
+## NVIDIA fallback coverage
+
+NVIDIA Riva Translate 4B Instruct v2 is the one-attempt fallback for reviewed supported directions exposed by the active catalogue. Current implementation enables English-pivot directions only, matching the model-card benchmark shape rather than inferring every possible pair. The selected NVIDIA model does not include Nepali.
+
+MyMemory-only languages stay available while MyMemory is healthy. If MyMemory fails for one of those languages, NVIDIA is not called and the gateway returns a retryable provider error. NVIDIA model tags are mapped only from reviewed compatible MyMemory tags; unsupported languages and variants are blocked from fallback.
+
+Google Cloud Translation may supply optional capability metadata when the gateway is configured with a Google project and Application Default Credentials. It is not in the translation route.
 
 Standard translation availability does not automatically mean that transliteration, speech, custom styles, or local processing are available. The interface must disable or explain unsupported enhancements per language pair.
 
@@ -88,13 +94,15 @@ NVIDIA is enabled only for exact language-pair tags documented and verified for 
 ## Release checks
 
 - Every advertised NVIDIA pair receives an automated request-contract smoke test.
-- Every enabled Google backup path receives a success, failure, and provider-labelling test.
+- Every enabled NVIDIA fallback path receives a success, failure, and provider-labelling test.
 - A representative set of high-use scripts receives visual and copy/paste testing.
 - English–Nepali receives the deeper human quality evaluation defined in the testing document.
 - Right-to-left scripts, complex scripts, accents, surrogate pairs, and mixed-language text receive interface tests.
 
 ## Primary sources
 
+- [MyMemory API technical specification](https://mymemory.translated.net/doc/spec.php)
+- [Deep Translator MyMemory compatibility catalogue](https://github.com/nidhaloff/deep-translator/blob/master/deep_translator/constants.py)
 - [Google Cloud Translation language support](https://docs.cloud.google.com/translate/docs/languages)
 - [Google Cloud Translation API reference](https://docs.cloud.google.com/translate/docs/reference/rest)
 - [NVIDIA Riva Translate 4B Instruct v2 model card](https://build.nvidia.com/nvidia/riva-translate-4b-instruct-v2/modelcard)
