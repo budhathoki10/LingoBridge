@@ -10,6 +10,7 @@ import {
   EXPLANATION_SYSTEM_PROMPT,
   extractJsonObject,
   looksLikeRestatement,
+  normalizeDigits,
   NvidiaExplanationAdapter,
   SIMPLER_WORDS_NUDGE,
 } from "../../apps/gateway/src/nvidia-explanation-adapter";
@@ -26,6 +27,8 @@ import {
   GATEWAY_ROUTES,
   MAX_EXPLANATION_SOURCE_CODE_POINTS,
   translationErrorSchema,
+  type WordUnderstandingRequest,
+  wordUnderstandingResultSchema,
 } from "../../packages/contracts/src/index";
 
 const explanationRequest: ExplanationRequest = {
@@ -124,6 +127,29 @@ describe("explain route", () => {
   });
 });
 
+describe("word-understanding route", () => {
+  it("returns structured context for one explicitly requested word", async () => {
+    const request: WordUnderstandingRequest = {
+      ...explanationRequest,
+      operation: "understand-word",
+      sourceText: "The team completed the deployment yesterday.",
+      translatedText: "टोलीले हिजो परिनियोजन पूरा गर्यो।",
+      targetLanguage: "ne",
+      word: "deployment",
+    };
+    const response = await testApp().request(GATEWAY_ROUTES.understandWord, {
+      body: JSON.stringify(request),
+      headers,
+      method: "POST",
+    });
+    expect(response.status).toBe(200);
+    expect(wordUnderstandingResultSchema.parse(await response.json())).toMatchObject({
+      provider: "nvidia",
+      word: "deployment",
+    });
+  });
+});
+
 class RecordingNvidiaClient implements NvidiaTranslationClient {
   calls: NvidiaChatCompletionRequest[] = [];
 
@@ -173,6 +199,34 @@ describe("NvidiaExplanationAdapter", () => {
     expect(call?.messages[1]?.content).toContain("Reader's language: Japanese (ja)");
     expect(call?.messages[1]?.content).toContain("Source language: English (en)");
     expect(call?.messages[1]?.content).toContain("<selected_text>break a leg</selected_text>");
+  });
+
+  it("fixes numbers Nemotron partly transliterated into Devanagari digits", async () => {
+    const numberRequest = {
+      ...explanationRequest,
+      sourceText: "You can translate about 830 to 1,000 words per day",
+      targetLanguage: "ne",
+      translatedText: "तपाईं प्रति दिन लगभग ८३० देखि १,००० शब्दहरू अनुवाद गर्न सक्नुहुन्छ",
+    };
+    const answer = {
+      ...modelAnswer,
+      meaning: "यो भन्छ कि एक दिनमा कति शब्द अनुवाद गर्न सकिन्छ।",
+      examples: [
+        {
+          source:
+            "The project manager said you can translate about 830 to 1,000 words per day, so we have two weeks for this 15,000-word job.",
+          translation:
+            "प्रोजेक्ट म्यानेजरले भनेका छन् कि तपाईं प्रति दिन ८३० देखि १,000 शब्द अनुवाद गर्न सक्नुहुन्छ, त्यसैले हामीसँग यो १५,000 शब्दको कामका लागि दुई हप्ता छन्।",
+        },
+      ],
+    };
+    const result = await new NvidiaExplanationAdapter(
+      new RecordingNvidiaClient(reply(JSON.stringify(answer))),
+    ).explain(numberRequest, new AbortController().signal);
+
+    expect(result.examples[0]?.translation).not.toMatch(/[०-९]/u);
+    expect(result.examples[0]?.translation).toContain("830 देखि 1,000");
+    expect(result.examples[0]?.translation).toContain("15,000 शब्दको");
   });
 
   it("drops a repeated translation pair and keeps one contextual example", async () => {

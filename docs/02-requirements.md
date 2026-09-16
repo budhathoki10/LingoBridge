@@ -47,6 +47,10 @@
 - Show an uncertainty message when language detection or translation confidence is low.
 - Save phrases only when the user chooses Save.
 - Keep saved phrases locally by default.
+- After a successful translation, let the user explicitly choose a word in the original selected
+  text and request a concise contextual definition, translation, part of speech, and example.
+- Do not analyze words automatically. Cache repeated word requests only for the current open
+  translator and save vocabulary only after a separate Save word action.
 - Replace text only inside an editable field and only after the user confirms.
 - In Online mode, use MyMemory first and include the configured server-side contact email as its `de` parameter on every provider request.
 - If MyMemory fails, reports exhausted quota, or returns an unusable response, attempt NVIDIA Riva Translate 4B Instruct v2 once when the requested direction is reviewed as supported and the user accepted both providers.
@@ -59,6 +63,7 @@
 - Let a user connect the extension to the same account through an explicit browser authentication flow.
 - Synchronize only phrases the user explicitly saves and preferences approved for sync.
 - Show an overview, searchable saved phrases, language filters, connected extension sessions, settings, export, and account deletion.
+- Show searchable saved vocabulary with delete and text-export actions, separately from phrases.
 - Let users edit notes, delete one phrase, delete all phrases, revoke an extension session, export their data, and delete their account.
 - Keep site permissions, sensitive-text decisions, and device-specific On-device state local to each extension installation.
 - Do not store a complete cloud translation history by default.

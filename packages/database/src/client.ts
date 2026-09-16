@@ -129,6 +129,22 @@ export interface DeletionReceiptDocument {
   userId: string;
 }
 
+export interface VocabularyDocument {
+  contextMeaning: string;
+  example: string;
+  id: string;
+  meaning: string;
+  partOfSpeech: string;
+  pronunciation: string | null;
+  savedAt: Date;
+  sourceLanguage: string;
+  sourceText: string;
+  targetLanguage: string;
+  translation: string;
+  userId: string;
+  word: string;
+}
+
 export interface CollectionDocuments {
   deletionReceipts: DeletionReceiptDocument;
   extensionAuthorizationCodes: ExtensionAuthorizationCodeDocument;
@@ -138,6 +154,7 @@ export interface CollectionDocuments {
   preferences: PreferencesDocument;
   syncMutations: SyncMutationDocument;
   users: UserDocument;
+  vocabulary: VocabularyDocument;
   webSessions: WebSessionDocument;
 }
 

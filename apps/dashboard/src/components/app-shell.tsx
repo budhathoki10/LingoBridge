@@ -36,6 +36,7 @@ interface NavItem {
 const PRIMARY_NAV: NavItem[] = [
   { href: "/overview", icon: OverviewIcon, label: "Overview" },
   { href: "/phrases", icon: PhrasesIcon, label: "Saved phrases" },
+  { href: "/vocabulary", icon: PhrasesIcon, label: "My vocabulary" },
   { href: "/preferences", icon: PreferencesIcon, label: "Preferences" },
   { href: "/extensions", icon: ExtensionsIcon, label: "Connected extensions" },
   { href: "/privacy", icon: PrivacyIcon, label: "Privacy and data" },

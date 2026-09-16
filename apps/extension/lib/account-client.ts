@@ -7,6 +7,8 @@ import {
   type SyncRequest,
   type SyncResponse,
   syncResponseSchema,
+  type SavedWordRecord,
+  vocabularyUpsertResponseSchema,
 } from "@lingobridge/contracts/account";
 import type { CredentialStore, StoredCredentials } from "./account-credentials";
 
@@ -229,6 +231,26 @@ export function createAccountClient(options: AccountClientOptions) {
         );
       }
       return parsed.data;
+    },
+
+    async saveWord(word: SavedWordRecord): Promise<void> {
+      let credentials = await validCredentials();
+      let response = await post(DASHBOARD_API_ROUTES.vocabulary, { word }, credentials.accessToken);
+      if (response.status === 401) {
+        credentials = await refresh(credentials);
+        response = await post(DASHBOARD_API_ROUTES.vocabulary, { word }, credentials.accessToken);
+      }
+      if (!response.ok) throw await failure(response);
+      const parsed = vocabularyUpsertResponseSchema.safeParse(
+        await response.json().catch(() => null),
+      );
+      if (!parsed.success) {
+        throw new AccountClientError(
+          "invalid-response",
+          "The dashboard returned an unexpected vocabulary response.",
+          true,
+        );
+      }
     },
 
     /** Best effort: local credentials are removed whether or not the dashboard is reachable. */

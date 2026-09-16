@@ -11,6 +11,7 @@ export * from "./phrases.js";
 export * from "./sessions.js";
 export * from "./sync.js";
 export * from "./users.js";
+export * from "./vocabulary.js";
 
 export const DEFAULT_DATABASE_NAME = "lingobridge";
 

@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import type { LivePhraseRecord, SyncedPreferences } from "@lingobridge/contracts/account";
+import type {
+  LivePhraseRecord,
+  SavedWordRecord,
+  SyncedPreferences,
+} from "@lingobridge/contracts/account";
 import {
   type CollectionName,
   collection,
@@ -14,6 +18,7 @@ import { getPreferences, toLivePhraseRecords } from "./phrases.js";
 import { type ExtensionSession, listExtensionSessions } from "./sessions.js";
 import { lockAccount } from "./sync.js";
 import { findUserById } from "./users.js";
+import { listSavedWords } from "./vocabulary.js";
 
 /**
  * Deletion window: synchronized phrases, preferences, sync receipts, and every session are removed
@@ -49,6 +54,7 @@ export interface AccountDeletionResult {
 /** Collections whose documents belong to one user through a `userId` field. */
 const USER_CONTENT_COLLECTIONS = [
   "phrases",
+  "vocabulary",
   "syncMutations",
   "loginAttempts",
   "extensionAuthorizationCodes",
@@ -163,6 +169,7 @@ export interface AccountExport {
   phrases: LivePhraseRecord[];
   preferences: SyncedPreferences;
   version: 1;
+  vocabulary: SavedWordRecord[];
 }
 
 export async function listAllLivePhrases(
@@ -191,6 +198,7 @@ export async function exportAccount(
   const phrases = await listAllLivePhrases(client, userId);
   const preferences = await getPreferences(client, userId);
   const sessions = await listExtensionSessions(client, userId);
+  const vocabulary = await listSavedWords(client, userId);
   return {
     account: {
       createdAt: user.createdAt,
@@ -208,6 +216,7 @@ export async function exportAccount(
     phrases,
     preferences,
     version: 1,
+    vocabulary,
   };
 }
 

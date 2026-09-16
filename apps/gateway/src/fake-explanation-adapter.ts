@@ -1,4 +1,9 @@
-import { type ExplanationRequest, explanationResultSchema } from "@lingobridge/contracts";
+import {
+  type ExplanationRequest,
+  explanationResultSchema,
+  type WordUnderstandingRequest,
+  wordUnderstandingResultSchema,
+} from "@lingobridge/contracts";
 import type { ExplanationAdapter } from "./explanation-adapter.js";
 import { TranslationAdapterError } from "./translation-adapter.js";
 
@@ -45,6 +50,21 @@ export class FakeExplanationAdapter implements ExplanationAdapter {
       register: "neutral",
       requestId: request.requestId,
       usageNote: "Simulated explanation. Live mode uses NVIDIA Nemotron 3 Ultra.",
+    });
+  }
+
+  async understandWord(request: WordUnderstandingRequest, signal: AbortSignal) {
+    await wait(this.delayMilliseconds, signal);
+    return wordUnderstandingResultSchema.parse({
+      contextMeaning: `Here, “${request.word}” has the meaning used in this sentence.`,
+      example: `This example uses ${request.word} in context.`,
+      meaning: `A simple meaning of ${request.word}.`,
+      partOfSpeech: "word",
+      pronunciation: null,
+      provider: "nvidia",
+      requestId: request.requestId,
+      translation: request.word,
+      word: request.word,
     });
   }
 }

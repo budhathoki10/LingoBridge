@@ -17,6 +17,8 @@ import {
   revokeExtensionSession,
   updateDashboardPreferences,
   updatePhraseNote,
+  deleteSavedWords,
+  listSavedWords,
 } from "@lingobridge/database";
 import type { LivePhraseRecord } from "@lingobridge/contracts/account";
 import { z } from "zod";
@@ -95,6 +97,22 @@ export async function handleDeletePhrases(
     "all" in input.data
       ? await deleteAllPhrases(services.database, userId, services.now())
       : await deletePhrases(services.database, userId, input.data.phraseIds, services.now());
+  return jsonResponse({ deleted });
+}
+
+const vocabularyDeleteSchema = z.object({ ids: z.array(phraseIdSchema).min(1).max(500) }).strict();
+
+export async function handleDeleteVocabulary(
+  request: Request,
+  services: DashboardServices,
+): Promise<Response> {
+  const input = await mutation(request, services, vocabularyDeleteSchema);
+  if (!input.ok) return input.response;
+  const deleted = await deleteSavedWords(
+    services.database,
+    input.auth.auth.user.id,
+    input.data.ids,
+  );
   return jsonResponse({ deleted });
 }
 
@@ -213,20 +231,43 @@ function formatAccountExport(exported: AccountExport): string {
     );
   }
   lines.push("", `SAVED PHRASES (${exported.phrases.length})`, ...formatPhrases(exported.phrases));
+  lines.push("", `SAVED VOCABULARY (${exported.vocabulary.length})`);
+  for (const word of exported.vocabulary) {
+    lines.push("", word.word, word.translation, word.meaning);
+  }
   return `${lines.join("\n")}\n`;
 }
 
-/** GET /api/dashboard/export?scope=phrases|account */
+/** GET /api/dashboard/export?scope=phrases|vocabulary|account */
 export async function handleExport(
   request: Request,
   services: DashboardServices,
 ): Promise<Response> {
   const auth = await authenticateDashboardRequest(request, services, { mutation: false });
   if (!auth.ok) return auth.response;
+  const requestedScope = new URL(request.url).searchParams.get("scope");
   const scope =
-    new URL(request.url).searchParams.get("scope") === "account" ? "account" : "phrases";
+    requestedScope === "account"
+      ? "account"
+      : requestedScope === "vocabulary"
+        ? "vocabulary"
+        : "phrases";
   const now = services.now();
   const userId = auth.auth.user.id;
+  if (scope === "vocabulary") {
+    const words = await listSavedWords(services.database, userId);
+    const text = `${words
+      .map((word) => `${word.word}\n${word.translation}\n${word.meaning}`)
+      .join("\n\n----------------------------------------\n\n")}\n`;
+    return new Response(text, {
+      headers: {
+        "Cache-Control": "no-store",
+        "Content-Disposition": `attachment; filename="lingobridge-vocabulary-${now.toISOString().slice(0, 10)}.txt"`,
+        "Content-Type": "text/plain; charset=utf-8",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  }
   const exported =
     scope === "account"
       ? await exportAccount(services.database, userId, now)

@@ -25,6 +25,13 @@ The dashboard gives signed-in users a safe place to manage information they deli
 - Delete one or multiple phrases.
 - Export the user's phrases.
 
+### My vocabulary
+
+- View words explicitly saved from Word Understanding, separately from saved phrases.
+- Search by original word or translation.
+- Delete saved words and export vocabulary as plain text.
+- Show meaning and part of speech without creating automatic translation history.
+
 ### Preferences
 
 - Preferred target language.

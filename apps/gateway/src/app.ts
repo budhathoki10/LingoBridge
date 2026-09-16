@@ -14,6 +14,8 @@ import {
   translationErrorSchema,
   translationRequestSchema,
   translationResultSchema,
+  wordUnderstandingRequestSchema,
+  wordUnderstandingResultSchema,
 } from "@lingobridge/contracts";
 import { OPERATIONS_METRICS_ROUTE } from "@lingobridge/contracts/operations";
 import { type Context, Hono } from "hono";
@@ -184,7 +186,7 @@ function providerFailure(
   context: Context,
   error: unknown,
   requestId: string,
-  work: "translation" | "explanation",
+  work: "translation" | "explanation" | "word understanding",
 ) {
   const cancelled = () =>
     context.json(
@@ -434,6 +436,66 @@ export function createGatewayApp(dependencies: Partial<GatewayDependencies> = {}
         return context.json(parsedResult.data);
       } catch (error) {
         return providerFailure(context, error, request.requestId, "translation");
+      }
+    },
+  );
+
+  app.post(
+    GATEWAY_ROUTES.understandWord,
+    bodyLimit({
+      maxSize: MAX_GATEWAY_REQUEST_BYTES,
+      onError: (context) =>
+        invalidRequest(context, "The word-understanding request body is too large.", 413),
+    }),
+    async (context) => {
+      const accepted = await acceptJsonPost(context, resolvedDependencies);
+      if (!accepted.ok) return accepted.response;
+      const parsedRequest = wordUnderstandingRequestSchema.safeParse(accepted.payload);
+      if (!parsedRequest.success) {
+        return context.json(
+          createError(
+            "invalid-request",
+            "The word-understanding request did not match the supported contract.",
+            safeRequestId(accepted.payload),
+            false,
+          ),
+          400,
+        );
+      }
+      const request = parsedRequest.data;
+      const adapter = resolvedDependencies.explanationAdapter;
+      if (!adapter) {
+        return context.json(
+          createError(
+            "provider-unavailable",
+            "Word understanding is not set up on this gateway yet.",
+            request.requestId,
+            false,
+          ),
+          503,
+        );
+      }
+      try {
+        const result = await runWithProviderDeadline(
+          (signal) => adapter.understandWord(request, signal),
+          context.req.raw.signal,
+          resolvedDependencies.explanationTimeoutMilliseconds,
+        );
+        const parsedResult = wordUnderstandingResultSchema.safeParse(result);
+        if (!parsedResult.success) {
+          return context.json(
+            createError(
+              "provider-unavailable",
+              "The word-understanding provider returned an unusable response.",
+              request.requestId,
+              true,
+            ),
+            502,
+          );
+        }
+        return context.json(parsedResult.data);
+      } catch (error) {
+        return providerFailure(context, error, request.requestId, "word understanding");
       }
     },
   );

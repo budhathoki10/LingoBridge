@@ -17,6 +17,10 @@ import {
   translationErrorSchema,
   translationRequestSchema,
   translationResultSchema,
+  type WordUnderstandingRequest,
+  type WordUnderstandingResult,
+  wordUnderstandingRequestSchema,
+  wordUnderstandingResultSchema,
 } from "@lingobridge/contracts";
 import { GATEWAY_ORIGIN } from "./gateway-config";
 import { getAnonymousInstallationId } from "./installation-id";
@@ -56,6 +60,10 @@ export interface GatewayClient {
   inspect(signal?: AbortSignal): Promise<GatewaySnapshot>;
   inspectService(signal?: AbortSignal): Promise<GatewayServiceSnapshot>;
   translate(request: TranslationRequest, signal: AbortSignal): Promise<TranslationResult>;
+  understandWord(
+    request: WordUnderstandingRequest,
+    signal: AbortSignal,
+  ): Promise<WordUnderstandingResult>;
 }
 
 interface GatewayClientOptions {
@@ -217,6 +225,28 @@ export function createGatewayClient(options: GatewayClientOptions = {}): Gateway
       };
     },
     inspectService,
+
+    async understandWord(request, signal) {
+      const parsedRequest = wordUnderstandingRequestSchema.safeParse(request);
+      if (!parsedRequest.success) {
+        throw new GatewayClientError(
+          "invalid-request",
+          "The word-understanding request did not match the shared contract.",
+          false,
+        );
+      }
+      const parsedResult = wordUnderstandingResultSchema.safeParse(
+        await post(GATEWAY_ROUTES.understandWord, parsedRequest.data, signal),
+      );
+      if (!parsedResult.success) {
+        throw new GatewayClientError(
+          "invalid-response",
+          "The gateway word explanation did not match the shared contract.",
+          true,
+        );
+      }
+      return parsedResult.data;
+    },
 
     async translate(request, signal) {
       const parsedRequest = translationRequestSchema.safeParse(request);

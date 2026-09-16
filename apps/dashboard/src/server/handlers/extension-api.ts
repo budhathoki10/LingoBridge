@@ -12,8 +12,10 @@ import {
   extensionTokenRequestSchema,
   syncRequestSchema,
   syncResponseSchema,
+  vocabularyUpsertRequestSchema,
+  vocabularyUpsertResponseSchema,
 } from "@lingobridge/contracts/account";
-import { AccountUnavailableError, runSync } from "@lingobridge/database";
+import { AccountUnavailableError, runSync, upsertSavedWord } from "@lingobridge/database";
 import { cookieNames, readCookie } from "../cookies";
 import {
   errorResponse,
@@ -136,6 +138,27 @@ export async function handleSync(request: Request, services: DashboardServices):
       retryable: true,
     });
   }
+}
+
+/** POST /api/v1/vocabulary — stores one word only after an explicit Save word action. */
+export async function handleVocabularyUpsert(
+  request: Request,
+  services: DashboardServices,
+): Promise<Response> {
+  if (!extensionOriginAllowed(request, services)) {
+    return errorResponse("forbidden", "This origin cannot use the LingoBridge API.");
+  }
+  const auth = await authenticateExtensionBearer(
+    services.extensionAuth,
+    request.headers.get("Authorization"),
+  );
+  if (auth.kind !== "active") return bearerFailure(auth);
+  const body = await readJsonBody(request);
+  if (!body.ok) return body.response;
+  const parsed = vocabularyUpsertRequestSchema.safeParse(body.value);
+  if (!parsed.success) return errorResponse("invalid-request", "The saved word is not valid.");
+  const word = await upsertSavedWord(services.database, auth.user.id, parsed.data.word);
+  return jsonResponse(vocabularyUpsertResponseSchema.parse({ word }));
 }
 
 /**

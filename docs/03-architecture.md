@@ -58,6 +58,15 @@ Authenticates dashboard users through an approved OAuth or OpenID Connect provid
 
 Synchronizes only explicitly saved phrases and approved preferences. It uses stable record identifiers, revisions, idempotent writes, and deletion tombstones so retries do not duplicate records and deletions reach connected clients.
 
+### Word understanding
+
+After a translation succeeds, Unicode word segmentation makes words in the original selected text
+keyboard- and pointer-activatable. One explicit activation sends only that word, the selected text,
+its existing translation, and the language pair to the gateway's Nemotron integration. Structured
+responses are validated before display and cached only while the translator remains open. Save word
+writes a separate local vocabulary record and, when connected, an authenticated user-owned
+vocabulary record for the dashboard. No automatic word history is created.
+
 ### Cloud database
 
 A MongoDB database (Atlas in production; see ADR-004) stores users, extension sessions, synchronized phrases, sync revisions, approved preferences, deletion state, and content-free operational aggregates. Every user-owned query is scoped by the authenticated user identifier. Complete translation history is not stored.
