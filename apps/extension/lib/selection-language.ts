@@ -1,10 +1,12 @@
 import type { CapabilityCatalogue } from "@lingobridge/contracts";
 import { detectTextLanguage } from "./language-detection";
+import { normalizeRomanizedNepali, type RomanizedNepaliNormalization } from "./romanized-nepali";
 
 export interface ResolvedSelectionSource {
   /** True when detection came up empty and English is standing in for a real answer. */
   assumed: boolean;
   code: string;
+  romanizedNepali: RomanizedNepaliNormalization | null;
 }
 
 export function isSupportedSelectionTarget(
@@ -49,12 +51,19 @@ export function resolveSelectionSource(
   text: string,
   catalogue: CapabilityCatalogue,
 ): ResolvedSelectionSource {
+  const romanizedNepali = normalizeRomanizedNepali(text);
+  if (
+    romanizedNepali &&
+    catalogue.languages.some((language) => language.code === "ne" && language.googleSource)
+  ) {
+    return { assumed: false, code: "ne", romanizedNepali };
+  }
   for (const candidate of detectTextLanguage(text)) {
     if (catalogue.languages.some((language) => language.code === candidate)) {
-      return { assumed: false, code: candidate };
+      return { assumed: false, code: candidate, romanizedNepali: null };
     }
   }
-  return { assumed: true, code: "en" };
+  return { assumed: true, code: "en", romanizedNepali: null };
 }
 
 export function chooseSelectionTargetLanguage(

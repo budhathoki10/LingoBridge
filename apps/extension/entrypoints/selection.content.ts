@@ -166,6 +166,8 @@ interface TranslationContext {
   favouriteLanguageCodes: string[];
   gatewayMode: "fake" | "live";
   languages: PreviewLanguage[];
+  requestText: string;
+  romanizedNepali: boolean;
   sourceAssumed: boolean;
   sourceLanguage: string;
   targetLanguage: string;
@@ -759,6 +761,7 @@ function createController(): InstalledController {
 
   function sourceLanguageName(): string {
     if (!context) return "";
+    if (context.romanizedNepali) return "Romanized Nepali";
     return (
       getPreviewLanguage(context.sourceLanguage, context.languages)?.name ?? context.sourceLanguage
     );
@@ -1080,6 +1083,12 @@ function createController(): InstalledController {
           ? `Online via ${result.provider}`
           : `Simulated ${result.provider} route`;
       body.insertBefore(meta, actions);
+      if (context?.romanizedNepali) {
+        const note = document.createElement("p");
+        note.className = "privacy";
+        note.textContent = "Romanized Nepali was converted to Nepali script before translation.";
+        body.insertBefore(note, actions);
+      }
 
       if (replaceFeedback === "stale") {
         statusContent(status, "That text changed on the page, so nothing was replaced.", "warning");
@@ -1534,6 +1543,8 @@ function createController(): InstalledController {
       favouriteLanguageCodes: preferences.favouriteLanguageCodes,
       gatewayMode: service.version.translationMode,
       languages,
+      requestText: source.romanizedNepali?.text ?? activeSelection?.text ?? "",
+      romanizedNepali: Boolean(source.romanizedNepali),
       sourceAssumed: source.assumed,
       sourceLanguage: source.code,
       targetLanguage,
@@ -1615,7 +1626,7 @@ function createController(): InstalledController {
       requestId: crypto.randomUUID(),
       sourceLanguage: context.sourceLanguage,
       targetLanguage: context.targetLanguage,
-      text: activeSelection.text,
+      text: context.requestText,
     };
     try {
       const translated = await gatewayClient.translate(request, requestController.signal);
