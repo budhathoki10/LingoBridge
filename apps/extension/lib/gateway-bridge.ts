@@ -10,6 +10,9 @@ import {
   type TranslationRequest,
   translationRequestSchema,
   translationResultSchema,
+  type WordUnderstandingRequest,
+  wordUnderstandingRequestSchema,
+  wordUnderstandingResultSchema,
 } from "@lingobridge/contracts";
 import {
   type GatewayClient,
@@ -21,7 +24,13 @@ export const GATEWAY_BRIDGE_REQUEST = "lingobridge:gateway:request";
 export const GATEWAY_BRIDGE_ABORT = "lingobridge:gateway:abort";
 export const GATEWAY_BRIDGE_PORT = "lingobridge:gateway:port";
 
-const OPERATIONS = ["capabilities", "explain", "inspect-service", "translate"] as const;
+const OPERATIONS = [
+  "capabilities",
+  "explain",
+  "inspect-service",
+  "translate",
+  "understand-word",
+] as const;
 
 type GatewayBridgeErrorCode = TranslationError["code"] | "invalid-response" | "network-unavailable";
 
@@ -44,6 +53,7 @@ export type GatewayBridgeRequest = { id: string; type: typeof GATEWAY_BRIDGE_REQ
   | { operation: "inspect-service"; request: null }
   | { operation: "explain"; request: ExplanationRequest }
   | { operation: "translate"; request: TranslationRequest }
+  | { operation: "understand-word"; request: WordUnderstandingRequest }
 );
 
 export interface GatewayBridgeAbort {
@@ -90,6 +100,16 @@ export function parseGatewayBridgeRequest(value: unknown): GatewayBridgeRequest 
       id: value.id,
       operation: "explain",
       request: parsedExplanation.data,
+      type: GATEWAY_BRIDGE_REQUEST,
+    };
+  }
+  if (operation === "understand-word") {
+    const parsedWord = wordUnderstandingRequestSchema.safeParse(value.request);
+    if (!parsedWord.success) return null;
+    return {
+      id: value.id,
+      operation: "understand-word",
+      request: parsedWord.data,
       type: GATEWAY_BRIDGE_REQUEST,
     };
   }
@@ -168,7 +188,7 @@ function parseResponse(value: unknown): GatewayBridgeResponse {
 export function createBridgeGatewayClient(transport: GatewayBridgeTransport): GatewayClient {
   async function call(
     operation: GatewayBridgeOperation,
-    request: TranslationRequest | ExplanationRequest | null,
+    request: TranslationRequest | ExplanationRequest | WordUnderstandingRequest | null,
     signal?: AbortSignal,
   ): Promise<unknown> {
     if (signal?.aborted) throw abortError();
@@ -260,6 +280,27 @@ export function createBridgeGatewayClient(transport: GatewayBridgeTransport): Ga
       return { capabilities, ...service };
     },
     inspectService,
+    async understandWord(request, signal) {
+      const parsedRequest = wordUnderstandingRequestSchema.safeParse(request);
+      if (!parsedRequest.success) {
+        throw new GatewayClientError(
+          "invalid-request",
+          "The word-understanding request did not match the shared contract.",
+          false,
+        );
+      }
+      const parsedResult = wordUnderstandingResultSchema.safeParse(
+        await call("understand-word", parsedRequest.data, signal),
+      );
+      if (!parsedResult.success) {
+        throw new GatewayClientError(
+          "invalid-response",
+          "The gateway word explanation did not match the shared contract.",
+          true,
+        );
+      }
+      return parsedResult.data;
+    },
     async translate(request, signal) {
       const parsedRequest = translationRequestSchema.safeParse(request);
       if (!parsedRequest.success) {

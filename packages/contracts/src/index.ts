@@ -11,6 +11,7 @@ export const GATEWAY_ROUTES = {
   explain: "/v1/explain",
   health: "/v1/health",
   translate: "/v1/translate",
+  understandWord: "/v1/understand-word",
   version: "/v1/version",
 } as const;
 
@@ -163,6 +164,33 @@ export const explanationResultSchema = z
   })
   .strict();
 
+export const wordUnderstandingRequestSchema = z
+  .object({
+    consent: explanationConsentSchema,
+    operation: z.literal("understand-word"),
+    requestId: requestIdSchema,
+    sourceLanguage: languageCodeSchema,
+    sourceText: explanationSourceTextSchema,
+    targetLanguage: languageCodeSchema,
+    translatedText: translationTextSchema,
+    word: z.string().trim().min(1).max(100),
+  })
+  .strict();
+
+export const wordUnderstandingResultSchema = z
+  .object({
+    contextMeaning: z.string().trim().min(1).max(500),
+    example: z.string().trim().min(1).max(300),
+    meaning: z.string().trim().min(1).max(500),
+    partOfSpeech: z.string().trim().min(1).max(40),
+    pronunciation: z.string().trim().min(1).max(160).nullable(),
+    provider: z.literal("nvidia"),
+    requestId: requestIdSchema,
+    translation: z.string().trim().min(1).max(300),
+    word: z.string().trim().min(1).max(100),
+  })
+  .strict();
+
 export const translationWarningSchema = z
   .object({
     code: z.enum(["low-confidence", "formatting-changed", "capability-stale"]),
@@ -273,3 +301,5 @@ export type Provider = z.infer<typeof providerSchema>;
 export type TranslationError = z.infer<typeof translationErrorSchema>;
 export type TranslationRequest = z.infer<typeof translationRequestSchema>;
 export type TranslationResult = z.infer<typeof translationResultSchema>;
+export type WordUnderstandingRequest = z.infer<typeof wordUnderstandingRequestSchema>;
+export type WordUnderstandingResult = z.infer<typeof wordUnderstandingResultSchema>;

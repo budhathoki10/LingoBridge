@@ -11,6 +11,7 @@ export const DASHBOARD_API_ROUTES = {
   extensionRevoke: "/api/v1/extension/revoke",
   extensionToken: "/api/v1/extension/token",
   sync: "/api/v1/sync",
+  vocabulary: "/api/v1/vocabulary",
 } as const;
 
 export const EXTENSION_CONNECT_PATH = "/extension/connect";
@@ -57,6 +58,26 @@ export const phraseNoteSchema = z
     message: `A note cannot exceed ${MAX_PHRASE_NOTE_CODE_POINTS} characters`,
   });
 export const phraseProviderSchema = z.union([providerSchema, z.literal("unknown")]);
+
+export const savedWordSchema = z
+  .object({
+    contextMeaning: z.string().trim().min(1).max(500),
+    example: z.string().trim().min(1).max(300),
+    id: phraseIdSchema,
+    meaning: z.string().trim().min(1).max(500),
+    partOfSpeech: z.string().trim().min(1).max(40),
+    pronunciation: z.string().trim().min(1).max(160).nullable(),
+    savedAt: z.string().datetime({ offset: true }),
+    sourceLanguage: languageCodeSchema,
+    sourceText: boundedText(1_000),
+    targetLanguage: languageCodeSchema,
+    translation: z.string().trim().min(1).max(300),
+    word: z.string().trim().min(1).max(100),
+  })
+  .strict();
+
+export const vocabularyUpsertRequestSchema = z.object({ word: savedWordSchema }).strict();
+export const vocabularyUpsertResponseSchema = z.object({ word: savedWordSchema }).strict();
 
 export const deviceLabelSchema = z
   .string()
@@ -279,3 +300,4 @@ export type SyncMutationResult = z.infer<typeof syncMutationResultSchema>;
 export type SyncRejectionReason = z.infer<typeof syncRejectionReasonSchema>;
 export type SyncRequest = z.infer<typeof syncRequestSchema>;
 export type SyncResponse = z.infer<typeof syncResponseSchema>;
+export type SavedWordRecord = z.infer<typeof savedWordSchema>;

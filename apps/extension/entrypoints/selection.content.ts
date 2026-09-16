@@ -8,6 +8,8 @@ import {
   type OnlineConsent,
   type TranslationRequest,
   type TranslationResult,
+  type WordUnderstandingRequest,
+  type WordUnderstandingResult,
 } from "@lingobridge/contracts";
 import {
   catalogueToPreviewLanguages,
@@ -40,6 +42,8 @@ import {
   savePhrase,
   saveSavedPhrases,
 } from "../lib/saved-phrases";
+import { saveWord } from "../lib/saved-words";
+import { tokenizeWords, wordUnderstandingCacheKey } from "../lib/word-understanding";
 import {
   chooseSelectionTargetLanguage,
   resolveSelectionSource,
@@ -145,6 +149,7 @@ function providerLabel(provider: TranslationResult["provider"]): string {
 }
 
 type ExplanationState = "idle" | "consent" | "loading" | "error" | "ready";
+type WordState = "idle" | "consent" | "loading" | "error" | "ready";
 
 interface CapturedSelection {
   editable: boolean;
@@ -279,6 +284,9 @@ const SURFACE_CSS = `
   .arrow svg { width: 15px; height: 15px; }
   .source, .result { margin: 0; padding: 10px 11px; border: 1px solid #dedfdd; border-radius: 8px; background: #fff; font-size: 13px; line-height: 1.52; overflow-wrap: anywhere; white-space: pre-wrap; }
   .source { max-height: 112px; overflow: auto; color: #4d5660; }
+  .source__word { margin: 0; padding: 0; border: 0; border-radius: 3px; color: inherit; background: transparent; font: inherit; line-height: inherit; cursor: pointer; }
+  .source__word:hover, .source__word:focus-visible { color: #174fbd; background: #edf3ff; outline: 2px solid transparent; }
+  .source__word[aria-pressed="true"] { color: #174fbd; background: #dfeaff; }
   .result { min-height: 70px; color: #19212b; }
   .status { display: flex; align-items: flex-start; gap: 8px; margin: 0; color: #606a74; font-size: 11px; line-height: 1.45; }
   .dot { width: 7px; height: 7px; flex: none; margin-top: 4px; border-radius: 50%; background: #2363eb; }
@@ -314,6 +322,14 @@ const SURFACE_CSS = `
   .explain__actions button:hover { background: #1d4ed8; }
   .explain__actions .secondary { border-color: #c7cacf; color: #4e5862; background: #fff; }
   .explain__actions .secondary:hover { border-color: #969da4; background: #f8f8f6; }
+  .word-panel { display: grid; gap: 8px; padding: 10px 11px; border: 1px solid #cddbf7; border-radius: 8px; background: #f7f9fe; }
+  .word-panel--error { border-color: #efc6c0; background: #fff7f6; }
+  .word-panel__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .word-panel__title { color: #173f91; font-size: 13px; font-weight: 750; }
+  .word-panel__close { width: 28px; height: 28px; padding: 0; border: 0; color: #67717c; background: transparent; font-size: 18px; }
+  .word-panel dl { display: grid; gap: 7px; margin: 0; }
+  .word-panel dt { color: #66707a; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+  .word-panel dd { margin: 1px 0 0; color: #252d36; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
   .spinner { width: 14px; height: 14px; flex: none; border: 2px solid #cbd7ef; border-top-color: #2363eb; border-radius: 50%; animation: spin .75s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .magic { transition: none; } .spinner { animation-duration: 1.5s; } }
@@ -562,6 +578,16 @@ function createController(): InstalledController {
   let explanationRetryable = false;
   let explanationController: AbortController | null = null;
   let explanationSequence = 0;
+  let wordResult: WordUnderstandingResult | null = null;
+  let wordState: WordState = "idle";
+  let wordError = "";
+  let wordRetryable = false;
+  let selectedWord = "";
+  let wordController: AbortController | null = null;
+  let wordSequence = 0;
+  let wordSavePending = false;
+  let wordSaved = false;
+  const wordCache = new Map<string, WordUnderstandingResult>();
   let lastFingerprint: string | null = null;
   let stabilityTimer: number | null = null;
   let expiryTimer: number | null = null;
@@ -637,6 +663,7 @@ function createController(): InstalledController {
     copyFeedback = null;
     replaceFeedback = null;
     resetExplanation();
+    resetWordUnderstanding();
     stopSpeaking();
     activeSelection = null;
   }
@@ -748,7 +775,7 @@ function createController(): InstalledController {
     const source = document.createElement("p");
     source.className = "source";
     source.dir = "auto";
-    source.textContent = activeSelection?.text ?? "";
+    renderInteractiveSource(source);
     const status = document.createElement("p");
     status.className = "status";
     status.setAttribute("aria-live", "polite");
@@ -1105,6 +1132,7 @@ function createController(): InstalledController {
       }
 
       if (explanationState !== "idle") body.insertBefore(renderExplanation(), actions);
+      if (wordState !== "idle") body.insertBefore(renderWordUnderstanding(), actions);
 
       if (explanationState === "idle") {
         actions.append(actionButton("Explain", () => void requestExplanation(), true));
@@ -1151,6 +1179,258 @@ function createController(): InstalledController {
       }
       statusContent(status, errorMessage, "error");
       if (errorRetryable) actions.append(actionButton("Retry", () => void runTranslation()));
+    }
+  }
+
+  function renderInteractiveSource(source: HTMLParagraphElement): void {
+    const text = activeSelection?.text ?? "";
+    if (state !== "success" || !result) {
+      source.textContent = text;
+      return;
+    }
+    source.setAttribute("aria-label", "Original text. Choose a word to understand it.");
+    for (const token of tokenizeWords(text, context?.sourceLanguage)) {
+      if (!token.isWord) {
+        source.append(document.createTextNode(token.text));
+        continue;
+      }
+      const button = document.createElement("button");
+      button.className = "source__word";
+      button.type = "button";
+      button.textContent = token.text;
+      button.setAttribute("aria-label", `Understand ${token.text}`);
+      button.setAttribute("aria-pressed", String(selectedWord === token.text));
+      button.addEventListener("pointerdown", (event) => event.preventDefault());
+      button.addEventListener("click", () => void requestWordUnderstanding(token.text));
+      source.append(button);
+    }
+  }
+
+  function resetWordUnderstanding(): void {
+    wordSequence += 1;
+    wordController?.abort();
+    wordController = null;
+    wordResult = null;
+    wordState = "idle";
+    wordError = "";
+    wordRetryable = false;
+    selectedWord = "";
+    wordSavePending = false;
+    wordSaved = false;
+  }
+
+  function renderWordUnderstanding(): HTMLElement {
+    const panel = document.createElement("section");
+    panel.className = wordState === "error" ? "word-panel word-panel--error" : "word-panel";
+    panel.setAttribute("aria-label", "Word understanding");
+    panel.setAttribute("aria-live", "polite");
+    const head = document.createElement("div");
+    head.className = "word-panel__head";
+    const title = document.createElement("strong");
+    title.className = "word-panel__title";
+    title.textContent = selectedWord || "Word understanding";
+    const dismiss = document.createElement("button");
+    dismiss.className = "word-panel__close";
+    dismiss.type = "button";
+    dismiss.textContent = "×";
+    dismiss.setAttribute("aria-label", "Close word understanding");
+    dismiss.addEventListener("click", () => {
+      resetWordUnderstanding();
+      renderPanel();
+    });
+    head.append(title, dismiss);
+    panel.append(head);
+
+    if (wordState === "consent") {
+      const note = document.createElement("p");
+      note.className = "explain__note";
+      note.textContent =
+        "Word understanding sends this word, the selected sentence, and its translation to NVIDIA Nemotron. Nothing is saved unless you choose Save word.";
+      const buttons = document.createElement("div");
+      buttons.className = "explain__actions";
+      buttons.append(
+        actionButton(
+          "Not now",
+          () => {
+            resetWordUnderstanding();
+            renderPanel();
+          },
+          true,
+        ),
+        actionButton("Allow and understand", () => void acceptConsentAndUnderstandWord()),
+      );
+      panel.append(note, buttons);
+      return panel;
+    }
+    if (wordState === "loading") {
+      const loading = document.createElement("p");
+      loading.className = "explain__status";
+      loading.append(
+        Object.assign(document.createElement("span"), { className: "spinner" }),
+        `Understanding “${selectedWord}”…`,
+      );
+      panel.append(loading);
+      return panel;
+    }
+    if (wordState === "error") {
+      const error = document.createElement("p");
+      error.className = "explain__note";
+      error.setAttribute("role", "alert");
+      error.textContent = wordError;
+      panel.append(error);
+      if (wordRetryable) {
+        const buttons = document.createElement("div");
+        buttons.className = "explain__actions";
+        buttons.append(actionButton("Try again", () => void runWordUnderstanding(), true));
+        panel.append(buttons);
+      }
+      return panel;
+    }
+    if (!wordResult) return panel;
+    const fields: Array<[string, string | null]> = [
+      ["Translation", wordResult.translation],
+      ["Meaning", wordResult.meaning],
+      ["Part of speech", wordResult.partOfSpeech],
+      ["In this context", wordResult.contextMeaning],
+      ["Example", wordResult.example],
+      ["Pronunciation", wordResult.pronunciation],
+    ];
+    const list = document.createElement("dl");
+    for (const [label, value] of fields) {
+      if (!value) continue;
+      const wrapper = document.createElement("div");
+      const term = document.createElement("dt");
+      term.textContent = label;
+      const detail = document.createElement("dd");
+      detail.textContent = value;
+      wrapper.append(term, detail);
+      list.append(wrapper);
+    }
+    const buttons = document.createElement("div");
+    buttons.className = "explain__actions";
+    const save = actionButton(wordSaved ? "Saved" : "Save word", () => void saveCurrentWord());
+    save.disabled = wordSavePending || wordSaved;
+    buttons.append(save);
+    panel.append(list, buttons);
+    return panel;
+  }
+
+  async function requestWordUnderstanding(word: string): Promise<void> {
+    if (!context || !result || !activeSelection) return;
+    const normalizedWord = word.trim();
+    if (wordState === "loading" && selectedWord === normalizedWord) return;
+    selectedWord = normalizedWord;
+    wordResult = null;
+    wordSaved = false;
+    const key = wordUnderstandingCacheKey({
+      sourceLanguage: context.sourceLanguage,
+      sourceText: activeSelection.text.trim(),
+      targetLanguage: result.targetLanguage,
+      word: selectedWord,
+    });
+    const cached = wordCache.get(key);
+    if (cached) {
+      wordResult = cached;
+      wordState = "ready";
+      renderPanel();
+      return;
+    }
+    if (context.gatewayMode === "live" && !(await loadExplanationConsent().catch(() => null))) {
+      wordState = "consent";
+      renderPanel();
+      return;
+    }
+    await runWordUnderstanding();
+  }
+
+  async function acceptConsentAndUnderstandWord(): Promise<void> {
+    try {
+      await acceptExplanationConsent();
+    } catch {
+      wordState = "error";
+      wordError = "Word understanding could not save your consent. Try again.";
+      wordRetryable = true;
+      renderPanel();
+      return;
+    }
+    await runWordUnderstanding();
+  }
+
+  async function runWordUnderstanding(): Promise<void> {
+    if (!context || !result || !activeSelection || !selectedWord) return;
+    const sequence = ++wordSequence;
+    wordController?.abort();
+    wordController = new AbortController();
+    wordState = "loading";
+    wordError = "";
+    renderPanel();
+    const request: WordUnderstandingRequest = {
+      consent:
+        context.gatewayMode === "fake"
+          ? FAKE_EXPLANATION_CONSENT
+          : ((await loadExplanationConsent()) as ExplanationConsent),
+      operation: "understand-word",
+      requestId: crypto.randomUUID(),
+      sourceLanguage: context.sourceLanguage,
+      sourceText: activeSelection.text.trim(),
+      targetLanguage: result.targetLanguage,
+      translatedText: result.translatedText,
+      word: selectedWord,
+    };
+    try {
+      const understood = await gatewayClient.understandWord(request, wordController.signal);
+      if (sequence !== wordSequence) return;
+      wordResult = understood;
+      wordCache.set(
+        wordUnderstandingCacheKey({
+          sourceLanguage: request.sourceLanguage,
+          sourceText: request.sourceText,
+          targetLanguage: request.targetLanguage,
+          word: request.word,
+        }),
+        understood,
+      );
+      wordState = "ready";
+    } catch (error) {
+      if (sequence !== wordSequence || error instanceof DOMException) return;
+      wordState = "error";
+      wordError = "Couldn’t understand this word right now.";
+      wordRetryable = !(error instanceof GatewayClientError) || error.retryable;
+    } finally {
+      if (sequence === wordSequence) wordController = null;
+    }
+    renderPanel();
+  }
+
+  async function saveCurrentWord(): Promise<void> {
+    if (!wordResult || !context || !result || !activeSelection || wordSavePending) return;
+    wordSavePending = true;
+    renderPanel();
+    try {
+      const savedWord = {
+        contextMeaning: wordResult.contextMeaning,
+        example: wordResult.example,
+        id: crypto.randomUUID(),
+        meaning: wordResult.meaning,
+        partOfSpeech: wordResult.partOfSpeech,
+        pronunciation: wordResult.pronunciation,
+        savedAt: new Date().toISOString(),
+        sourceLanguage: context.sourceLanguage,
+        sourceText: activeSelection.text.trim(),
+        targetLanguage: result.targetLanguage,
+        translation: wordResult.translation,
+        word: wordResult.word,
+      };
+      await saveWord(savedWord);
+      void browser.runtime.sendMessage({ type: "lingobridge:vocabulary:save", word: savedWord });
+      wordSaved = true;
+    } catch {
+      wordState = "error";
+      wordError = "This word could not be saved. Try again.";
+      wordRetryable = false;
+    } finally {
+      wordSavePending = false;
+      renderPanel();
     }
   }
 
@@ -1632,6 +1912,7 @@ function createController(): InstalledController {
     copyFeedback = null;
     replaceFeedback = null;
     resetExplanation();
+    resetWordUnderstanding();
     state = "loading";
     renderPanel();
     const request: TranslationRequest = {

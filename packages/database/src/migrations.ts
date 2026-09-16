@@ -131,6 +131,15 @@ export const migrations: readonly Migration[] = [
       await db.collection("syncMutations").createIndex({ createdAt: 1 });
     },
   },
+  {
+    id: "0002_saved_vocabulary",
+    async apply(db) {
+      await createCollection(db, "vocabulary");
+      await db.collection("vocabulary").createIndex({ userId: 1, id: 1 }, { unique: true });
+      await db.collection("vocabulary").createIndex({ userId: 1, savedAt: -1 });
+      await db.collection("vocabulary").createIndex({ userId: 1, word: 1 });
+    },
+  },
 ];
 
 export async function runMigrations(database: Database): Promise<string[]> {

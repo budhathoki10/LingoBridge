@@ -31,6 +31,7 @@ Temporary data uses session storage or memory and expires within five minutes.
 - On-device or online preference.
 - Online-processing consent.
 - Phrases the user explicitly saves.
+- Word explanations the user explicitly saves with Save word.
 
 Saved phrases need visible delete-one, delete-all, and export controls.
 
@@ -52,6 +53,11 @@ The dashboard must provide export, delete-one, delete-all, session revocation, a
 - Minimum request metadata needed for security and rate limiting.
 
 The gateway must not create translation history, analytics events containing text, or error logs containing source or result content.
+
+Word understanding is a separate explicit action covered by the Nemotron explanation consent. It
+sends one chosen word plus the already selected text, its translation, and the language pair. It
+never reads nearby webpage content, analyzes every word automatically, or persists a request unless
+the user subsequently chooses Save word.
 
 Online consent must name MyMemory as the primary processor and NVIDIA as a possible fallback processor for supported directions. It must disclose that the gateway sends its configured contact email to MyMemory as the `de` parameter. A fallback is allowed only within that disclosed consent. The result must identify the provider that actually processed the text.
 

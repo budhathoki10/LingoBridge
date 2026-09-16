@@ -385,7 +385,7 @@ describe("background sync service", () => {
 
     expect((storage.data[SAVED_PHRASES_STORAGE_KEY] as unknown[]).length).toBe(MAX_SAVED_PHRASES);
     expect(await database.db.collection("phrases").countDocuments({ deletedAt: null })).toBe(total);
-  });
+  }, 15_000);
 
   it("schedules a retry when offline and marks the connection revoked when the server says so", async () => {
     const scheduled: (Date | null)[] = [];

@@ -1,5 +1,6 @@
 import {
   dashboardConnectionPending,
+  accountClient,
   focusDashboardConnection,
   handleAccountMessage,
   PERIODIC_SYNC_ALARM,
@@ -7,6 +8,7 @@ import {
   SYNC_ALARM,
   syncService,
 } from "../lib/account-background";
+import { savedWordSchema } from "@lingobridge/contracts/account";
 import { parseAccountMessage } from "../lib/account-status";
 import {
   GATEWAY_BRIDGE_PORT,
@@ -182,6 +184,12 @@ async function runGatewayBridgeRequest(
     if (request.operation === "explain") {
       return { data: await gatewayClient.explain(request.request, controller.signal), ok: true };
     }
+    if (request.operation === "understand-word") {
+      return {
+        data: await gatewayClient.understandWord(request.request, controller.signal),
+        ok: true,
+      };
+    }
     return { data: await gatewayClient.translate(request.request, controller.signal), ok: true };
   } catch (error) {
     if (controller.signal.aborted) return { aborted: true, ok: false };
@@ -334,6 +342,20 @@ export default defineBackground(() => {
   // to go through sendResponse, with `return true` holding the channel open until it arrives.
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (sender.id !== browser.runtime.id) return undefined;
+
+    if (
+      message &&
+      typeof message === "object" &&
+      Reflect.get(message, "type") === "lingobridge:vocabulary:save"
+    ) {
+      const parsedWord = savedWordSchema.safeParse(Reflect.get(message, "word"));
+      if (!parsedWord.success) return undefined;
+      accountClient.saveWord(parsedWord.data).then(
+        () => sendResponse({ ok: true }),
+        () => sendResponse({ ok: false }),
+      );
+      return true;
+    }
 
     const accountMessage = parseAccountMessage(message);
     if (accountMessage) {
