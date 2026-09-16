@@ -31,7 +31,7 @@ Read the remaining documents when the task affects workflow, AI behaviour, deliv
 - Selection Magic is a core opt-in workflow: stable eligible selections show a small magic icon near the range on sites where access is granted. Translation begins only after the user clicks that icon, and the result targets the user's saved preferred language.
 - Do not turn it into a general chatbot, full-page surveillance tool, writing suite, or language-learning platform.
 - Do not claim Nepali is supported by Chrome's local translator unless current official documentation confirms it.
-- In Online mode, NVIDIA `riva-translate-4b-instruct-v2` is primary for reviewed supported directions. Google Cloud Translation is an optional backup when configured; NVIDIA is not a Nepali provider.
+- In Online mode, MyMemory is primary and receives the configured server-side contact email as `de`. NVIDIA `riva-translate-4b-instruct-v2` is a one-attempt fallback for reviewed supported directions; NVIDIA is not a Nepali provider.
 - Never hard-code a marketing language count. Read the reviewed capability snapshot and gate every provider, direction, transliteration, style, and on-device feature independently.
 
 ## Security rules

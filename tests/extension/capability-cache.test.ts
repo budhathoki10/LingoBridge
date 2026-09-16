@@ -1,3 +1,4 @@
+import type { CapabilityCatalogue } from "@lingobridge/contracts";
 import { describe, expect, it } from "vitest";
 import {
   type CapabilityCacheStorage,
@@ -5,6 +6,7 @@ import {
   markCapabilityCatalogueStale,
 } from "../../apps/extension/lib/capability-cache";
 import { fakeCapabilityCatalogue } from "../../apps/gateway/src/capabilities";
+import { createNvidiaCapabilityCatalogue } from "../../apps/gateway/src/nvidia-capabilities";
 
 class MemoryStorage implements CapabilityCacheStorage {
   readonly values: Record<string, unknown> = {};
@@ -33,5 +35,22 @@ describe("extension capability cache", () => {
     storage.values.lingobridgeCapabilityCatalogue = { providerSecret: "invalid" };
     expect(await createCapabilityCache(storage).load()).toBeNull();
     expect(markCapabilityCatalogueStale(fakeCapabilityCatalogue).freshness).toBe("stale");
+  });
+
+  it("ignores stale pre-MyMemory live capability catalogues", async () => {
+    const storage = new MemoryStorage();
+    const catalogue = createNvidiaCapabilityCatalogue();
+    const oldCatalogue = {
+      ...catalogue,
+      catalogueVersion: "nvidia-riva-old",
+      languages: catalogue.languages.slice(0, 20),
+      source: "nvidia-riva",
+    } as CapabilityCatalogue;
+    storage.values.lingobridgeCapabilityCatalogue = oldCatalogue;
+
+    expect(await createCapabilityCache(storage).load()).toBeNull();
+    await expect(createCapabilityCache(storage).save(oldCatalogue)).rejects.toThrow(
+      "predates MyMemory support",
+    );
   });
 });

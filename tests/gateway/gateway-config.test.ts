@@ -24,6 +24,7 @@ describe("gateway runtime security configuration", () => {
     expect(() =>
       loadGatewayRuntimeConfig({
         LINGOBRIDGE_ALLOWED_EXTENSION_ORIGINS: "chrome-extension://*",
+        MYMEMORY_CONTACT_EMAIL: "owner@example.com",
         NVIDIA_API_KEY: "safe-test-nvidia-key",
         LINGOBRIDGE_TRANSLATION_MODE: "live",
       }),
@@ -31,6 +32,7 @@ describe("gateway runtime security configuration", () => {
 
     const config = loadGatewayRuntimeConfig({
       LINGOBRIDGE_ALLOWED_EXTENSION_ORIGINS: exactOrigin,
+      MYMEMORY_CONTACT_EMAIL: "owner@example.com",
       NVIDIA_API_KEY: "safe-test-nvidia-key",
       LINGOBRIDGE_TRANSLATION_MODE: "live",
     });
@@ -40,19 +42,30 @@ describe("gateway runtime security configuration", () => {
     expect(config.security.originPolicy.allows(exactOrigin)).toBe(true);
   });
 
-  it("requires NVIDIA credentials in live mode and validates optional Google backup project", () => {
+  it("requires MyMemory contact and NVIDIA credentials in live mode", () => {
     expect(() =>
       loadGatewayRuntimeConfig({
         LINGOBRIDGE_ALLOWED_EXTENSION_ORIGINS: exactOrigin,
         LINGOBRIDGE_TRANSLATION_MODE: "live",
       }),
+    ).toThrow("MYMEMORY_CONTACT_EMAIL");
+    expect(() =>
+      loadGatewayRuntimeConfig({
+        LINGOBRIDGE_ALLOWED_EXTENSION_ORIGINS: exactOrigin,
+        LINGOBRIDGE_TRANSLATION_MODE: "live",
+        MYMEMORY_CONTACT_EMAIL: "owner@example.com",
+      }),
     ).toThrow("NVIDIA_API_KEY");
     expect(() =>
       loadGatewayRuntimeConfig({
         GOOGLE_CLOUD_PROJECT: "projects/unsafe/path",
+        MYMEMORY_CONTACT_EMAIL: "owner@example.com",
         NVIDIA_API_KEY: "safe-test-nvidia-key",
       }),
     ).toThrow("valid project ID");
+    expect(() => loadGatewayRuntimeConfig({ MYMEMORY_CONTACT_EMAIL: "not-an-email" })).toThrow(
+      "valid email address",
+    );
   });
 
   it("rejects invalid numeric security settings", () => {

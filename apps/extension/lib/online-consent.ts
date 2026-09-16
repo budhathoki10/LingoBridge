@@ -1,6 +1,6 @@
 import { type OnlineConsent, onlineConsentSchema } from "@lingobridge/contracts";
 
-export const ONLINE_PROVIDER_CONSENT_VERSION = "phase-4-nvidia-primary-v1";
+export const ONLINE_PROVIDER_CONSENT_VERSION = "mymemory-primary-nvidia-backup-v1";
 const STORAGE_KEY = "lingobridgeOnlineProviderConsent";
 
 export interface ConsentStorage {
@@ -23,9 +23,11 @@ export function createOnlineConsentRepository(storage: ConsentStorage) {
     async accept(): Promise<OnlineConsent> {
       const consent = onlineConsentSchema.parse({
         acceptedAt: new Date().toISOString(),
-        google: true,
-        googleBackup: true,
+        google: false,
+        googleBackup: false,
+        myMemory: true,
         nvidia: true,
+        nvidiaBackup: true,
         version: ONLINE_PROVIDER_CONSENT_VERSION,
       });
       await storage.set({ [STORAGE_KEY]: consent });

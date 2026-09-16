@@ -227,7 +227,13 @@ describe("dashboard mutations", () => {
       }),
       dashboard.services,
     );
-    expect(await exported.text()).not.toContain("Alice only");
+    expect(exported.headers.get("Content-Type")).toBe("text/plain; charset=utf-8");
+    expect(exported.headers.get("Content-Disposition")).toContain("lingobridge-account-");
+    expect(exported.headers.get("Content-Disposition")).toContain(".txt");
+    const exportedText = await exported.text();
+    expect(exportedText).toContain("LingoBridge Account Data");
+    expect(exportedText).toContain("SAVED PHRASES (0)");
+    expect(exportedText).not.toContain("Alice only");
 
     expect(await getPhraseRecord(dashboard.database, aliceId, secret.id)).toMatchObject({
       state: "live",
@@ -242,6 +248,21 @@ describe("dashboard mutations", () => {
       dashboard.services,
     );
     expect(await own.json()).toMatchObject({ phrase: { note: "mine", revision: 2 } });
+    const phraseExport = await handleExport(
+      new Request(`${DASHBOARD_ORIGIN}/api/dashboard/export?scope=phrases`, {
+        headers: { Cookie: alice.cookies },
+      }),
+      dashboard.services,
+    );
+    expect(phraseExport.headers.get("Content-Disposition")).toContain("lingobridge-phrases-");
+    const phraseText = await phraseExport.text();
+    expect(phraseText).toBe(`Source:\nAlice only\n\nTranslation:\n${secret.translatedText}\n`);
+    expect(phraseText).toContain("Source:\nAlice only");
+    expect(phraseText).toContain(`Translation:\n${secret.translatedText}`);
+    expect(phraseText).not.toContain("LingoBridge Saved Phrases");
+    expect(phraseText).not.toContain("Note:\nmine");
+    expect(phraseText).not.toContain("Languages:");
+    expect(phraseText).not.toContain("Provider:");
     const stale = await handleUpdateNote(
       post(
         "/api/dashboard/phrases/note",

@@ -9,8 +9,8 @@ import {
   describeLanguage,
   EXPLANATION_SYSTEM_PROMPT,
   extractJsonObject,
-  NvidiaExplanationAdapter,
   looksLikeRestatement,
+  NvidiaExplanationAdapter,
   SIMPLER_WORDS_NUDGE,
 } from "../../apps/gateway/src/nvidia-explanation-adapter";
 import type {
@@ -115,11 +115,11 @@ describe("explain route", () => {
     expect(error.message).not.toContain("simulate failure");
   });
 
-  it("defaults to Nemotron 3 Super with a longer deadline, and validates the model ID", () => {
+  it("defaults to Nemotron 3 Ultra with a longer deadline, and validates the model ID", () => {
     const config = loadGatewayRuntimeConfig({});
-    expect(config.explanationModel).toBe("nvidia/nemotron-3-super-120b-a12b");
+    expect(config.explanationModel).toBe("nvidia/nemotron-3-ultra-550b-a55b");
     expect(DEFAULT_EXPLANATION_MODEL).toBe(config.explanationModel);
-    expect(config.explanationTimeoutMilliseconds).toBe(30_000);
+    expect(config.explanationTimeoutMilliseconds).toBe(90_000);
     expect(() => loadGatewayRuntimeConfig({ NVIDIA_EXPLANATION_MODEL: "not a model" })).toThrow();
   });
 });
@@ -157,7 +157,7 @@ describe("NvidiaExplanationAdapter", () => {
     const result = await adapter.explain(explanationRequest, new AbortController().signal);
 
     expect(result).toEqual({
-      examples: modelAnswer.examples.slice(0, 2),
+      examples: modelAnswer.examples.slice(0, 1),
       meaning: modelAnswer.meaning,
       provider: "nvidia",
       register: "casual",
@@ -166,12 +166,40 @@ describe("NvidiaExplanationAdapter", () => {
     });
 
     const call = client.calls[0];
-    expect(call?.model).toBe("nvidia/nemotron-3-super-120b-a12b");
+    expect(call?.model).toBe("nvidia/nemotron-3-ultra-550b-a55b");
+    expect(call?.chat_template_kwargs).toEqual({ enable_thinking: false });
     expect(call?.max_tokens).toBe(1_500);
     expect(call?.messages[0]).toEqual({ content: EXPLANATION_SYSTEM_PROMPT, role: "system" });
     expect(call?.messages[1]?.content).toContain("Reader's language: Japanese (ja)");
     expect(call?.messages[1]?.content).toContain("Source language: English (en)");
     expect(call?.messages[1]?.content).toContain("<selected_text>break a leg</selected_text>");
+  });
+
+  it("drops a repeated translation pair and keeps one contextual example", async () => {
+    const sentenceRequest = {
+      ...explanationRequest,
+      sourceText: "A cow is a large domesticated mammal.",
+      targetLanguage: "ne",
+      translatedText: "गाई ठूलो घरपालुवा स्तनपायी जनावर हो।",
+    };
+    const answer = {
+      ...modelAnswer,
+      examples: [
+        {
+          source: "A cow is a large domesticated mammal.",
+          translation: "गाई ठूलो घरपालुवा स्तनपायी जनावर हो।",
+        },
+        {
+          source: "The textbook says that a cow is a large domesticated mammal.",
+          translation: "पाठ्यपुस्तकमा भनिएको छ कि गाई ठूलो घरपालुवा स्तनपायी जनावर हो।",
+        },
+      ],
+    };
+    const result = await new NvidiaExplanationAdapter(
+      new RecordingNvidiaClient(reply(JSON.stringify(answer))),
+    ).explain(sentenceRequest, new AbortController().signal);
+
+    expect(result.examples).toEqual([answer.examples[1]]);
   });
 
   it("asks once more for simpler words when the meaning only repeats the translation", async () => {

@@ -20,7 +20,7 @@ Every provider should return:
 
 - Detection starts only after an eligible selection becomes stable and the user clicks its magic icon.
 - Prefer an available on-device language detector so opening the translator after the click does not itself disclose text.
-- In consented Online mode, omit the source language only when Google backup handles detection; NVIDIA requires an explicit reviewed source-target tag.
+- In consented Online mode, resolve the source language before provider routing; both MyMemory and NVIDIA require an explicit source-target pair.
 - Show Detecting until a result exists; never label a guess as certain.
 - Very short, numeric, emoji-only, or heavily mixed-language selections may require the user to choose the source language.
 - The target defaults to the user's preferred language. If source and target resolve to the same language, use the user's most recent different target or ask them to choose.
@@ -63,17 +63,17 @@ Use when the browser supports the source-target pair. Benefits include local pro
 
 ### Cloud translation provider
 
-Use LingoBridge's gateway for the complete Google-supported catalogue and pairs absent from Chrome. If later approved, Romanized Nepali and style control also use the gateway. The gateway uses this order:
+Use LingoBridge's gateway for active-catalogue pairs absent from Chrome. If later approved, Romanized Nepali and style control also use the gateway. The gateway uses this order:
 
-1. NVIDIA `riva-translate-4b-instruct-v2` is the primary online translator for reviewed supported directions.
-2. Google Cloud Translation Advanced is a backup when Google is configured, the pair is supported, and the user has accepted both providers.
-3. If neither provider supports the pair, return a visible failure without attempting an unsupported provider.
+1. MyMemory is the primary online translator and receives the configured contact email as `de` on every provider request.
+2. NVIDIA `riva-translate-4b-instruct-v2` is attempted once after a MyMemory failure or quota response when the pair is reviewed as supported and the user accepted both providers.
+3. If NVIDIA does not support the fallback pair, return a visible failure without attempting it.
 
 The active capability catalogue defines standard Online translation coverage. The selected NVIDIA model lists English and 36 non-English languages but does not include Nepali. NVIDIA is enabled only for exact verified pair tags, not every possible combination of those languages. See `docs/11-language-coverage.md`.
 
 ### Fallback policy
 
-LingoBridge must not silently move an On-device request to Online. It may offer the online option with a clear explanation. Online consent discloses NVIDIA as primary and Google as a possible backup. If backup occurs, the result identifies Google. Any provider with materially different data handling requires renewed consent before it joins the route.
+LingoBridge must not silently move an On-device request to Online. It may offer the online option with a clear explanation. Online consent discloses MyMemory as primary, the configured contact email sent in `de`, and NVIDIA as a possible fallback. If fallback occurs, the result identifies NVIDIA. Any provider with materially different data handling requires renewed consent before it joins the route.
 
 ## Evaluation dataset
 

@@ -124,11 +124,12 @@ export function removeSavedPhrase(phrases: readonly SavedPhrase[], id: string): 
 }
 
 export function serializeSavedPhrases(phrases: readonly SavedPhrase[]): string {
-  return `${JSON.stringify(
-    { exportedAt: new Date().toISOString(), phrases, version: 1 },
-    null,
-    2,
-  )}\n`;
+  const lines: string[] = [];
+  for (const [index, phrase] of phrases.entries()) {
+    if (index > 0) lines.push("", "----------------------------------------", "");
+    lines.push("Source:", phrase.sourceText, "", "Translation:", phrase.translatedText);
+  }
+  return `${lines.join("\n")}\n`;
 }
 
 export function createSavedPhraseRepository(storage: ExtensionStorageArea) {

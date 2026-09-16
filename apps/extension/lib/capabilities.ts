@@ -229,28 +229,30 @@ export function getPreviewDirectionCapabilities(
     );
     if (sourceLanguage === AUTO_LANGUAGE_CODE) {
       standardTranslation = Boolean(
-        targetCapability?.googleTarget &&
-          catalogue.languages.some((language) => language.googleSource),
+        (targetCapability?.myMemoryTarget || targetCapability?.googleTarget) &&
+          catalogue.languages.some((language) => language.myMemorySource || language.googleSource),
       );
     } else if (catalogue.googlePairing === "all-listed") {
       const explicitProviderDirection = catalogue.directions.some(
         (direction) =>
           direction.sourceLanguage === sourceLanguage &&
           direction.targetLanguage === targetLanguage &&
-          (direction.google || direction.nvidia),
+          (direction.myMemory || direction.google || direction.nvidia),
       );
       standardTranslation = Boolean(
         explicitProviderDirection ||
           (differentLanguages &&
-            targetCapability?.googleTarget &&
+            (targetCapability?.myMemoryTarget || targetCapability?.googleTarget) &&
             catalogue.languages.find(
-              (language) => language.code === sourceLanguage && language.googleSource,
+              (language) =>
+                language.code === sourceLanguage &&
+                (language.myMemorySource || language.googleSource),
             )),
       );
     } else {
       standardTranslation = catalogue.directions.some(
         (direction) =>
-          (direction.google || direction.nvidia) &&
+          (direction.myMemory || direction.google || direction.nvidia) &&
           direction.sourceLanguage === sourceLanguage &&
           direction.targetLanguage === targetLanguage,
       );

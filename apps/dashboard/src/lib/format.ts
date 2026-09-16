@@ -53,6 +53,8 @@ export function languageName(code: string | null): string {
 
 export function providerLabel(provider: string): string {
   switch (provider) {
+    case "mymemory":
+      return "MyMemory";
     case "nvidia":
       return "NVIDIA";
     case "google":

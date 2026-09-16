@@ -8,19 +8,28 @@ import { FakeExplanationAdapter } from "./fake-explanation-adapter.js";
 import { FakeTranslationAdapter } from "./fake-translation-adapter.js";
 import { FileCapabilityCatalogueStore } from "./file-capability-catalogue-store.js";
 import { GoogleCapabilitySource } from "./google-capability-source.js";
-import { createGoogleCloudClient, GoogleTranslationAdapter } from "./google-translation-adapter.js";
-import { OnlineProviderCapabilitySource } from "./nvidia-capabilities.js";
+import { createGoogleCloudClient } from "./google-translation-adapter.js";
+import {
+  createMyMemoryClient,
+  MyMemoryTranslationAdapter,
+} from "./mymemory-translation-adapter.js";
+import {
+  isCurrentOnlineCapabilityCatalogue,
+  OnlineProviderCapabilitySource,
+} from "./nvidia-capabilities.js";
 import { NvidiaExplanationAdapter } from "./nvidia-explanation-adapter.js";
 import { OperationalMetrics, observeTranslationAdapter } from "./operational-metrics.js";
 import {
   createNvidiaTranslationClient,
   NvidiaTranslationAdapter,
 } from "./nvidia-translation-adapter.js";
-import { NvidiaPrimaryProviderRouter } from "./provider-router.js";
+import { MyMemoryPrimaryProviderRouter } from "./provider-router.js";
 
 const config = loadGatewayRuntimeConfig(process.env);
 const liveProjectId = config.translationMode === "live" ? config.googleProjectId : null;
 const googleClient = liveProjectId ? createGoogleCloudClient() : null;
+const myMemoryClient = createMyMemoryClient(config.myMemoryBaseUrl);
+const myMemoryContactEmail = config.myMemoryContactEmail;
 const nvidiaClient = config.nvidiaApiKey
   ? createNvidiaTranslationClient({
       apiKey: config.nvidiaApiKey,
@@ -29,26 +38,19 @@ const nvidiaClient = config.nvidiaApiKey
   : null;
 const operationsMetrics = new OperationalMetrics();
 const translationAdapter =
-  config.translationMode === "live" && nvidiaClient
-    ? new NvidiaPrimaryProviderRouter({
-        google:
-          liveProjectId && googleClient
-            ? observeTranslationAdapter(
-                new GoogleTranslationAdapter(
-                  googleClient,
-                  liveProjectId,
-                  config.security.providerTimeoutMilliseconds,
-                ),
-                "google",
-                operationsMetrics,
-              )
-            : null,
+  config.translationMode === "live" && nvidiaClient && myMemoryContactEmail
+    ? new MyMemoryPrimaryProviderRouter({
+        myMemory: observeTranslationAdapter(
+          new MyMemoryTranslationAdapter(myMemoryClient, myMemoryContactEmail),
+          "mymemory",
+          operationsMetrics,
+        ),
         nvidia: observeTranslationAdapter(
           new NvidiaTranslationAdapter(nvidiaClient, config.nvidiaModel, config.nvidiaMaxTokens),
           "nvidia",
           operationsMetrics,
         ),
-        onBackup: (succeeded) => operationsMetrics.recordFallback(succeeded),
+        onFallback: (succeeded) => operationsMetrics.recordFallback("nvidia", succeeded),
       })
     : observeTranslationAdapter(new FakeTranslationAdapter(), "fake", operationsMetrics);
 const capabilityProvider =
@@ -65,6 +67,7 @@ const capabilityProvider =
         ),
         new FileCapabilityCatalogueStore(config.capabilityCachePath),
         {
+          acceptStoredCatalogue: isCurrentOnlineCapabilityCatalogue,
           freshForMilliseconds: config.capabilityFreshForMilliseconds,
           retryAfterFailureMilliseconds: config.capabilityRetryAfterFailureMilliseconds,
         },

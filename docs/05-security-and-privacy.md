@@ -53,7 +53,7 @@ The dashboard must provide export, delete-one, delete-all, session revocation, a
 
 The gateway must not create translation history, analytics events containing text, or error logs containing source or result content.
 
-Online consent must name NVIDIA as the primary processor for supported directions and Google Cloud Translation as a possible backup processor when configured. A fallback is allowed only within that disclosed consent. The result must identify the provider that actually processed the text.
+Online consent must name MyMemory as the primary processor and NVIDIA as a possible fallback processor for supported directions. It must disclose that the gateway sends its configured contact email to MyMemory as the `de` parameter. A fallback is allowed only within that disclosed consent. The result must identify the provider that actually processed the text.
 
 ## Threats and controls
 
@@ -67,13 +67,13 @@ The selection observer listens only for completed user pointer and keyboard sele
 
 ### Secret exposure
 
-Google and NVIDIA credentials never appear in the extension package, source maps, logs, documentation examples, or browser storage. Only the gateway holds secrets through its deployment secret store.
+Provider credentials never appear in the extension package, source maps, logs, documentation examples, or browser storage. Only the gateway holds secrets through its deployment secret store. The MyMemory contact email is server-only configuration and is never exposed to the extension.
 
 ### Oversized or abusive requests
 
 The extension and gateway enforce character and byte limits. The gateway adds per-IP and anonymous-install rate limits, request timeouts, supported-pair allowlists, and a maximum response size.
 
-The fallback router uses a fixed provider capability table. It must not send Nepali requests to NVIDIA Riva Translate 4B Instruct v2, and it must permit at most one provider fallback per user request.
+The fallback router uses a fixed NVIDIA capability table. It must not send Nepali requests to NVIDIA Riva Translate 4B Instruct v2, and it must permit at most one provider fallback per user request. MyMemory query URLs, including selected text and the `de` email, must never be logged.
 
 The public capability endpoint contains language and feature metadata only. It exposes no provider credentials, internal account identifiers, quotas, infrastructure details, or user-specific data. The gateway rejects any translation request whose operation is absent from the active capability catalogue.
 
@@ -195,7 +195,7 @@ The dashboard uses its own restrictive policy, permits network access only to ap
 ## Privacy interface requirements
 
 - Display On-device or Online beside every result.
-- For Online results, display Google or NVIDIA as the actual processor.
+- For Online results, display MyMemory or NVIDIA as the actual processor.
 - Link to the privacy policy before the first online translation.
 - Explain current-site versus all-site Selection Magic access before Chrome displays the permission prompt.
 - Provide a visible Selection Magic toggle and per-site disable action.

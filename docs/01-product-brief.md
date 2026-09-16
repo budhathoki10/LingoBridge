@@ -5,7 +5,7 @@
 - **Name:** LingoBridge
 - **Tagline:** Understand the words in front of you.
 - **Category:** Chrome translation extension with companion web dashboard
-- **Language scope:** Every language currently supported by Google Cloud Translation, with deeper English–Nepali evaluation
+- **Language scope:** Every language in the active gateway capability catalogue, with deeper English–Nepali evaluation
 
 ## Problem
 

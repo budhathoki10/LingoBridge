@@ -17,26 +17,39 @@ export function isSupportedSelectionTarget(
   return Boolean(
     language &&
       (language.googleTarget ||
+        language.myMemoryTarget ||
         catalogue.directions.some(
-          (direction) => direction.targetLanguage === targetLanguage && direction.nvidia,
+          (direction) =>
+            direction.targetLanguage === targetLanguage && (direction.myMemory || direction.nvidia),
         )),
   );
 }
 
 /**
- * Targets reachable from one source. NVIDIA pairs English with everything and nothing with
- * anything else, so a French selection legitimately has exactly one destination.
+ * Targets reachable from one source through the active primary or fallback provider.
  */
 export function supportedTargetsForSource(
   catalogue: CapabilityCatalogue,
   sourceLanguage: string,
 ): string[] {
+  if (catalogue.googlePairing === "all-listed") {
+    const source = catalogue.languages.find((language) => language.code === sourceLanguage);
+    if (source?.myMemorySource || source?.googleSource) {
+      return catalogue.languages
+        .filter(
+          (language) =>
+            language.code !== sourceLanguage && (language.myMemoryTarget || language.googleTarget),
+        )
+        .map((language) => language.code);
+    }
+  }
   return [
     ...new Set(
       catalogue.directions
         .filter(
           (direction) =>
-            direction.sourceLanguage === sourceLanguage && (direction.nvidia || direction.google),
+            direction.sourceLanguage === sourceLanguage &&
+            (direction.myMemory || direction.nvidia || direction.google),
         )
         .map((direction) => direction.targetLanguage),
     ),
@@ -54,7 +67,9 @@ export function resolveSelectionSource(
   const romanizedNepali = normalizeRomanizedNepali(text);
   if (
     romanizedNepali &&
-    catalogue.languages.some((language) => language.code === "ne" && language.googleSource)
+    catalogue.languages.some(
+      (language) => language.code === "ne" && (language.myMemorySource || language.googleSource),
+    )
   ) {
     return { assumed: false, code: "ne", romanizedNepali };
   }

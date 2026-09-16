@@ -15,6 +15,7 @@ import {
   type PreviewLanguage,
 } from "../lib/capabilities";
 import {
+  isCurrentCapabilityCatalogue,
   loadCachedCapabilityCatalogue,
   saveCachedCapabilityCatalogue,
 } from "../lib/capability-cache";
@@ -117,7 +118,9 @@ const FAKE_CONSENT: OnlineConsent = {
   acceptedAt: "2026-09-07T00:00:00.000Z",
   google: true,
   googleBackup: true,
+  myMemory: true,
   nvidia: true,
+  nvidiaBackup: true,
   version: "phase-3.1-fake-gateway",
 };
 
@@ -133,6 +136,13 @@ const REGISTER_LABELS: Record<ExplanationRegister, string> = {
   neutral: "Neutral",
   slang: "Slang",
 };
+
+function providerLabel(provider: TranslationResult["provider"]): string {
+  if (provider === "mymemory") return "MyMemory";
+  if (provider === "nvidia") return "NVIDIA";
+  if (provider === "google") return "Google";
+  return "On-device";
+}
 
 type ExplanationState = "idle" | "consent" | "loading" | "error" | "ready";
 
@@ -1001,7 +1011,7 @@ function createController(): InstalledController {
       const privacy = document.createElement("p");
       privacy.className = "privacy";
       privacy.append(
-        "Online mode sends only this selected text to NVIDIA first, with Google as an optional backup. ",
+        "Online mode sends only this selected text to MyMemory first, with NVIDIA as a backup for supported languages. ",
       );
       const link = document.createElement("a");
       link.href = browser.runtime.getURL("/privacy.html");
@@ -1080,8 +1090,8 @@ function createController(): InstalledController {
       meta.className = "meta";
       meta.textContent =
         context?.gatewayMode === "live"
-          ? `Online via ${result.provider}`
-          : `Simulated ${result.provider} route`;
+          ? `Online via ${providerLabel(result.provider)}`
+          : `Simulated ${providerLabel(result.provider)} route`;
       body.insertBefore(meta, actions);
       if (context?.romanizedNepali) {
         const note = document.createElement("p");
@@ -1525,8 +1535,12 @@ function createController(): InstalledController {
         ? storedCatalogue
         : null;
     try {
-      catalogue = await gatewayClient.getCapabilities();
-      await saveCachedCapabilityCatalogue(catalogue).catch(() => undefined);
+      const fetchedCatalogue = await gatewayClient.getCapabilities();
+      if (!isCurrentCapabilityCatalogue(fetchedCatalogue)) {
+        throw new Error("The gateway is serving an outdated language catalogue.");
+      }
+      catalogue = fetchedCatalogue;
+      await saveCachedCapabilityCatalogue(fetchedCatalogue).catch(() => undefined);
     } catch {
       if (!catalogue) throw new Error("Language availability could not be loaded.");
     }

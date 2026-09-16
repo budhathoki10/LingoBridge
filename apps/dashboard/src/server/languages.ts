@@ -26,7 +26,10 @@ export async function loadTargetLanguages(gatewayUrl: string): Promise<LanguageO
     if (!parsed.success) return cache?.options ?? null;
     const targets = new Set(parsed.data.directions.map((direction) => direction.targetLanguage));
     const options = parsed.data.languages
-      .filter((language) => language.googleTarget || targets.has(language.code))
+      .filter(
+        (language) =>
+          language.myMemoryTarget || language.googleTarget || targets.has(language.code),
+      )
       .map((language) => ({
         code: language.code,
         name: language.name,

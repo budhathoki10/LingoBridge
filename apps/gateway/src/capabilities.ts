@@ -57,23 +57,27 @@ export function supportsTranslation(
       (direction) =>
         direction.sourceLanguage === sourceLanguage &&
         direction.targetLanguage === targetLanguage &&
-        (direction.google || direction.nvidia),
+        (direction.myMemory || direction.google || direction.nvidia),
     );
     if (explicitDirection) return true;
-    if (!target?.googleTarget) return false;
+    if (!target?.googleTarget && !target?.myMemoryTarget) return false;
     if (sourceLanguage === "auto") {
-      return catalogue.languages.some((language) => language.googleSource);
+      return catalogue.languages.some(
+        (language) => language.googleSource || language.myMemorySource,
+      );
     }
     return Boolean(
       catalogue.languages.find(
-        (language) => language.code === sourceLanguage && language.googleSource,
+        (language) =>
+          language.code === sourceLanguage && (language.googleSource || language.myMemorySource),
       ),
     );
   }
 
   if (sourceLanguage === "auto") {
     return catalogue.directions.some(
-      (direction) => direction.targetLanguage === targetLanguage && direction.google,
+      (direction) =>
+        direction.targetLanguage === targetLanguage && (direction.myMemory || direction.google),
     );
   }
 
@@ -81,6 +85,6 @@ export function supportsTranslation(
     (direction) =>
       direction.sourceLanguage === sourceLanguage &&
       direction.targetLanguage === targetLanguage &&
-      (direction.google || direction.nvidia),
+      (direction.myMemory || direction.google || direction.nvidia),
   );
 }

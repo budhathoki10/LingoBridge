@@ -7,6 +7,7 @@ import {
 } from "@lingobridge/contracts/account";
 import { languageCodeSchema } from "@lingobridge/contracts";
 import {
+  type AccountExport,
   deleteAccount,
   deleteAllPhrases,
   deletePhrases,
@@ -17,6 +18,7 @@ import {
   updateDashboardPreferences,
   updatePhraseNote,
 } from "@lingobridge/database";
+import type { LivePhraseRecord } from "@lingobridge/contracts/account";
 import { z } from "zod";
 import { ACCOUNT_DELETION_CONFIRMATION, DELETE_ALL_CONFIRMATION } from "../../lib/privacy";
 import { clearCookie, cookieNames } from "../cookies";
@@ -165,6 +167,55 @@ export async function handleRevokeExtension(
   return jsonResponse({ revoked: 1 });
 }
 
+function formatPhrases(phrases: readonly LivePhraseRecord[]): string[] {
+  const lines: string[] = [];
+  for (const [index, phrase] of phrases.entries()) {
+    if (index > 0) lines.push("", "----------------------------------------", "");
+    lines.push("Source:", phrase.sourceText, "", "Translation:", phrase.translatedText);
+  }
+  return lines;
+}
+
+function formatPhraseExport(phrases: readonly LivePhraseRecord[]): string {
+  return `${formatPhrases(phrases).join("\n")}\n`;
+}
+
+function formatAccountExport(exported: AccountExport): string {
+  const preferences = exported.preferences;
+  const lines = [
+    "LingoBridge Account Data",
+    `Exported: ${exported.exportedAt}`,
+    "",
+    "ACCOUNT",
+    `Display name: ${exported.account.displayName ?? "Not provided"}`,
+    `Email: ${exported.account.email ?? "Not provided"}`,
+    `Role: ${exported.account.role}`,
+    `Created: ${exported.account.createdAt}`,
+    "",
+    "PREFERENCES",
+    `Preferred target language: ${preferences.preferredTargetLanguage ?? "Not set"}`,
+    `Processing preference: ${preferences.processingPreference ?? "Not set"}`,
+    `Phrase sync: ${preferences.phraseSyncEnabled ? "Enabled" : "Disabled"}`,
+    `Updated: ${preferences.updatedAt ?? "Never"}`,
+    `Revision: ${preferences.revision}`,
+    "",
+    `CONNECTED EXTENSIONS (${exported.extensionSessions.length})`,
+  ];
+  if (exported.extensionSessions.length === 0) lines.push("None");
+  for (const [index, session] of exported.extensionSessions.entries()) {
+    lines.push(
+      "",
+      `Extension ${index + 1}`,
+      `Device: ${session.deviceLabel}`,
+      `Connected: ${session.connectedAt}`,
+      `Last used: ${session.lastUsedAt}`,
+      `Revoked: ${session.revokedAt ?? "No"}`,
+    );
+  }
+  lines.push("", `SAVED PHRASES (${exported.phrases.length})`, ...formatPhrases(exported.phrases));
+  return `${lines.join("\n")}\n`;
+}
+
 /** GET /api/dashboard/export?scope=phrases|account */
 export async function handleExport(
   request: Request,
@@ -176,7 +227,7 @@ export async function handleExport(
     new URL(request.url).searchParams.get("scope") === "account" ? "account" : "phrases";
   const now = services.now();
   const userId = auth.auth.user.id;
-  const body =
+  const exported =
     scope === "account"
       ? await exportAccount(services.database, userId, now)
       : {
@@ -184,13 +235,17 @@ export async function handleExport(
           phrases: await listAllLivePhrases(services.database, userId),
           version: 1,
         };
-  if (!body) return errorResponse("not-found", "The account is no longer available.");
-  const filename = `lingobridge-${scope}-${now.toISOString().slice(0, 10)}.json`;
-  return new Response(`${JSON.stringify(body, null, 2)}\n`, {
+  if (!exported) return errorResponse("not-found", "The account is no longer available.");
+  const text =
+    scope === "account"
+      ? formatAccountExport(exported as AccountExport)
+      : formatPhraseExport(exported.phrases);
+  const filename = `lingobridge-${scope}-${now.toISOString().slice(0, 10)}.txt`;
+  return new Response(text, {
     headers: {
       "Cache-Control": "no-store",
       "Content-Disposition": `attachment; filename="${filename}"`,
-      "Content-Type": "application/json; charset=utf-8",
+      "Content-Type": "text/plain; charset=utf-8",
       "X-Content-Type-Options": "nosniff",
     },
   });

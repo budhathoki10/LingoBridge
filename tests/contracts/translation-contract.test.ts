@@ -59,6 +59,7 @@ describe("translationRequestSchema", () => {
 
 describe("providerSchema", () => {
   it("accepts only reviewed provider labels", () => {
+    expect(providerSchema.safeParse("mymemory").success).toBe(true);
     expect(providerSchema.safeParse("google").success).toBe(true);
     expect(providerSchema.safeParse("nvidia").success).toBe(true);
     expect(providerSchema.safeParse("unapproved-provider").success).toBe(false);

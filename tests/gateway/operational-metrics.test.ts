@@ -9,7 +9,7 @@ import {
   observeTranslationAdapter,
   OperationalMetrics,
 } from "../../apps/gateway/src/operational-metrics";
-import { NvidiaPrimaryProviderRouter } from "../../apps/gateway/src/provider-router";
+import { MyMemoryPrimaryProviderRouter } from "../../apps/gateway/src/provider-router";
 import { TranslationAdapterError } from "../../apps/gateway/src/translation-adapter";
 import {
   ANONYMOUS_INSTALLATION_HEADER,
@@ -142,26 +142,33 @@ describe("OperationalMetrics", () => {
     expect(metrics.snapshot("live").providers).toEqual([]);
   });
 
-  it("counts Google backup attempts and outcomes through the router", async () => {
+  it("counts NVIDIA fallback attempts and outcomes through the router", async () => {
     const metrics = new OperationalMetrics();
-    const failingNvidia = {
+    const failingMyMemory = {
       translate: async () => {
         throw new TranslationAdapterError("provider-unavailable", "down");
       },
     };
-    const router = new NvidiaPrimaryProviderRouter({
-      google: observeTranslationAdapter(new FakeTranslationAdapter(0), "google", metrics),
-      nvidia: observeTranslationAdapter(failingNvidia, "nvidia", metrics),
-      onBackup: (succeeded) => metrics.recordFallback(succeeded),
+    const router = new MyMemoryPrimaryProviderRouter({
+      myMemory: observeTranslationAdapter(failingMyMemory, "mymemory", metrics),
+      nvidia: observeTranslationAdapter(new FakeTranslationAdapter(0), "nvidia", metrics),
+      onFallback: (succeeded) => metrics.recordFallback("nvidia", succeeded),
     });
-    await router.translate({ ...request, targetLanguage: "de" }, new AbortController().signal);
+    await router.translate(
+      {
+        ...request,
+        consent: { ...request.consent, myMemory: true, nvidiaBackup: true },
+        targetLanguage: "de",
+      },
+      new AbortController().signal,
+    );
     const snapshot = metrics.snapshot("live");
-    expect(snapshot.providers.find((provider) => provider.provider === "google")).toMatchObject({
+    expect(snapshot.providers.find((provider) => provider.provider === "nvidia")).toMatchObject({
       fallbackAttempts: 1,
       fallbackSuccesses: 1,
     });
     expect(
-      snapshot.providers.find((provider) => provider.provider === "nvidia")?.outcomes[
+      snapshot.providers.find((provider) => provider.provider === "mymemory")?.outcomes[
         "provider-error"
       ],
     ).toBe(1);

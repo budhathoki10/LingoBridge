@@ -61,9 +61,9 @@ export default async function PrivacyPage({ searchParams }: { searchParams: Sear
             <div>
               <dt>Translation providers</dt>
               <dd>
-                NVIDIA translates first where it supports the language pair. Google Cloud
-                Translation is used as a backup only where you allowed it. Each result shows which
-                one produced it.
+                MyMemory translates first and receives the gateway contact email in its request.
+                NVIDIA is attempted once as a backup only for a supported language direction. Each
+                result shows which provider produced it.
               </dd>
             </div>
             <div>

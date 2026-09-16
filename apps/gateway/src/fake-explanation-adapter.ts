@@ -44,7 +44,7 @@ export class FakeExplanationAdapter implements ExplanationAdapter {
       provider: "nvidia",
       register: "neutral",
       requestId: request.requestId,
-      usageNote: "Simulated explanation. Live mode uses NVIDIA Nemotron 3 Super.",
+      usageNote: "Simulated explanation. Live mode uses NVIDIA Nemotron 3 Ultra.",
     });
   }
 }
