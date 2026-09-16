@@ -54,7 +54,14 @@ The dashboard must provide export, delete-one, delete-all, session revocation, a
 
 The gateway must not create translation history, analytics events containing text, or error logs containing source or result content.
 
-Word understanding is a separate explicit action covered by the Nemotron explanation consent. It
+Explain and word understanding share one explanation consent (`explain-nvidia-openrouter-v2`). It
+names NVIDIA Nemotron as the primary processor and OpenRouter, with the model provider it routes to,
+as the backup. Free OpenRouter models may be served by providers whose terms allow logging or
+training, so the privacy page says so and advises against explaining text the user would not share.
+The gateway sends a request to OpenRouter only when the consent sets `openRouter: true`; consent
+stored under the earlier NVIDIA-only version is ignored and asked for again.
+
+Word understanding is a separate explicit action covered by that explanation consent. It
 sends one chosen word plus the already selected text, its translation, and the language pair. It
 never reads nearby webpage content, analyzes every word automatically, or persists a request unless
 the user subsequently chooses Save word.

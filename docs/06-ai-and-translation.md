@@ -71,6 +71,24 @@ Use LingoBridge's gateway for active-catalogue pairs absent from Chrome. If late
 
 The active capability catalogue defines standard Online translation coverage. The selected NVIDIA model lists English and 36 non-English languages but does not include Nepali. NVIDIA is enabled only for exact verified pair tags, not every possible combination of those languages. See `docs/11-language-coverage.md`.
 
+### Explanation models
+
+Explain and word understanding use NVIDIA `nemotron-3-ultra-550b-a55b`. Its hosted trial endpoint
+was observed on 16–17 September 2026 answering with HTTP 503 or not answering for minutes, so the
+gateway retries a temporary NVIDIA failure once and then, with consent, asks OpenRouter.
+
+On 17 September 2026 the same word and Explain prompts (English source, Nepali and Hindi readers)
+were run on OpenRouter free models:
+
+| Model | Availability | Latency | Result |
+| --- | --- | --- | --- |
+| `google/gemma-4-31b-it:free` | 1 of 31 requests; the rest were upstream shared-pool 429s | 5 s | The one answer was accurate. Not usable as a backup while the pool is saturated. |
+| `google/gemma-4-26b-a4b-it:free` | 0 of 30 requests | — | Not evaluated. |
+| `nex-agi/nex-n2.5-pro:free` | 5 of 5 | 5–46 s | Natural, accurate Nepali and Hindi. Chosen as the default backup. |
+| `nvidia/nemotron-3-super-120b-a12b:free` | 5 of 5 | 6–16 s | Wrong word meanings, misspellings, and a Nepali explanation that restated the translation. |
+
+Free-model availability changes; re-run this comparison before changing `OPENROUTER_MODEL`.
+
 ### Fallback policy
 
 LingoBridge must not silently move an On-device request to Online. It may offer the online option with a clear explanation. Online consent discloses MyMemory as primary, the configured contact email sent in `de`, and NVIDIA as a possible fallback. If fallback occurs, the result identifies NVIDIA. Any provider with materially different data handling requires renewed consent before it joins the route.

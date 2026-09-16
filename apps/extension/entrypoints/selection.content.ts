@@ -172,6 +172,7 @@ type SurfaceState =
   | "unsupported-pair"
   | "needs-target"
   | "preparing"
+  | "ready"
   | "sensitive"
   | "success";
 
@@ -314,8 +315,7 @@ const SURFACE_CSS = `
   .explain__meaning { color: #19212b; font-size: 13px; line-height: 1.5; }
   .explain__note { color: #4d5660; font-size: 11px; line-height: 1.45; }
   .explain__examples { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
-  .explain__examples li { display: grid; gap: 1px; padding: 6px 8px; border-radius: 6px; background: #fff; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
-  .explain__examples span:last-child { color: #5c6570; }
+  .explain__examples li { padding: 6px 8px; border-radius: 6px; background: #fff; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
   .explain__status { display: flex; align-items: center; gap: 8px; color: #405070; font-size: 11px; }
   .explain__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
   .explain__actions button { min-height: 30px; padding: 5px 10px; border: 1px solid #2363eb; border-radius: 7px; color: #fff; background: #2363eb; font-size: 11px; font-weight: 700; }
@@ -827,12 +827,7 @@ function createController(): InstalledController {
       if (targets.has(language.code)) option(targetSelect, language.code, language.name);
     }
     targetSelect.value = context.targetLanguage;
-    targetSelect.addEventListener("change", () => {
-      if (!context) return;
-      context.targetLanguage = targetSelect.value;
-      void savePreferredTarget(context.targetLanguage);
-      void runTranslation();
-    });
+    targetSelect.addEventListener("change", () => chooseTarget(targetSelect.value));
 
     const selectedName =
       getPreviewLanguage(context.targetLanguage, context.languages)?.name ?? context.targetLanguage;
@@ -872,19 +867,40 @@ function createController(): InstalledController {
       const button = document.createElement("button");
       button.type = "button";
       button.textContent = name;
-      button.setAttribute("aria-label", `Translate to ${name}`);
+      button.setAttribute("aria-label", `Use ${name}`);
       button.setAttribute("aria-pressed", String(code === context.targetLanguage));
       button.disabled = state === "loading" || state === "preparing";
       button.addEventListener("pointerdown", (event) => event.preventDefault());
       button.addEventListener("click", () => {
-        if (!context || context.targetLanguage === code) return;
-        context.targetLanguage = code;
-        void savePreferredTarget(code);
-        void runTranslation();
+        if (context?.targetLanguage !== code) chooseTarget(code);
       });
       favorites.append(button);
     }
     fillFavoritePicker(favoritePicker, targets);
+  }
+
+  /**
+   * Choosing a language only records the choice. Translating is a separate click, so switching
+   * from the default language to the one the reader wants never sends a translation nobody reads.
+   */
+  function chooseTarget(code: string): void {
+    if (!context) return;
+    context.targetLanguage = code;
+    void savePreferredTarget(code);
+    if (state !== "consent") {
+      requestSequence += 1;
+      requestController?.abort();
+      requestController = null;
+      stopSpeaking();
+      result = null;
+      savedPhraseId = null;
+      copyFeedback = null;
+      replaceFeedback = null;
+      resetExplanation();
+      resetWordUnderstanding();
+      state = isTranslatablePair() ? "ready" : "unsupported-pair";
+    }
+    renderPanel();
   }
 
   function fillFavoritePicker(picker: HTMLDetailsElement, targets: Set<string>): void {
@@ -1024,7 +1040,7 @@ function createController(): InstalledController {
       statusContent(status, sensitiveMessage(sensitiveKind), "warning");
       actions.append(
         actionButton("Cancel", close, true),
-        actionButton("Translate anyway", () => void prepareTranslation(true)),
+        actionButton("Translate anyway", () => void prepareTranslation(true, true)),
       );
       return;
     }
@@ -1071,6 +1087,17 @@ function createController(): InstalledController {
         "warning",
       );
       targetSelect.disabled = false;
+      return;
+    }
+
+    if (state === "ready") {
+      const targetName =
+        getPreviewLanguage(context?.targetLanguage ?? "", context?.languages)?.name ??
+        context?.targetLanguage;
+      statusContent(status, `Choose a language, then translate into ${targetName}.`);
+      const translate = actionButton("Translate", () => void runTranslation());
+      translate.setAttribute("aria-label", `Translate into ${targetName}`);
+      actions.append(translate);
       return;
     }
 
@@ -1245,7 +1272,7 @@ function createController(): InstalledController {
       const note = document.createElement("p");
       note.className = "explain__note";
       note.textContent =
-        "Word understanding sends this word, the selected sentence, and its translation to NVIDIA Nemotron. Nothing is saved unless you choose Save word.";
+        "Word understanding sends this word, the selected sentence, and its translation to NVIDIA Nemotron, or to an OpenRouter model if NVIDIA can’t answer. Nothing is saved unless you choose Save word.";
       const buttons = document.createElement("div");
       buttons.className = "explain__actions";
       buttons.append(
@@ -1302,6 +1329,11 @@ function createController(): InstalledController {
       const term = document.createElement("dt");
       term.textContent = label;
       const detail = document.createElement("dd");
+      if (result) {
+        detail.lang = result.targetLanguage;
+        detail.dir =
+          getPreviewLanguage(result.targetLanguage, context?.languages)?.textDirection ?? "auto";
+      }
       detail.textContent = value;
       wrapper.append(term, detail);
       list.append(wrapper);
@@ -1470,7 +1502,7 @@ function createController(): InstalledController {
       const note = document.createElement("p");
       note.className = "explain__note";
       note.append(
-        "Explain sends this selected text and its translation to NVIDIA’s Nemotron model to write a short explanation. Nothing is saved. ",
+        "Explain sends this selected text and its translation to NVIDIA’s Nemotron model, or to an OpenRouter model if NVIDIA can’t answer, to write a short explanation. Nothing is saved. ",
       );
       const link = document.createElement("a");
       link.href = browser.runtime.getURL("/privacy.html");
@@ -1548,18 +1580,12 @@ function createController(): InstalledController {
     const examples = document.createElement("ul");
     examples.className = "explain__examples";
     examples.setAttribute("aria-label", "Examples");
-    const sourceLanguage = result.detectedSourceLanguage ?? context?.sourceLanguage ?? "";
+    // The whole explanation reads in the translated language, so only the example's translation shows.
     for (const example of explanation.examples) {
       const item = document.createElement("li");
-      const original = document.createElement("span");
-      original.lang = sourceLanguage;
-      original.dir = "auto";
-      original.textContent = example.source;
-      const translated = document.createElement("span");
-      translated.lang = result.targetLanguage;
-      translated.dir = targetDirection;
-      translated.textContent = example.translation;
-      item.append(original, translated);
+      item.lang = result.targetLanguage;
+      item.dir = targetDirection;
+      item.textContent = example.translation;
       examples.append(item);
     }
     card.append(examples);
@@ -1845,7 +1871,11 @@ function createController(): InstalledController {
     };
   }
 
-  async function prepareTranslation(sensitiveConfirmed: boolean): Promise<void> {
+  /** Loads languages and checks the pair. Only `translateNow` callers have already asked to translate. */
+  async function prepareTranslation(
+    sensitiveConfirmed: boolean,
+    translateNow = false,
+  ): Promise<void> {
     if (!activeSelection) return;
     if (!sensitiveConfirmed) {
       sensitiveKind = detectSensitiveSelection(activeSelection.text);
@@ -1870,7 +1900,12 @@ function createController(): InstalledController {
         renderPanel();
         return;
       }
-      await runTranslation();
+      if (translateNow) {
+        await runTranslation();
+        return;
+      }
+      state = "ready";
+      renderPanel();
     } catch (error) {
       state = "error";
       errorMessage = error instanceof Error ? error.message : "Translation could not be prepared.";

@@ -1,4 +1,6 @@
+import { setTimeout as sleep } from "node:timers/promises";
 import {
+  type ExplanationProvider,
   type ExplanationRequest,
   explanationResultSchema,
   type WordUnderstandingRequest,
@@ -39,7 +41,15 @@ export const WORD_UNDERSTANDING_SYSTEM_PROMPT = `You explain one word from a sen
 Reply with one JSON object and nothing else:
 {"word": string, "translation": string, "meaning": string, "partOfSpeech": string, "contextMeaning": string, "example": string, "pronunciation": string | null}
 
-Keep every field concise. "translation" is the selected word in the reader's language. "meaning" is a simple definition in the reader's language. "contextMeaning" explains its meaning in this sentence. "example" is one short source-language sentence using the same sense. Use pronunciation only when useful; otherwise null.
+Write every field except "word" entirely in the reader's language. The reader must not see any other language, so never add source-language words, English grammar terms, or phonetic symbols.
+
+Keep every field concise. "translation" is the selected word in the reader's language. "meaning" is a simple definition. "partOfSpeech" is the grammar category named in the reader's language (for Nepali, "विशेषण" rather than "adjective"). "contextMeaning" explains its meaning in this sentence. "example" is one short, natural sentence in the reader's language that uses the translated word in the same sense. "pronunciation" tells the reader how to say the selected source-language word itself (the value of "word"), never the translation.
+
+Pronunciation rules:
+- Spell the sound of the selected word using the reader's language's own letters and spelling habits, so a reader of that language can say it aloud. Examples for "enormous": Nepali "इनोर्मस", Japanese "イノーマス", Arabic "إينورمَس", Swahili "inomasi".
+- When the reader's language uses the Latin alphabet, still respell the selected word by sound with that language's spelling; do not copy the word unchanged and do not give the translation's pronunciation.
+- Do not use phonetic symbols, capital-letter stress marks, or English-style respellings.
+- Use null when the selected word is already written and read the same way in the reader's language.
 
 Numbers: always write digits as 0-9, never in Devanagari or other local-script digits, even when the rest of the sentence is in that script.`;
 
@@ -103,6 +113,24 @@ function buildUserMessage(request: ExplanationRequest): string {
     `<selected_text>${request.sourceText}</selected_text>`,
     `<translation>${request.translatedText}</translation>`,
   ].join("\n");
+}
+
+/** Asked once when the first word-understanding answer is not the requested JSON object. */
+export const WORD_JSON_NUDGE =
+  "That answer could not be read. Reply again with only the JSON object described, with every key present, and nothing before or after it.";
+
+/** Keeps a verbose but otherwise valid model field inside the contract limit instead of failing. */
+export function truncateField(text: string, maxLength: number): string {
+  const characters = Array.from(text.trim());
+  if (characters.length <= maxLength) return characters.join("");
+  return characters.slice(0, maxLength).join("").trim();
+}
+
+/** A pronunciation that only repeats the translation says nothing about the selected word. */
+function usefulPronunciation(pronunciation: string | null | undefined, translation: string) {
+  const spoken = pronunciation?.trim();
+  if (!spoken) return null;
+  return normalizeForComparison(spoken) === normalizeForComparison(translation) ? null : spoken;
 }
 
 /** Asked once when the first answer only restates the translation. */
@@ -201,6 +229,8 @@ export class NvidiaExplanationAdapter implements ExplanationAdapter {
     private readonly client: NvidiaTranslationClient,
     private readonly model = DEFAULT_EXPLANATION_MODEL,
     private readonly maxTokens = 2_048,
+    private readonly retryDelayMilliseconds = 750,
+    private readonly provider: ExplanationProvider = "nvidia",
   ) {}
 
   async explain(request: ExplanationRequest, signal: AbortSignal) {
@@ -240,7 +270,7 @@ export class NvidiaExplanationAdapter implements ExplanationAdapter {
         .slice(0, MAX_EXAMPLES)
         .map((example) => ({ ...example, translation: normalizeDigits(example.translation) })),
       meaning: normalizeDigits(output.data.meaning),
-      provider: "nvidia",
+      provider: this.provider,
       register: output.data.register,
       requestId: request.requestId,
       usageNote: normalizeDigits(output.data.usageNote?.trim() || "") || null,
@@ -256,23 +286,32 @@ export class NvidiaExplanationAdapter implements ExplanationAdapter {
   }
 
   async understandWord(request: WordUnderstandingRequest, signal: AbortSignal) {
-    const answer = await this.ask(
-      [
-        { content: WORD_UNDERSTANDING_SYSTEM_PROMPT, role: "system" },
-        {
-          content: [
-            `Source language: ${describeLanguage(request.sourceLanguage)}`,
-            `Reader's language: ${describeLanguage(request.targetLanguage)}`,
-            `<word>${request.word}</word>`,
-            `<source_text>${request.sourceText}</source_text>`,
-            `<translation>${request.translatedText}</translation>`,
-          ].join("\n"),
-          role: "user",
-        },
-      ],
-      signal,
-    );
-    const output = wordModelOutputSchema.safeParse(extractJsonObject(answer));
+    const conversation: NvidiaChatCompletionRequest["messages"] = [
+      { content: WORD_UNDERSTANDING_SYSTEM_PROMPT, role: "system" },
+      {
+        content: [
+          `Source language: ${describeLanguage(request.sourceLanguage)}`,
+          `Reader's language: ${describeLanguage(request.targetLanguage)}`,
+          `<word>${request.word}</word>`,
+          `<source_text>${request.sourceText}</source_text>`,
+          `<translation>${request.translatedText}</translation>`,
+        ].join("\n"),
+        role: "user",
+      },
+    ];
+    const answer = await this.ask(conversation, signal);
+    let output = wordModelOutputSchema.safeParse(extractJsonObject(answer));
+
+    if (!output.success) {
+      conversation.push(
+        { content: answer, role: "assistant" },
+        { content: WORD_JSON_NUDGE, role: "user" },
+      );
+      output = wordModelOutputSchema.safeParse(
+        extractJsonObject(await this.ask(conversation, signal)),
+      );
+    }
+
     if (!output.success) {
       throw new TranslationAdapterError(
         "provider-unavailable",
@@ -280,14 +319,17 @@ export class NvidiaExplanationAdapter implements ExplanationAdapter {
         true,
       );
     }
+    const { data } = output;
+    const pronunciation = usefulPronunciation(data.pronunciation, data.translation);
     const parsed = wordUnderstandingResultSchema.safeParse({
-      ...output.data,
-      contextMeaning: normalizeDigits(output.data.contextMeaning),
-      meaning: normalizeDigits(output.data.meaning),
-      pronunciation: output.data.pronunciation?.trim() || null,
-      provider: "nvidia",
+      contextMeaning: normalizeDigits(truncateField(data.contextMeaning, 500)),
+      example: normalizeDigits(truncateField(data.example, 300)),
+      meaning: normalizeDigits(truncateField(data.meaning, 500)),
+      partOfSpeech: truncateField(data.partOfSpeech, 40),
+      pronunciation: pronunciation ? truncateField(pronunciation, 160) : null,
+      provider: this.provider,
       requestId: request.requestId,
-      translation: normalizeDigits(output.data.translation),
+      translation: normalizeDigits(truncateField(data.translation, 300)),
       word: request.word,
     });
     if (!parsed.success) {
@@ -300,27 +342,43 @@ export class NvidiaExplanationAdapter implements ExplanationAdapter {
     return parsed.data;
   }
 
+  /** Hosted models briefly answer 429 or 503 under load, so a temporary failure gets one retry. */
   private async ask(
     messages: NvidiaChatCompletionRequest["messages"],
     signal: AbortSignal,
   ): Promise<string> {
-    let response: NvidiaChatCompletionResponse;
     try {
-      response = await this.client.createChatCompletion(
-        {
-          // Room for a possible reasoning preamble before the short JSON answer.
-          max_tokens: this.maxTokens,
-          chat_template_kwargs: { enable_thinking: false },
-          messages: [...messages],
-          model: this.model,
-          temperature: 0.3,
-          top_p: 0.9,
-        },
-        signal,
-      );
+      return await this.complete(messages, signal);
     } catch (error) {
-      throw providerError(error);
+      const failure = providerError(error);
+      if (!(failure instanceof TranslationAdapterError) || !failure.retryable || signal.aborted) {
+        throw failure;
+      }
+      await sleep(this.retryDelayMilliseconds, undefined, { signal });
+      try {
+        return await this.complete(messages, signal);
+      } catch (retryError) {
+        throw providerError(retryError);
+      }
     }
+  }
+
+  private async complete(
+    messages: NvidiaChatCompletionRequest["messages"],
+    signal: AbortSignal,
+  ): Promise<string> {
+    const response: NvidiaChatCompletionResponse = await this.client.createChatCompletion(
+      {
+        // Room for a possible reasoning preamble before the short JSON answer.
+        max_tokens: this.maxTokens,
+        ...(this.provider === "nvidia" ? { chat_template_kwargs: { enable_thinking: false } } : {}),
+        messages: [...messages],
+        model: this.model,
+        temperature: 0.3,
+        top_p: 0.9,
+      },
+      signal,
+    );
     return response.choices?.[0]?.message?.content ?? "";
   }
 }

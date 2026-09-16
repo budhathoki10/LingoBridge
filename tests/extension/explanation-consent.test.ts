@@ -22,14 +22,18 @@ class MemoryConsentStorage implements ConsentStorage {
 }
 
 describe("explanation consent", () => {
-  it("is absent until accepted, names NVIDIA Nemotron, and is independent of translation consent", async () => {
+  it("is absent until accepted, allows the OpenRouter backup, and is independent of translation consent", async () => {
     const storage = new MemoryConsentStorage();
     storage.values.lingobridgeOnlineProviderConsent = { google: true };
     const repository = createExplanationConsentRepository(storage);
 
     expect(await repository.load()).toBeNull();
     const consent = await repository.accept();
-    expect(consent).toMatchObject({ nvidia: true, version: EXPLANATION_CONSENT_VERSION });
+    expect(consent).toMatchObject({
+      nvidia: true,
+      openRouter: true,
+      version: EXPLANATION_CONSENT_VERSION,
+    });
     expect(await repository.load()).toEqual(consent);
 
     await repository.revoke();
@@ -37,12 +41,12 @@ describe("explanation consent", () => {
     expect(storage.values.lingobridgeOnlineProviderConsent).toEqual({ google: true });
   });
 
-  it("ignores consent from an older version", async () => {
+  it("asks again when the stored consent predates the OpenRouter backup", async () => {
     const storage = new MemoryConsentStorage();
     storage.values.lingobridgeExplanationConsent = {
       acceptedAt: "2026-01-01T00:00:00.000Z",
       nvidia: true,
-      version: "explain-nvidia-nemotron-v0",
+      version: "explain-nvidia-nemotron-v1",
     };
     expect(await createExplanationConsentRepository(storage).load()).toBeNull();
   });

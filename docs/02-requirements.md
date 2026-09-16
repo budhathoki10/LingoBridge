@@ -8,6 +8,7 @@
 - When Selection Magic is enabled for the site, wait for the selection to stabilize and show one small magic-icon button beside the eligible range.
 - Do not detect, transmit, or translate the selected text merely because the icon appeared. Start the translation flow only after the user clicks the icon.
 - After the icon click, detect the source language and open an anchored translator using the user's saved preferred target language. Let the user correct either language.
+- Send the selected text for translation only when the user clicks Translate. Opening the translator, choosing a target language, or switching favorites never starts a translation, so changing away from the default language does not create an unused request. Consent and "Translate anyway" confirmations are themselves explicit translate actions.
 - Keep right-click and keyboard-shortcut actions as accessible fallbacks.
 - Anchor the translator near the selection while keeping it inside the visible viewport.
 - Show source and target language selectors, swap, source text, result, loading, Copy, Listen, Save, settings, and close controls.
@@ -49,8 +50,16 @@
 - Keep saved phrases locally by default.
 - After a successful translation, let the user explicitly choose a word in the original selected
   text and request a concise contextual definition, translation, part of speech, and example.
+- Write every explanation and word-understanding field in the language the text was translated
+  into, including the part of speech and the example sentence. The pronunciation describes the
+  selected source word itself, respelled by sound with that language's letters, never the
+  translation's pronunciation or phonetic symbols. Explain shows only the translated example
+  sentence.
 - Do not analyze words automatically. Cache repeated word requests only for the current open
   translator and save vocabulary only after a separate Save word action.
+- Explain and word understanding use NVIDIA Nemotron 3 Ultra first. When NVIDIA fails or does not
+  answer within the configured primary deadline, retry once on the configured OpenRouter model, only
+  if the user's explanation consent names OpenRouter. The result names the provider that answered.
 - Replace text only inside an editable field and only after the user confirms.
 - In Online mode, use MyMemory first and include the configured server-side contact email as its `de` parameter on every provider request.
 - If MyMemory fails, reports exhausted quota, or returns an unusable response, attempt NVIDIA Riva Translate 4B Instruct v2 once when the requested direction is reviewed as supported and the user accepted both providers.

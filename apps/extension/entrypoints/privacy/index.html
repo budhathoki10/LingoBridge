@@ -31,8 +31,14 @@
         <p>
           When you click Explain on a translation, the gateway sends only that selected text, its
           translation, and the two language codes to NVIDIA Nemotron 3 Ultra to write a short,
-          simple explanation with examples in the language you translated into. Explain asks for its own permission the first time,
+          simple explanation with examples in the language you translated into. Clicking a word
+          sends that word, the selected text, and its translation the same way. Explain asks for its own permission the first time,
           works only on short phrases, and is never used unless you click it.
+        </p>
+        <p>
+          If NVIDIA fails or is too slow, the gateway sends the same request once to a model on
+          OpenRouter. Free OpenRouter models are run by other companies whose terms may allow them
+          to log or learn from requests, so do not explain text you would not share.
         </p>
       </section>
 
@@ -49,8 +55,8 @@
         <h2>Your control</h2>
         <p>
           Online translation stays disabled until you allow it in the popup. You can turn it off
-          there at any time. Selecting webpage text only displays the magic icon; detection and
-          translation start after you click it. Disabling Online translation prevents new text from
+          there at any time. Selecting webpage text only displays the magic icon; clicking it
+          opens the translator, and the text is sent only when you click Translate. Disabling Online translation prevents new text from
           being sent; it does not delete text you deliberately save in later product phases.
         </p>
       </section>
@@ -75,7 +81,8 @@
           rel="noreferrer"
           target="_blank"
           >Nemotron 3 Ultra model</a
-        >.
+        >, with OpenRouter as the backup. Read OpenRouter's
+        <a href="https://openrouter.ai/privacy" rel="noreferrer" target="_blank">privacy policy</a>.
       </p>
     </main>
   </body>

@@ -15,7 +15,9 @@ add latency, cost, and unwanted text processing.
 - Send one chosen word, the selected text, its existing translation, and the language pair through
   the existing gateway and Nemotron 3 Ultra consent boundary.
 - Require structured, validated output containing the word translation, simple meaning, part of
-  speech, contextual meaning, one example, and optional pronunciation.
+  speech, contextual meaning, one example, and optional pronunciation, all written in the language
+  the text was translated into (amended 17 September 2026; pronunciation is spelled in that
+  language's script).
 - Cache results only for the current open translator, keyed by word, context, and language pair.
 - Save nothing automatically. Save word creates a separate local vocabulary record and, for a
   connected account, a user-owned dashboard vocabulary record.
