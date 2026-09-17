@@ -43,6 +43,10 @@ extension may normalize high-confidence dictionary-backed Romanized Nepali into 
 before a normal Nepali translation request. This is preprocessing, not a separate provider model,
 and it must remain disabled for low-confidence mixed English text.
 
+In Online mode, detected Romanized Nepali is first rewritten in Nepali script by NVIDIA Nemotron 3
+Ultra, with OpenRouter as a one-time backup, before the MyMemory translation (ADR-006 amendment,
+17 September 2026). The local dictionary conversion remains the fallback.
+
 - Keep transliteration and translation as separate operations.
 - Preserve unknown names and technical words rather than inventing Nepali spellings.
 - Show or record uncertainty when the dictionary coverage is too low.

@@ -11,6 +11,7 @@
   "dependencies": {
     "@fontsource-variable/roboto": "5.3.0",
     "@lingobridge/contracts": "workspace:*",
+    "@lingobridge/design-tokens": "workspace:*",
     "@wxt-dev/module-react": "1.2.2",
     "react": "19.2.8",
     "react-dom": "19.2.8",

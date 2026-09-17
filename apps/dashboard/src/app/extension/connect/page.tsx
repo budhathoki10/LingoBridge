@@ -1,7 +1,8 @@
 import { parseConnectionRequest } from "@lingobridge/auth";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { BridgeMark, CheckIcon, CloseIcon } from "@/components/icons";
+import { Brand } from "@/components/brand";
+import { CheckIcon, CloseIcon } from "@/components/icons";
 import { getPageSession } from "@/server/page-session";
 
 export const metadata: Metadata = { title: "Connect extension" };
@@ -41,12 +42,7 @@ export default async function ConnectExtensionPage({
   return (
     <main className="standalone">
       <div className="standalone__card standalone__card--wide">
-        <span className="brand">
-          <span className="brand__mark">
-            <BridgeMark size={14} />
-          </span>
-          LingoBridge
-        </span>
+        <Brand />
 
         {parsed.ok ? (
           <>

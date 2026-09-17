@@ -1,6 +1,10 @@
 import type { CapabilityCatalogue } from "@lingobridge/contracts";
 import { detectTextLanguage } from "./language-detection";
-import { normalizeRomanizedNepali, type RomanizedNepaliNormalization } from "./romanized-nepali";
+import {
+  looksLikeRomanizedNepali,
+  normalizeRomanizedNepali,
+  type RomanizedNepaliNormalization,
+} from "./romanized-nepali";
 
 export interface ResolvedSelectionSource {
   /** True when detection came up empty and English is standing in for a real answer. */
@@ -64,7 +68,10 @@ export function resolveSelectionSource(
   text: string,
   catalogue: CapabilityCatalogue,
 ): ResolvedSelectionSource {
-  const romanizedNepali = normalizeRomanizedNepali(text);
+  const detected = detectTextLanguage(text);
+  const romanizedNepali =
+    normalizeRomanizedNepali(text) ??
+    (detected.length === 0 || detected[0] === "ne" ? looksLikeRomanizedNepali(text) : null);
   if (
     romanizedNepali &&
     catalogue.languages.some(
@@ -73,7 +80,7 @@ export function resolveSelectionSource(
   ) {
     return { assumed: false, code: "ne", romanizedNepali };
   }
-  for (const candidate of detectTextLanguage(text)) {
+  for (const candidate of detected) {
     if (catalogue.languages.some((language) => language.code === candidate)) {
       return { assumed: false, code: candidate, romanizedNepali: null };
     }

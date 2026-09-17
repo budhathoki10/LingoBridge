@@ -1,4 +1,8 @@
-import type { ExplanationRequest, WordUnderstandingRequest } from "@lingobridge/contracts";
+import type {
+  ExplanationRequest,
+  TransliterationRequest,
+  WordUnderstandingRequest,
+} from "@lingobridge/contracts";
 import type { ExplanationAdapter } from "./explanation-adapter.js";
 
 export interface FallbackExplanationOptions {
@@ -20,6 +24,14 @@ export class FallbackExplanationAdapter implements ExplanationAdapter {
     return this.run(
       request.consent.openRouter === true,
       (adapter, attemptSignal) => adapter.explain(request, attemptSignal),
+      signal,
+    );
+  }
+
+  transliterate(request: TransliterationRequest, signal: AbortSignal) {
+    return this.run(
+      request.consent.transliteration === true,
+      (adapter, attemptSignal) => adapter.transliterate(request, attemptSignal),
       signal,
     );
   }

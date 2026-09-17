@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import "@fontsource-variable/roboto";
+import "@lingobridge/design-tokens/tokens.css";
+import "@lingobridge/design-tokens/tokens-dark.css";
 import "./globals.css";
 import "./app.css";
 

@@ -136,14 +136,14 @@ export function SelectionMagicCard() {
 
   if (state.kind === "error") {
     return (
-      <section className="site-access site-access--error">
-        <span aria-hidden="true" className="site-access__icon">
-          <SparkIcon />
+      <section className="card card--danger site-access site-access--error">
+        <span aria-hidden="true" className="site-access__icon site-access__icon--off">
+          <SparkIcon size={18} />
         </span>
         <p className="site-access__label" role="alert">
           {state.message}
         </p>
-        <button disabled={busy} onClick={() => void refresh()} type="button">
+        <button className="btn" disabled={busy} onClick={() => void refresh()} type="button">
           Retry
         </button>
       </section>
@@ -156,32 +156,37 @@ export function SelectionMagicCard() {
   const readyHere = state.settings.enabled && state.currentSiteGranted && !currentDisabled;
 
   return (
-    <section aria-label="Selection Magic" className="site-access">
-      <span aria-hidden="true" className="site-access__icon">
-        <SparkIcon />
+    <section aria-label="Selection Magic" className="card site-access">
+      <span
+        aria-hidden="true"
+        className={`site-access__icon${readyHere ? "" : " site-access__icon--off"}`}
+      >
+        <SparkIcon size={18} />
       </span>
       <p className="site-access__label">
         <strong>Selection Magic</strong>
         <span>{readyHere ? "On for this site" : "Off for this site"}</span>
       </p>
       {readyHere ? (
-        <button
-          className="site-access__quiet"
-          disabled={busy}
-          onClick={disableCurrentSite}
-          type="button"
-        >
+        <button className="btn" disabled={busy} onClick={disableCurrentSite} type="button">
           Disable here
         </button>
       ) : (
-        <button disabled={busy} onClick={enableCurrentSite} type="button">
+        <button
+          className="btn btn--primary"
+          disabled={busy}
+          onClick={enableCurrentSite}
+          type="button"
+        >
           Enable here
         </button>
       )}
       {state.settings.enabled ? (
-        <button className="site-access__off" disabled={busy} onClick={turnOff} type="button">
-          Turn off everywhere
-        </button>
+        <div className="site-access__footer">
+          <button className="btn btn--link" disabled={busy} onClick={turnOff} type="button">
+            Turn off everywhere
+          </button>
+        </div>
       ) : null}
     </section>
   );

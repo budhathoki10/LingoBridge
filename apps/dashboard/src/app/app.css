@@ -39,14 +39,8 @@
 }
 
 .brand__mark {
-  display: grid;
-  width: 24px;
-  height: 24px;
+  display: block;
   flex: none;
-  place-items: center;
-  border-radius: var(--radius-md);
-  background: var(--accent);
-  color: var(--on-accent);
 }
 
 .main {
@@ -286,7 +280,7 @@
 .page-header {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-4);
 }
@@ -446,7 +440,7 @@
 .toolbar__row {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-end;
   gap: var(--space-2);
 }
 
@@ -482,6 +476,18 @@
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
   gap: var(--space-2);
   flex: 999 1 480px;
+}
+
+.filter {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.filter__label {
+  color: var(--text-tertiary);
+  font-size: var(--text-12);
+  font-weight: 500;
 }
 
 .filter-summary {
@@ -1216,6 +1222,50 @@
 .skeleton--value {
   width: 64px;
   height: 26px;
+}
+
+/* Vocabulary rows have no selection column or table cells at any width. */
+.row.row--vocab {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.vocab {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.vocab__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+}
+
+.vocab__word {
+  font-size: var(--text-16);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.vocab__pos {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+}
+
+.vocab__pronunciation {
+  color: var(--text-tertiary);
+  font-size: var(--text-13);
+}
+
+.vocab__meaning {
+  color: var(--text-secondary);
+  font-size: var(--text-13);
+  overflow-wrap: anywhere;
 }
 
 .row.row--link {

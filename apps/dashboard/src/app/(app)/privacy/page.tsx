@@ -47,8 +47,8 @@ export default async function PrivacyPage({ searchParams }: { searchParams: Sear
             <div>
               <dt>Stored</dt>
               <dd>
-                Your sign-in identity and email, phrases you explicitly saved, synced preferences,
-                and the name and activity dates of each connected extension.
+                Your sign-in identity and email, phrases and words you explicitly saved, synced
+                preferences, and the name and activity dates of each connected extension.
               </dd>
             </div>
             <div>
@@ -62,8 +62,9 @@ export default async function PrivacyPage({ searchParams }: { searchParams: Sear
               <dt>Translation providers</dt>
               <dd>
                 MyMemory translates first and receives the gateway contact email in its request.
-                NVIDIA is attempted once as a backup only for a supported language direction. Each
-                result shows which provider produced it.
+                NVIDIA is attempted once as a backup only for a supported language direction.
+                Explain and word lookups use NVIDIA Nemotron, with an OpenRouter model as the
+                backup. Each result shows which provider produced it.
               </dd>
             </div>
             <div>

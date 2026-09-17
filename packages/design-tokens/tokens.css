@@ -1,0 +1,88 @@
+/* LingoBridge design tokens: the single source for color, type, spacing, radius, and motion.
+   One accent, a close-stepped warm neutral ramp, semantic red/amber/green. Surfaces separate by
+   borders and background steps; shadows are only for layers that float over other content.
+   `:host` lets the in-page translator use the same tokens inside its shadow root. */
+
+:root,
+:host {
+  color-scheme: light;
+
+  /* Neutral ramp */
+  --n-0: #ffffff;
+  --n-25: #fbfbfa;
+  --n-50: #f7f7f5;
+  --n-100: #f0f0ee;
+  --n-150: #e9e9e6;
+  --n-200: #e1e1dd;
+  --n-300: #cfcfca;
+  --n-400: #a3a39d;
+  --n-500: #75756f;
+  --n-600: #5b5b56;
+  --n-700: #3d3d39;
+  --n-900: #1b1b19;
+
+  --bg: var(--n-25);
+  --surface: var(--n-0);
+  --surface-hover: var(--n-50);
+  --surface-sunken: var(--n-100);
+  --border-subtle: var(--n-150);
+  --border: var(--n-200);
+  --border-strong: var(--n-300);
+  --text: var(--n-900);
+  --text-secondary: var(--n-600);
+  --text-tertiary: var(--n-500);
+
+  --accent: #2363eb;
+  --accent-hover: #1c52c8;
+  --accent-subtle: #eef3fe;
+  --accent-border: #c9d8fb;
+  --accent-text: #1c52c8;
+  --on-accent: #ffffff;
+
+  --danger: #c4321f;
+  --danger-hover: #a52816;
+  --danger-subtle: #fdf1ef;
+  --danger-border: #f1c7c0;
+  --warning: #9a5b00;
+  --warning-subtle: #fdf6e7;
+  --warning-border: #efd9a6;
+  --success: #1b7a43;
+  --success-subtle: #edf8f1;
+  --success-border: #bfe3cd;
+
+  --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent);
+  --shadow-float: 0 1px 2px rgb(20 20 18 / 6%), 0 8px 24px rgb(20 20 18 / 10%);
+
+  --font-sans:
+    "Roboto Variable", Roboto, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "Noto Sans", "Noto Sans Devanagari", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+
+  --text-11: 0.6875rem;
+  --text-12: 0.75rem;
+  --text-13: 0.8125rem;
+  --text-14: 0.875rem;
+  --text-16: 1rem;
+  --text-20: 1.25rem;
+  --text-24: 1.5rem;
+  --text-32: 2rem;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  --duration: 140ms;
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-in: cubic-bezier(0.5, 0, 0.75, 0);
+}

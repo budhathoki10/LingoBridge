@@ -13,7 +13,6 @@ import {
 } from "react";
 import {
   AdminIcon,
-  BridgeMark,
   CloseIcon,
   DownloadIcon,
   ExtensionsIcon,
@@ -24,7 +23,9 @@ import {
   PrivacyIcon,
   SearchIcon,
   SignOutIcon,
+  VocabularyIcon,
 } from "./icons";
+import { Brand } from "./brand";
 import { DashboardProviders } from "./providers";
 
 interface NavItem {
@@ -36,7 +37,7 @@ interface NavItem {
 const PRIMARY_NAV: NavItem[] = [
   { href: "/overview", icon: OverviewIcon, label: "Overview" },
   { href: "/phrases", icon: PhrasesIcon, label: "Saved phrases" },
-  { href: "/vocabulary", icon: PhrasesIcon, label: "My vocabulary" },
+  { href: "/vocabulary", icon: VocabularyIcon, label: "My vocabulary" },
   { href: "/preferences", icon: PreferencesIcon, label: "Preferences" },
   { href: "/extensions", icon: ExtensionsIcon, label: "Connected extensions" },
   { href: "/privacy", icon: PrivacyIcon, label: "Privacy and data" },
@@ -352,12 +353,7 @@ export function AppShell({
       <div className="shell">
         <aside className="sidebar">
           <div className="sidebar__brand">
-            <Link className="brand" href="/overview">
-              <span className="brand__mark">
-                <BridgeMark size={14} />
-              </span>
-              LingoBridge
-            </Link>
+            <Brand href="/overview" />
           </div>
           {searchTrigger}
           <Navigation isAdmin={user.isAdmin} />
@@ -371,12 +367,7 @@ export function AppShell({
         </aside>
 
         <header className="topbar">
-          <Link className="brand" href="/overview">
-            <span className="brand__mark">
-              <BridgeMark size={14} />
-            </span>
-            LingoBridge
-          </Link>
+          <Brand href="/overview" />
           <div className="page-header__actions">
             <button
               aria-label="Search"
@@ -415,12 +406,7 @@ export function AppShell({
         >
           <div className="drawer__inner">
             <div className="sidebar__brand">
-              <span className="brand">
-                <span className="brand__mark">
-                  <BridgeMark size={14} />
-                </span>
-                LingoBridge
-              </span>
+              <Brand />
               <button
                 aria-label="Close navigation"
                 className="button button--ghost button--icon"

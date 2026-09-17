@@ -331,62 +331,56 @@ export function PhrasesView(props: PhrasesViewProps) {
             </span>
           </div>
           <div className="toolbar__filters">
-            <label className="visually-hidden" htmlFor="filter-source">
-              Source language
+            <label className="filter">
+              <span className="filter__label">Source</span>
+              <select
+                className="select"
+                onChange={(event) => updateUrl({ source: event.target.value })}
+                value={props.filters.source}
+              >
+                <option value="">All languages</option>
+                {props.sourceLanguages.map((code) => (
+                  <option key={code} value={code}>
+                    {languageName(code)}
+                  </option>
+                ))}
+              </select>
             </label>
-            <select
-              className="select"
-              id="filter-source"
-              onChange={(event) => updateUrl({ source: event.target.value })}
-              value={props.filters.source}
-            >
-              <option value="">All source languages</option>
-              {props.sourceLanguages.map((code) => (
-                <option key={code} value={code}>
-                  {languageName(code)}
-                </option>
-              ))}
-            </select>
-            <label className="visually-hidden" htmlFor="filter-target">
-              Target language
+            <label className="filter">
+              <span className="filter__label">Target</span>
+              <select
+                className="select"
+                onChange={(event) => updateUrl({ target: event.target.value })}
+                value={props.filters.target}
+              >
+                <option value="">All languages</option>
+                {props.targetLanguages.map((code) => (
+                  <option key={code} value={code}>
+                    {languageName(code)}
+                  </option>
+                ))}
+              </select>
             </label>
-            <select
-              className="select"
-              id="filter-target"
-              onChange={(event) => updateUrl({ target: event.target.value })}
-              value={props.filters.target}
-            >
-              <option value="">All target languages</option>
-              {props.targetLanguages.map((code) => (
-                <option key={code} value={code}>
-                  {languageName(code)}
-                </option>
-              ))}
-            </select>
-            <label className="visually-hidden" htmlFor="filter-from">
-              Saved on or after
+            <label className="filter">
+              <span className="filter__label">Saved after</span>
+              <input
+                className="input"
+                max={props.filters.to || undefined}
+                onChange={(event) => updateUrl({ from: event.target.value })}
+                type="date"
+                value={props.filters.from}
+              />
             </label>
-            <input
-              className="input"
-              id="filter-from"
-              max={props.filters.to || undefined}
-              onChange={(event) => updateUrl({ from: event.target.value })}
-              title="Saved on or after"
-              type="date"
-              value={props.filters.from}
-            />
-            <label className="visually-hidden" htmlFor="filter-to">
-              Saved on or before
+            <label className="filter">
+              <span className="filter__label">Saved before</span>
+              <input
+                className="input"
+                min={props.filters.from || undefined}
+                onChange={(event) => updateUrl({ to: event.target.value })}
+                type="date"
+                value={props.filters.to}
+              />
             </label>
-            <input
-              className="input"
-              id="filter-to"
-              min={props.filters.from || undefined}
-              onChange={(event) => updateUrl({ to: event.target.value })}
-              title="Saved on or before"
-              type="date"
-              value={props.filters.to}
-            />
           </div>
         </div>
         <div aria-live="polite" className="filter-summary">

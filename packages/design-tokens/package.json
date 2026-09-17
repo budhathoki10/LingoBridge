@@ -1,0 +1,15 @@
+{
+  "name": "@lingobridge/design-tokens",
+  "version": "0.1.0",
+  "private": true,
+  "exports": {
+    "./brand": {
+      "types": "./brand.d.ts",
+      "default": "./brand.js"
+    },
+    "./tokens.css": "./tokens.css",
+    "./tokens-dark.css": "./tokens-dark.css",
+    "./logo.svg": "./logo.svg"
+  },
+  "type": "module"
+}

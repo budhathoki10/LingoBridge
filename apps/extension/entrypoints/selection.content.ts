@@ -11,6 +11,7 @@ import {
   type WordUnderstandingRequest,
   type WordUnderstandingResult,
 } from "@lingobridge/contracts";
+import SURFACE_CSS from "../assets/selection-panel.css?inline";
 import {
   catalogueToPreviewLanguages,
   getPreviewLanguage,
@@ -24,6 +25,7 @@ import {
 import { acceptExplanationConsent, loadExplanationConsent } from "../lib/explanation-consent";
 import { createBridgeGatewayClient, GATEWAY_BRIDGE_PORT } from "../lib/gateway-bridge";
 import { ensurePanelFont } from "../lib/panel-font";
+import { iconSvg, logoSvg, magicSvg, type PanelIconName } from "../lib/panel-icons";
 import { GatewayClientError } from "../lib/gateway-client";
 import { acceptOnlineProviderConsent, loadOnlineProviderConsent } from "../lib/online-consent";
 import {
@@ -188,6 +190,8 @@ interface TranslationContext {
   languages: PreviewLanguage[];
   requestText: string;
   romanizedNepali: boolean;
+  /** Set once an AI model rewrote the romanized Nepali, so a retry does not ask again. */
+  romanizedNepaliConverted: boolean;
   sourceAssumed: boolean;
   sourceLanguage: string;
   targetLanguage: string;
@@ -204,187 +208,15 @@ declare global {
   }
 }
 
-const SURFACE_CSS = `
-  :host {
-    all: initial;
-    color-scheme: light;
-    contain: layout style;
-    font-family: "LingoBridge Roboto", Roboto, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  }
-  *, *::before, *::after { box-sizing: border-box; }
-  /* The host element is reset with an inline "all: initial !important", which also clears a font
-     set on :host, so the font is applied to the surface itself. */
-  .magic, .panel { font-family: "LingoBridge Roboto", Roboto, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-  button, input, select { color: inherit; font: inherit; }
-  button { cursor: pointer; }
-  button:disabled { cursor: not-allowed; opacity: .58; }
-  button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 3px solid rgba(35, 99, 235, .3); outline-offset: 2px; }
-  .magic {
-    display: grid; width: 38px; height: 38px; padding: 0; place-items: center;
-    border: 1px solid rgba(255,255,255,.78); border-radius: 10px;
-    color: #fff; background: #2363eb; box-shadow: 0 8px 24px rgba(20, 31, 54, .24);
-    transition: transform 120ms ease, background 120ms ease;
-    animation: pop-in 140ms ease;
-  }
-  .magic:hover { background: #1d4ed8; transform: translateY(-1px); }
-  .magic:active { transform: translateY(0); }
-  .magic svg { width: 21px; height: 21px; }
-  .panel {
-    width: min(380px, calc(100vw - 16px)); max-height: min(520px, calc(100vh - 16px));
-    overflow: auto; border: 1px solid #d4d7da; border-radius: 12px; color: #18202a;
-    background: #fbfaf7; box-shadow: 0 18px 48px rgba(20, 31, 54, .22);
-    animation: panel-in 140ms ease;
-  }
-  @keyframes pop-in { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: scale(1); } }
-  @keyframes panel-in { from { opacity: 0; transform: translateY(-4px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
-  .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border-bottom: 1px solid #e1e1de; background: #fff; }
-  .brand { display: flex; min-width: 0; align-items: center; gap: 8px; }
-  .mark { display: grid; width: 27px; height: 27px; flex: none; place-items: center; border-radius: 7px; color: #fff; background: #2363eb; }
-  .mark svg { width: 16px; height: 16px; }
-  .brand-copy { display: grid; min-width: 0; gap: 1px; }
-  .brand strong { font-size: 12px; line-height: 1.2; letter-spacing: -.01em; }
-  .brand span { overflow: hidden; color: #6a727b; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-  .close { display: grid; width: 30px; height: 30px; flex: none; padding: 0; place-items: center; border: 1px solid transparent; border-radius: 7px; color: #626b74; background: transparent; }
-  .close:hover { border-color: #d7d9db; background: #f5f5f3; }
-  .close svg { width: 17px; height: 17px; }
-  .body { display: grid; gap: 11px; padding: 12px; }
-  .language-row { display: grid; grid-template-columns: minmax(0, 1fr) 20px minmax(0, 1fr); align-items: end; gap: 8px; }
-  .target-field { display: grid; min-width: 0; gap: 4px; }
-  .target-control { display: grid; grid-template-columns: minmax(0, 1fr) 34px; gap: 5px; }
-  .favorite-toggle { display: grid; width: 34px; height: 38px; padding: 0; place-items: center; border: 1px solid #cfd2d5; border-radius: 7px; color: #6b7480; background: #fff; font-size: 21px; line-height: 1; }
-  .favorite-toggle[aria-pressed="true"] { color: #a66b00; border-color: #e0c47c; background: #fffaf0; }
-  .favorite-toggle:hover { border-color: #969da4; }
-  .favorites { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
-  .favorites[hidden] { display: none; }
-  .favorites-label { margin-right: 2px; color: #707981; font-size: 10px; font-weight: 650; }
-  .favorites button { min-height: 27px; padding: 4px 7px; border: 1px solid #cfd2d5; border-radius: 6px; color: #394450; background: #fff; font-size: 11px; font-weight: 600; }
-  .favorites button:hover { border-color: #2363eb; color: #1d4ed8; }
-  .favorites button[aria-pressed="true"] { border-color: #b9ccef; color: #174fbd; background: #edf3ff; }
-  .favorite-picker { border: 1px solid #dedfdd; border-radius: 8px; background: #fff; }
-  .favorite-picker[hidden] { display: none; }
-  .favorite-picker summary { padding: 8px 10px; color: #1d4ed8; cursor: pointer; font-size: 11px; font-weight: 700; }
-  .favorite-picker__body { display: grid; gap: 8px; padding: 0 10px 10px; }
-  .favorite-picker__search { width: 100%; min-height: 34px; padding: 6px 9px; border: 1px solid #cfd2d5; border-radius: 7px; background: #fff; font-size: 12px; }
-  .favorite-picker__list { display: grid; gap: 2px; max-height: 170px; overflow: auto; }
-  .favorite-picker__item { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 4px 2px; color: #394450; cursor: pointer; font-size: 11px; font-weight: 600; text-transform: none; letter-spacing: normal; }
-  .favorite-picker__item[hidden] { display: none; }
-  .favorite-picker__item input { width: 15px; height: 15px; margin: 0; accent-color: #2363eb; }
-  .favorite-picker__footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  .favorite-picker__count { color: #66707a; font-size: 10px; }
-  .favorite-picker__save { min-height: 31px; padding: 5px 9px; border: 1px solid #2363eb; border-radius: 7px; color: #fff; background: #2363eb; font-size: 11px; font-weight: 700; }
-  label { display: grid; min-width: 0; gap: 4px; color: #66707a; font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .02em; }
-  .source-language { display: flex; min-width: 0; height: 38px; align-items: center; overflow: hidden; padding: 0 9px; border: 1px solid #d8dadd; border-radius: 7px; background: #f1f2f0; color: #3c454f; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-  select {
-    width: 100%; min-width: 0; height: 38px; padding: 0 26px 0 9px;
-    border: 1px solid #cfd2d5; border-radius: 7px; background: #fff
-      url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%234e5862" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>')
-      no-repeat right 7px center / 15px;
-    color: #18202a; font-size: 12px; font-weight: 600; appearance: none; -webkit-appearance: none;
-    transition: border-color 120ms ease, box-shadow 120ms ease;
-  }
-  select:hover { border-color: #969da4; }
-  select:focus-visible { border-color: #2363eb; }
-  select:disabled { background-color: #f1f2f0; color: #8b939c; cursor: not-allowed; }
-  .arrow { display: flex; align-self: center; justify-content: center; margin-bottom: 9px; color: #8b9299; }
-  .arrow svg { width: 15px; height: 15px; }
-  .source, .result { margin: 0; padding: 10px 11px; border: 1px solid #dedfdd; border-radius: 8px; background: #fff; font-size: 13px; line-height: 1.52; overflow-wrap: anywhere; white-space: pre-wrap; }
-  .source { max-height: 112px; overflow: auto; color: #4d5660; }
-  .source__word { margin: 0; padding: 0; border: 0; border-radius: 3px; color: inherit; background: transparent; font: inherit; line-height: inherit; cursor: pointer; }
-  .source__word:hover, .source__word:focus-visible { color: #174fbd; background: #edf3ff; outline: 2px solid transparent; }
-  .source__word[aria-pressed="true"] { color: #174fbd; background: #dfeaff; }
-  .result { min-height: 70px; color: #19212b; }
-  .status { display: flex; align-items: flex-start; gap: 8px; margin: 0; color: #606a74; font-size: 11px; line-height: 1.45; }
-  .dot { width: 7px; height: 7px; flex: none; margin-top: 4px; border-radius: 50%; background: #2363eb; }
-  .status--error { color: #9f261d; }
-  .status--error .dot { background: #b42318; }
-  .status--warning { color: #7a5100; }
-  .status--warning .dot { background: #b77900; }
-  .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
-  .actions button, .link-button { min-height: 34px; padding: 7px 11px; border: 1px solid #2363eb; border-radius: 7px; color: #fff; background: #2363eb; font-size: 11px; font-weight: 700; transition: background 120ms ease, border-color 120ms ease, transform 80ms ease; }
-  .actions button:hover { background: #1d4ed8; }
-  .actions button:active { transform: translateY(1px); }
-  .actions button:disabled:hover { background: #2363eb; transform: none; }
-  .actions .secondary { border-color: #c7cacf; color: #4e5862; background: #fff; }
-  .actions .secondary:hover { border-color: #969da4; background: #f8f8f6; }
-  .actions .secondary:disabled:hover { border-color: #c7cacf; background: #fff; }
-  .privacy { color: #51627a; font-size: 10px; line-height: 1.45; }
-  .privacy a { color: #1d4ed8; }
-  .meta { display: flex; flex-wrap: wrap; gap: 5px; color: #707981; font-size: 10px; }
-  .explain { display: grid; gap: 8px; padding: 10px 11px; border: 1px solid #d9e3f7; border-radius: 8px; background: #f5f8ff; }
-  .explain--error { border-color: #efc6c0; background: #fff7f6; }
-  .explain__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  .explain__title { color: #1f3f86; font-size: 11px; font-weight: 700; letter-spacing: .01em; }
-  .explain__badge { padding: 1px 7px; border: 1px solid #c9d6f2; border-radius: 999px; color: #34518f; background: #fff; font-size: 10px; font-weight: 650; }
-  .explain p { margin: 0; overflow-wrap: anywhere; }
-  .explain__meaning { color: #19212b; font-size: 13px; line-height: 1.5; }
-  .explain__note { color: #4d5660; font-size: 11px; line-height: 1.45; }
-  .explain__examples { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
-  .explain__examples li { padding: 6px 8px; border-radius: 6px; background: #fff; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
-  .explain__status { display: flex; align-items: center; gap: 8px; color: #405070; font-size: 11px; }
-  .explain__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
-  .explain__actions button { min-height: 30px; padding: 5px 10px; border: 1px solid #2363eb; border-radius: 7px; color: #fff; background: #2363eb; font-size: 11px; font-weight: 700; }
-  .explain__actions button:hover { background: #1d4ed8; }
-  .explain__actions .secondary { border-color: #c7cacf; color: #4e5862; background: #fff; }
-  .explain__actions .secondary:hover { border-color: #969da4; background: #f8f8f6; }
-  .word-panel { display: grid; gap: 8px; padding: 10px 11px; border: 1px solid #cddbf7; border-radius: 8px; background: #f7f9fe; }
-  .word-panel--error { border-color: #efc6c0; background: #fff7f6; }
-  .word-panel__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-  .word-panel__title { color: #173f91; font-size: 13px; font-weight: 750; }
-  .word-panel__close { width: 28px; height: 28px; padding: 0; border: 0; color: #67717c; background: transparent; font-size: 18px; }
-  .word-panel dl { display: grid; gap: 7px; margin: 0; }
-  .word-panel dt { color: #66707a; font-size: 10px; font-weight: 700; text-transform: uppercase; }
-  .word-panel dd { margin: 1px 0 0; color: #252d36; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
-  .spinner { width: 14px; height: 14px; flex: none; border: 2px solid #cbd7ef; border-top-color: #2363eb; border-radius: 50%; animation: spin .75s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  @media (prefers-reduced-motion: reduce) { .magic { transition: none; } .spinner { animation-duration: 1.5s; } }
-  @media (max-width: 280px) { .language-row { grid-template-columns: 1fr; } .arrow { display: none; } .actions { justify-content: stretch; } .actions button { flex: 1; } .favorite-picker__footer { display: grid; } .favorite-picker__save { width: 100%; } }
-`;
+type StatusMode = "error" | "loading" | "normal" | "success" | "warning";
 
-function sparkSvg(): SVGSVGElement {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("aria-hidden", "true");
-  svg.setAttribute("fill", "none");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  path.setAttribute(
-    "d",
-    "M12 3.8c.7 3.1 2.1 4.5 5.2 5.2-3.1.7-4.5 2.1-5.2 5.2C11.3 11.1 9.9 9.7 6.8 9 9.9 8.3 11.3 6.9 12 3.8Z",
-  );
-  path.setAttribute("stroke", "currentColor");
-  path.setAttribute("stroke-linejoin", "round");
-  path.setAttribute("stroke-width", "1.7");
-  svg.append(path);
-  return svg;
-}
-
-function arrowSvg(): SVGSVGElement {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("aria-hidden", "true");
-  svg.setAttribute("fill", "none");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  path.setAttribute("d", "M5 12h13m0 0-5-5m5 5-5 5");
-  path.setAttribute("stroke", "currentColor");
-  path.setAttribute("stroke-linecap", "round");
-  path.setAttribute("stroke-linejoin", "round");
-  path.setAttribute("stroke-width", "1.8");
-  svg.append(path);
-  return svg;
-}
-
-function closeSvg(): SVGSVGElement {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("aria-hidden", "true");
-  svg.setAttribute("fill", "none");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  path.setAttribute("d", "m7 7 10 10M17 7 7 17");
-  path.setAttribute("stroke", "currentColor");
-  path.setAttribute("stroke-linecap", "round");
-  path.setAttribute("stroke-width", "1.8");
-  svg.append(path);
-  return svg;
-}
+const STATUS_ICONS: Record<StatusMode, PanelIconName | null> = {
+  error: "alert",
+  loading: null,
+  normal: null,
+  success: "languages",
+  warning: "warning",
+};
 
 function elementFromNode(node: Node | null): Element | null {
   if (!node) return null;
@@ -694,11 +526,11 @@ function createController(): InstalledController {
     button.type = "button";
     button.title = "Translate selected text";
     button.setAttribute("aria-label", "Translate selected text with LingoBridge");
-    button.append(sparkSvg());
+    button.append(magicSvg());
     button.addEventListener("pointerdown", (event) => event.preventDefault());
     button.addEventListener("click", () => void activate());
     renderBase(button);
-    setHostPosition(38, 38);
+    setHostPosition(36, 36);
   }
 
   function createPanel(): {
@@ -718,22 +550,22 @@ function createController(): InstalledController {
     head.className = "head";
     const brand = document.createElement("div");
     brand.className = "brand";
-    const mark = document.createElement("span");
-    mark.className = "mark";
-    mark.append(sparkSvg());
     const brandCopy = document.createElement("span");
-    brandCopy.className = "brand-copy";
+    brandCopy.className = "brand__copy";
     const title = document.createElement("strong");
+    title.className = "brand__name";
     title.textContent = "LingoBridge";
     const subtitle = document.createElement("span");
-    subtitle.textContent = "Selected text translation";
+    subtitle.className = "brand__sub";
+    subtitle.textContent = "Translate selection";
     brandCopy.append(title, subtitle);
-    brand.append(mark, brandCopy);
+    brand.append(logoSvg(), brandCopy);
     const closeButton = document.createElement("button");
-    closeButton.className = "close";
+    closeButton.className = "icon-button";
     closeButton.type = "button";
+    closeButton.title = "Close (Esc)";
     closeButton.setAttribute("aria-label", "Close LingoBridge");
-    closeButton.append(closeSvg());
+    closeButton.append(iconSvg("close"));
     closeButton.addEventListener("pointerdown", (event) => event.preventDefault());
     closeButton.addEventListener("click", close);
     head.append(brand, closeButton);
@@ -742,18 +574,22 @@ function createController(): InstalledController {
     body.className = "body";
     const languageRow = document.createElement("div");
     languageRow.className = "language-row";
-    const sourceLabel = document.createElement("label");
-    sourceLabel.append("From");
+    const sourceField = document.createElement("div");
+    sourceField.className = "field";
+    const sourceLabel = document.createElement("span");
+    sourceLabel.className = "field__label";
+    sourceLabel.textContent = "From";
     const sourceName = document.createElement("span");
     sourceName.className = "source-language";
-    sourceLabel.append(sourceName);
+    sourceField.append(sourceLabel, sourceName);
     const arrow = document.createElement("span");
     arrow.className = "arrow";
     arrow.setAttribute("aria-hidden", "true");
-    arrow.append(arrowSvg());
+    arrow.append(iconSvg("arrowRight"));
     const targetField = document.createElement("div");
-    targetField.className = "target-field";
+    targetField.className = "field";
     const targetLabel = document.createElement("label");
+    targetLabel.className = "field__label";
     targetLabel.htmlFor = "lingobridge-target-language";
     targetLabel.textContent = "To";
     const targetControl = document.createElement("div");
@@ -764,10 +600,10 @@ function createController(): InstalledController {
     const favoriteToggle = document.createElement("button");
     favoriteToggle.className = "favorite-toggle";
     favoriteToggle.type = "button";
-    favoriteToggle.textContent = "☆";
+    favoriteToggle.append(iconSvg("star"));
     targetControl.append(targetSelect, favoriteToggle);
     targetField.append(targetLabel, targetControl);
-    languageRow.append(sourceLabel, arrow, targetField);
+    languageRow.append(sourceField, arrow, targetField);
 
     const favorites = document.createElement("div");
     favorites.className = "favorites";
@@ -825,7 +661,17 @@ function createController(): InstalledController {
   ): void {
     if (!context) return;
     const name = sourceLanguageName();
-    sourceName.textContent = context.sourceAssumed ? `${name} (assumed)` : name;
+    const nameText = document.createElement("span");
+    nameText.className = "source-language__name";
+    nameText.textContent = name;
+    sourceName.replaceChildren(nameText);
+    sourceName.title = context.sourceAssumed ? `${name} (assumed)` : `${name} (detected)`;
+    if (context.sourceAssumed) {
+      const tag = document.createElement("span");
+      tag.className = "source-language__tag";
+      tag.textContent = "Assumed";
+      sourceName.append(tag);
+    }
     const targets = new Set(supportedTargetsForSource(context.catalogue, context.sourceLanguage));
     for (const language of context.languages) {
       if (targets.has(language.code)) option(targetSelect, language.code, language.name);
@@ -836,7 +682,7 @@ function createController(): InstalledController {
     const selectedName =
       getPreviewLanguage(context.targetLanguage, context.languages)?.name ?? context.targetLanguage;
     const pinned = context.favouriteLanguageCodes.includes(context.targetLanguage);
-    favoriteToggle.textContent = pinned ? "★" : "☆";
+    favoriteToggle.replaceChildren(iconSvg("star"));
     favoriteToggle.setAttribute("aria-pressed", String(pinned));
     favoriteToggle.setAttribute(
       "aria-label",
@@ -870,6 +716,7 @@ function createController(): InstalledController {
       const name = getPreviewLanguage(code, context.languages)?.name ?? code;
       const button = document.createElement("button");
       button.type = "button";
+      button.className = "chip";
       button.textContent = name;
       button.setAttribute("aria-label", `Use ${name}`);
       button.setAttribute("aria-pressed", String(code === context.targetLanguage));
@@ -945,14 +792,14 @@ function createController(): InstalledController {
     const count = document.createElement("span");
     count.className = "favorite-picker__count";
     const save = document.createElement("button");
-    save.className = "favorite-picker__save";
+    save.className = "btn btn--primary";
     save.type = "button";
     save.textContent = "Save favorites";
     save.setAttribute("aria-label", "Save favorite languages");
     save.addEventListener("pointerdown", (event) => event.preventDefault());
     function refreshChecklist(): void {
       const total = unavailableCount + selected.size;
-      count.textContent = `${total} of 12 favorites selected`;
+      count.textContent = `${total} of 12 selected`;
       for (const checkbox of checkboxes) checkbox.disabled = total >= 12 && !checkbox.checked;
     }
     for (const checkbox of checkboxes) {
@@ -996,22 +843,46 @@ function createController(): InstalledController {
   function statusContent(
     status: HTMLParagraphElement,
     message: string,
-    mode: "error" | "normal" | "warning" = "normal",
+    mode: StatusMode = "normal",
+    detail?: string,
   ): void {
-    status.className = mode === "normal" ? "status" : `status status--${mode}`;
-    const dot = document.createElement("span");
-    dot.className = "dot";
-    dot.setAttribute("aria-hidden", "true");
+    status.className = mode === "error" || mode === "warning" ? `status status--${mode}` : "status";
+    const parts: Node[] = [];
+    const iconName = STATUS_ICONS[mode];
+    if (mode === "loading" || iconName) {
+      const icon = document.createElement("span");
+      icon.className = "status__icon";
+      icon.setAttribute("aria-hidden", "true");
+      icon.append(
+        iconName
+          ? iconSvg(iconName)
+          : Object.assign(document.createElement("span"), { className: "spinner" }),
+      );
+      parts.push(icon);
+    }
     const text = document.createElement("span");
     text.textContent = message;
-    status.replaceChildren(dot, text);
+    if (detail) {
+      const extra = document.createElement("span");
+      extra.className = "status__provider";
+      extra.textContent = ` · ${detail}`;
+      text.append(extra);
+    }
+    parts.push(text);
+    status.replaceChildren(...parts);
   }
 
-  function actionButton(label: string, action: () => void, secondary = false): HTMLButtonElement {
+  function actionButton(
+    label: string,
+    action: () => void,
+    secondary = false,
+    icon?: PanelIconName,
+  ): HTMLButtonElement {
     const button = document.createElement("button");
     button.type = "button";
-    button.textContent = label;
-    if (secondary) button.className = "secondary";
+    button.className = secondary ? "btn" : "btn btn--primary";
+    if (icon) button.append(iconSvg(icon));
+    button.append(label);
     button.addEventListener("pointerdown", (event) => event.preventDefault());
     button.addEventListener("click", action);
     return button;
@@ -1035,8 +906,7 @@ function createController(): InstalledController {
     favoritePicker.hidden = targetSelect.disabled;
 
     if (state === "preparing") {
-      statusContent(status, "Preparing your preferred language…");
-      status.prepend(Object.assign(document.createElement("span"), { className: "spinner" }));
+      statusContent(status, "Detecting the language…", "loading");
       return;
     }
 
@@ -1056,9 +926,9 @@ function createController(): InstalledController {
         "warning",
       );
       const privacy = document.createElement("p");
-      privacy.className = "privacy";
+      privacy.className = "notice";
       privacy.append(
-        "Online mode sends only this selected text to MyMemory first, with NVIDIA as a backup for supported languages. ",
+        "Online mode sends only this selected text to MyMemory first, with NVIDIA as a backup for supported languages. Romanized Nepali is first rewritten in Nepali script by NVIDIA Nemotron, with OpenRouter as a backup. ",
       );
       const link = document.createElement("a");
       link.href = browser.runtime.getURL("/privacy.html");
@@ -1106,8 +976,15 @@ function createController(): InstalledController {
     }
 
     if (state === "loading") {
-      statusContent(status, "Translating only the text you selected…");
-      status.prepend(Object.assign(document.createElement("span"), { className: "spinner" }));
+      const placeholder = document.createElement("div");
+      placeholder.className = "result result--loading";
+      placeholder.setAttribute("aria-hidden", "true");
+      placeholder.append(
+        Object.assign(document.createElement("span"), { className: "skeleton" }),
+        Object.assign(document.createElement("span"), { className: "skeleton skeleton--short" }),
+      );
+      body.insertBefore(placeholder, status);
+      statusContent(status, "Translating only the text you selected…", "loading");
       actions.append(
         actionButton(
           "Stop",
@@ -1121,6 +998,7 @@ function createController(): InstalledController {
             renderPanel();
           },
           true,
+          "stop",
         ),
       );
       return;
@@ -1143,18 +1021,17 @@ function createController(): InstalledController {
       statusContent(
         status,
         `${sourceName} → ${getPreviewLanguage(result.targetLanguage, context?.languages)?.name ?? result.targetLanguage}`,
-      );
-      const meta = document.createElement("div");
-      meta.className = "meta";
-      meta.textContent =
+        "success",
         context?.gatewayMode === "live"
-          ? `Online via ${providerLabel(result.provider)}`
-          : `Simulated ${providerLabel(result.provider)} route`;
-      body.insertBefore(meta, actions);
+          ? providerLabel(result.provider)
+          : `${providerLabel(result.provider)} (simulated)`,
+      );
       if (context?.romanizedNepali) {
         const note = document.createElement("p");
-        note.className = "privacy";
-        note.textContent = "Romanized Nepali was converted to Nepali script before translation.";
+        note.className = "notice";
+        note.textContent = context.romanizedNepaliConverted
+          ? `Romanized Nepali was read as: ${context.requestText}`
+          : "Romanized Nepali was converted to Nepali script before translation.";
         body.insertBefore(note, actions);
       }
 
@@ -1166,25 +1043,33 @@ function createController(): InstalledController {
       if (wordState !== "idle") body.insertBefore(renderWordUnderstanding(), actions);
 
       if (explanationState === "idle") {
-        actions.append(actionButton("Explain", () => void requestExplanation(), true));
+        actions.append(actionButton("Explain", () => void requestExplanation(), true, "spark"));
       }
 
-      actions.append(
-        actionButton(
-          copyFeedback === "copied" ? "Copied" : copyFeedback === "failed" ? "Copy failed" : "Copy",
-          copyTranslation,
-          true,
-        ),
+      const copy = actionButton(
+        copyFeedback === "copied" ? "Copied" : copyFeedback === "failed" ? "Copy failed" : "Copy",
+        copyTranslation,
+        true,
+        copyFeedback === "copied" ? "check" : "copy",
       );
+      if (copyFeedback === "copied") copy.classList.add("btn--done");
+      actions.append(copy);
 
       // Listen appears only when the browser really has a voice for this language. The catalogue
       // carries no speech data, so asking it would hide the action everywhere.
       if (pickSpeechVoice(availableVoices(), result.targetLanguage)) {
-        actions.append(actionButton(speaking ? "Stop" : "Listen", toggleSpeaking, true));
+        actions.append(
+          actionButton(
+            speaking ? "Stop" : "Listen",
+            toggleSpeaking,
+            true,
+            speaking ? "stop" : "speaker",
+          ),
+        );
       }
 
       if (activeSelection?.replace) {
-        actions.append(actionButton("Replace", replaceSelection, true));
+        actions.append(actionButton("Replace", replaceSelection, true, "replace"));
       }
 
       // Saving happens only here, on a deliberate click. Showing or closing a result never stores
@@ -1194,7 +1079,10 @@ function createController(): InstalledController {
         saved ? "Saved" : "Save phrase",
         () => void togglePhraseSaved(),
         true,
+        "bookmark",
       );
+      if (saved) save.classList.add("btn--pressed");
+      save.title = saved ? "Remove from saved phrases" : "Save to your phrases";
       save.disabled = savePending;
       save.setAttribute("aria-pressed", saved ? "true" : "false");
       actions.append(save);
@@ -1205,11 +1093,13 @@ function createController(): InstalledController {
       // A retry cannot reach a replaced background worker; only a page reload loads the new script.
       if (extensionContextInvalidated()) {
         statusContent(status, EXTENSION_UPDATED_MESSAGE, "error");
-        actions.append(actionButton("Reload page", () => window.location.reload()));
+        actions.append(actionButton("Reload page", () => window.location.reload(), false, "retry"));
         return;
       }
       statusContent(status, errorMessage, "error");
-      if (errorRetryable) actions.append(actionButton("Retry", () => void runTranslation()));
+      if (errorRetryable) {
+        actions.append(actionButton("Retry", () => void runTranslation(), false, "retry"));
+      }
     }
   }
 
@@ -1261,9 +1151,10 @@ function createController(): InstalledController {
     title.className = "word-panel__title";
     title.textContent = selectedWord || "Word understanding";
     const dismiss = document.createElement("button");
-    dismiss.className = "word-panel__close";
+    dismiss.className = "icon-button";
     dismiss.type = "button";
-    dismiss.textContent = "×";
+    dismiss.title = "Close";
+    dismiss.append(iconSvg("close"));
     dismiss.setAttribute("aria-label", "Close word understanding");
     dismiss.addEventListener("click", () => {
       resetWordUnderstanding();
@@ -1298,7 +1189,7 @@ function createController(): InstalledController {
       loading.className = "explain__status";
       loading.append(
         Object.assign(document.createElement("span"), { className: "spinner" }),
-        `Understanding “${selectedWord}”…`,
+        `Looking up “${selectedWord}”…`,
       );
       panel.append(loading);
       return panel;
@@ -1312,7 +1203,7 @@ function createController(): InstalledController {
       if (wordRetryable) {
         const buttons = document.createElement("div");
         buttons.className = "explain__actions";
-        buttons.append(actionButton("Try again", () => void runWordUnderstanding(), true));
+        buttons.append(actionButton("Try again", () => void runWordUnderstanding(), true, "retry"));
         panel.append(buttons);
       }
       return panel;
@@ -1342,13 +1233,27 @@ function createController(): InstalledController {
         detail.dir =
           getPreviewLanguage(result.targetLanguage, context?.languages)?.textDirection ?? "auto";
       }
-      detail.textContent = value;
+      if (label === "Part of speech") {
+        const pill = document.createElement("span");
+        pill.className = "word-panel__pos";
+        pill.textContent = value;
+        detail.append(pill);
+      } else {
+        detail.textContent = value;
+      }
+      if (label === "Translation") detail.classList.add("word-panel__translation");
       wrapper.append(term, detail);
       list.append(wrapper);
     }
     const buttons = document.createElement("div");
     buttons.className = "explain__actions";
-    const save = actionButton(wordSaved ? "Saved" : "Save word", () => void saveCurrentWord());
+    const save = actionButton(
+      wordSaved ? "Saved" : "Save word",
+      () => void saveCurrentWord(),
+      wordSaved,
+      wordSaved ? "check" : "bookmark",
+    );
+    if (wordSaved) save.classList.add("btn--done");
     save.disabled = wordSavePending || wordSaved;
     buttons.append(save);
     panel.append(list, buttons);
@@ -1440,6 +1345,7 @@ function createController(): InstalledController {
       if (sequence === wordSequence) wordController = null;
     }
     renderPanel();
+    shadow?.querySelector(".word-panel")?.scrollIntoView({ block: "nearest" });
   }
 
   async function saveCurrentWord(): Promise<void> {
@@ -1502,7 +1408,7 @@ function createController(): InstalledController {
     head.className = "explain__head";
     const title = document.createElement("span");
     title.className = "explain__title";
-    title.textContent = "In simple words";
+    title.append(iconSvg("spark"), "In simple words");
     head.append(title);
     card.append(head);
 
@@ -1555,7 +1461,7 @@ function createController(): InstalledController {
       if (explanationRetryable) {
         const buttons = document.createElement("div");
         buttons.className = "explain__actions";
-        buttons.append(actionButton("Try again", () => void runExplanation(), true));
+        buttons.append(actionButton("Try again", () => void runExplanation(), true, "retry"));
         card.append(buttons);
       }
       return card;
@@ -1873,6 +1779,7 @@ function createController(): InstalledController {
       languages,
       requestText: source.romanizedNepali?.text ?? activeSelection?.text ?? "",
       romanizedNepali: Boolean(source.romanizedNepali),
+      romanizedNepaliConverted: false,
       sourceAssumed: source.assumed,
       sourceLanguage: source.code,
       targetLanguage,
@@ -1935,6 +1842,33 @@ function createController(): InstalledController {
     }
   }
 
+  /**
+   * Asks NVIDIA Nemotron (OpenRouter as backup) to rewrite romanized Nepali in Nepali script.
+   * Returns null when that fails, so the on-device conversion is used instead.
+   */
+  async function convertRomanizedNepali(
+    text: string,
+    consent: OnlineConsent,
+    signal: AbortSignal,
+  ): Promise<string | null> {
+    try {
+      const converted = await gatewayClient.transliterate(
+        {
+          consent,
+          operation: "transliterate",
+          requestId: crypto.randomUUID(),
+          sourceLanguage: "ne",
+          text,
+        },
+        signal,
+      );
+      return converted.text;
+    } catch (error) {
+      if (signal.aborted) throw error;
+      return null;
+    }
+  }
+
   async function runTranslation(): Promise<void> {
     if (!activeSelection || !context) return;
     if (context.gatewayMode === "live" && !context.consent) {
@@ -1967,6 +1901,24 @@ function createController(): InstalledController {
       text: context.requestText,
     };
     try {
+      if (
+        context.romanizedNepali &&
+        !context.romanizedNepaliConverted &&
+        context.gatewayMode === "live" &&
+        context.consent?.transliteration === true
+      ) {
+        const converted = await convertRomanizedNepali(
+          activeSelection.text,
+          context.consent,
+          requestController.signal,
+        );
+        if (sequence !== requestSequence) return;
+        if (converted) {
+          context.requestText = converted;
+          context.romanizedNepaliConverted = true;
+          request.text = converted;
+        }
+      }
       const translated = await gatewayClient.translate(request, requestController.signal);
       if (sequence !== requestSequence) return;
       result = translated;

@@ -1,7 +1,7 @@
 import { getDeletionReceipt } from "@lingobridge/database";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { BridgeMark } from "@/components/icons";
+import { Brand } from "@/components/brand";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { getServices } from "@/server/container";
 
@@ -22,12 +22,7 @@ export default async function AccountDeletedPage({ searchParams }: { searchParam
   return (
     <main className="standalone">
       <div className="standalone__card standalone__card--wide">
-        <span className="brand">
-          <span className="brand__mark">
-            <BridgeMark size={14} />
-          </span>
-          LingoBridge
-        </span>
+        <Brand />
         {receipt ? (
           <>
             <div className="standalone__heading">
