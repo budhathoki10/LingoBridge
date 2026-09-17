@@ -471,14 +471,14 @@ describe("NvidiaExplanationAdapter.understandWord", () => {
     expect(result.pronunciation).toBeNull();
   });
 
-  it("asks for every word field in the reader's language", async () => {
+  it("asks for every word field in the reader's language except part of speech", async () => {
     const client = new RecordingNvidiaClient(reply(JSON.stringify(wordAnswer)));
     await new NvidiaExplanationAdapter(client).understandWord(
       wordRequest,
       new AbortController().signal,
     );
     expect(client.calls[0]?.messages[0]?.content).toContain(
-      'Write every field except "word" entirely in the reader\'s language.',
+      'except "word" and "partOfSpeech", which are always in English',
     );
     expect(client.calls[0]?.messages[1]?.content).toContain("Reader's language: Nepali (ne)");
   });

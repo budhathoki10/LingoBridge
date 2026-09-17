@@ -20,7 +20,8 @@ import {
   deleteSavedWords,
   listSavedWords,
 } from "@lingobridge/database";
-import type { LivePhraseRecord } from "@lingobridge/contracts/account";
+import type { LivePhraseRecord, SavedWordRecord } from "@lingobridge/contracts/account";
+import ExcelJS from "exceljs";
 import { z } from "zod";
 import { ACCOUNT_DELETION_CONFIRMATION, DELETE_ALL_CONFIRMATION } from "../../lib/privacy";
 import { clearCookie, cookieNames } from "../cookies";
@@ -194,8 +195,51 @@ function formatPhrases(phrases: readonly LivePhraseRecord[]): string[] {
   return lines;
 }
 
-function formatPhraseExport(phrases: readonly LivePhraseRecord[]): string {
-  return `${formatPhrases(phrases).join("\n")}\n`;
+async function buildVocabularyWorkbook(words: readonly SavedWordRecord[]): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "LingoBridge";
+  workbook.created = new Date();
+  const sheet = workbook.addWorksheet("Vocabulary");
+  sheet.columns = [
+    { header: "Word", key: "word", width: 20 },
+    { header: "Translation", key: "translation", width: 20 },
+    { header: "Meaning", key: "meaning", width: 40 },
+    { header: "Part of speech", key: "partOfSpeech", width: 16 },
+    { header: "In this context", key: "contextMeaning", width: 40 },
+    { header: "Example", key: "example", width: 40 },
+    { header: "Pronunciation", key: "pronunciation", width: 18 },
+    { header: "Saved at", key: "savedAt", width: 22 },
+  ];
+  sheet.getRow(1).font = { bold: true };
+  for (const word of words) {
+    sheet.addRow({
+      contextMeaning: word.contextMeaning,
+      example: word.example,
+      meaning: word.meaning,
+      partOfSpeech: word.partOfSpeech,
+      pronunciation: word.pronunciation ?? "",
+      savedAt: word.savedAt,
+      translation: word.translation,
+      word: word.word,
+    });
+  }
+  return Buffer.from(await workbook.xlsx.writeBuffer());
+}
+
+async function buildPhraseWorkbook(phrases: readonly LivePhraseRecord[]): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "LingoBridge";
+  workbook.created = new Date();
+  const sheet = workbook.addWorksheet("Saved phrases");
+  sheet.columns = [
+    { header: "Source", key: "source", width: 50 },
+    { header: "Translation", key: "translation", width: 50 },
+  ];
+  sheet.getRow(1).font = { bold: true };
+  for (const phrase of phrases) {
+    sheet.addRow({ source: phrase.sourceText, translation: phrase.translatedText });
+  }
+  return Buffer.from(await workbook.xlsx.writeBuffer());
 }
 
 function formatAccountExport(exported: AccountExport): string {
@@ -256,32 +300,32 @@ export async function handleExport(
   const userId = auth.auth.user.id;
   if (scope === "vocabulary") {
     const words = await listSavedWords(services.database, userId);
-    const text = `${words
-      .map((word) => `${word.word}\n${word.translation}\n${word.meaning}`)
-      .join("\n\n----------------------------------------\n\n")}\n`;
-    return new Response(text, {
+    const buffer = await buildVocabularyWorkbook(words);
+    return new Response(new Uint8Array(buffer), {
       headers: {
         "Cache-Control": "no-store",
-        "Content-Disposition": `attachment; filename="lingobridge-vocabulary-${now.toISOString().slice(0, 10)}.txt"`,
-        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Disposition": `attachment; filename="lingobridge-vocabulary-${now.toISOString().slice(0, 10)}.xlsx"`,
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "X-Content-Type-Options": "nosniff",
       },
     });
   }
-  const exported =
-    scope === "account"
-      ? await exportAccount(services.database, userId, now)
-      : {
-          exportedAt: now.toISOString(),
-          phrases: await listAllLivePhrases(services.database, userId),
-          version: 1,
-        };
+  if (scope === "phrases") {
+    const phrases = await listAllLivePhrases(services.database, userId);
+    const buffer = await buildPhraseWorkbook(phrases);
+    return new Response(new Uint8Array(buffer), {
+      headers: {
+        "Cache-Control": "no-store",
+        "Content-Disposition": `attachment; filename="lingobridge-phrases-${now.toISOString().slice(0, 10)}.xlsx"`,
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  }
+  const exported = await exportAccount(services.database, userId, now);
   if (!exported) return errorResponse("not-found", "The account is no longer available.");
-  const text =
-    scope === "account"
-      ? formatAccountExport(exported as AccountExport)
-      : formatPhraseExport(exported.phrases);
-  const filename = `lingobridge-${scope}-${now.toISOString().slice(0, 10)}.txt`;
+  const text = formatAccountExport(exported);
+  const filename = `lingobridge-account-${now.toISOString().slice(0, 10)}.txt`;
   return new Response(text, {
     headers: {
       "Cache-Control": "no-store",

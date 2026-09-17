@@ -29,7 +29,7 @@ The dashboard gives signed-in users a safe place to manage information they deli
 
 - View words explicitly saved from Word Understanding, separately from saved phrases.
 - Search by original word or translation.
-- Delete saved words and export vocabulary as plain text.
+- Delete saved words and export vocabulary as an Excel spreadsheet (`.xlsx`).
 - Show meaning and part of speech without creating automatic translation history.
 
 ### Preferences

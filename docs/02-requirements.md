@@ -49,9 +49,14 @@
 - Save phrases only when the user chooses Save.
 - Keep saved phrases locally by default.
 - After a successful translation, let the user explicitly choose a word in the original selected
-  text and request a concise contextual definition, translation, part of speech, and example.
+  text and request a concise contextual definition, translation, part of speech, and example. For
+  English source text, skip offering this choice on common, low-value words (articles, pronouns,
+  simple prepositions, and similar high-frequency vocabulary) so the choice highlights words worth
+  explaining; other source languages keep every word choosable for now.
 - Write every explanation and word-understanding field in the language the text was translated
-  into, including the part of speech and the example sentence. The pronunciation describes the
+  into, except word understanding's part of speech, which stays a standard English grammar term
+  (e.g. "noun", "adjective") because translating it produced inconsistent, sometimes meaningless
+  results. The example sentence is in the translated language. The pronunciation describes the
   selected source word itself, respelled by sound with that language's letters, never the
   translation's pronunciation or phonetic symbols. Explain shows only the translated example
   sentence.

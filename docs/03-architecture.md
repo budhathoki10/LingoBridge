@@ -61,7 +61,10 @@ Synchronizes only explicitly saved phrases and approved preferences. It uses sta
 ### Word understanding
 
 After a translation succeeds, Unicode word segmentation makes words in the original selected text
-keyboard- and pointer-activatable. One explicit activation sends only that word, the selected text,
+keyboard- and pointer-activatable, except that for English source text a bundled list of common
+English words (`apps/extension/lib/common-english-words.ts`) is excluded so only uncommon or
+complex words become buttons; other source languages keep every word activatable, since no
+equivalent list exists for them yet. One explicit activation sends only that word, the selected text,
 its existing translation, and the language pair to the gateway's explanation adapter (Nemotron, with
 the OpenRouter backup described below). Structured
 responses are validated before display and cached only while the translator remains open. Save word

@@ -300,10 +300,19 @@ export function AppShell({
       {
         group: "Actions",
         id: "export-phrases",
-        keywords: "download json backup",
-        label: "Export saved phrases",
+        keywords: "download excel spreadsheet xlsx backup",
+        label: "Export saved phrases (Excel)",
         run: () => {
           window.location.href = "/api/dashboard/export?scope=phrases";
+        },
+      },
+      {
+        group: "Actions",
+        id: "export-vocabulary",
+        keywords: "download excel spreadsheet xlsx words",
+        label: "Export vocabulary (Excel)",
+        run: () => {
+          window.location.href = "/api/dashboard/export?scope=vocabulary";
         },
       },
       {

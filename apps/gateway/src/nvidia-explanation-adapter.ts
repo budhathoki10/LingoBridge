@@ -1,4 +1,3 @@
-import { setTimeout as sleep } from "node:timers/promises";
 import {
   type ExplanationProvider,
   type ExplanationRequest,
@@ -41,9 +40,9 @@ export const WORD_UNDERSTANDING_SYSTEM_PROMPT = `You explain one word from a sen
 Reply with one JSON object and nothing else:
 {"word": string, "translation": string, "meaning": string, "partOfSpeech": string, "contextMeaning": string, "example": string, "pronunciation": string | null}
 
-Write every field except "word" entirely in the reader's language. The reader must not see any other language, so never add source-language words, English grammar terms, or phonetic symbols.
+Write every field in the reader's language, except "word" and "partOfSpeech", which are always in English. The reader must not see any other language mixed into the other fields, so never add source-language words or phonetic symbols there.
 
-Keep every field concise. "translation" is the selected word in the reader's language. "meaning" is a simple definition. "partOfSpeech" is the grammar category named in the reader's language (for Nepali, "विशेषण" rather than "adjective"). "contextMeaning" explains its meaning in this sentence. "example" is one short, natural sentence in the reader's language that uses the translated word in the same sense. "pronunciation" tells the reader how to say the selected source-language word itself (the value of "word"), never the translation.
+Keep every field concise. "translation" is the selected word in the reader's language. "meaning" is a simple definition. "partOfSpeech" is one standard English grammar term (e.g. "noun", "verb", "adjective", "adverb", "auxiliary verb", "preposition"), never translated. "contextMeaning" explains its meaning in this sentence. "example" is one short, natural sentence in the reader's language that uses the translated word in the same sense. "pronunciation" tells the reader how to say the selected source-language word itself (the value of "word"), never the translation.
 
 Pronunciation rules:
 - Spell the sound of the selected word using the reader's language's own letters and spelling habits, so a reader of that language can say it aloud. Examples for "enormous": Nepali "इनोर्मस", Japanese "イノーマス", Arabic "إينورمَس", Swahili "inomasi".
@@ -118,6 +117,25 @@ function buildUserMessage(request: ExplanationRequest): string {
 /** Asked once when the first word-understanding answer is not the requested JSON object. */
 export const WORD_JSON_NUDGE =
   "That answer could not be read. Reply again with only the JSON object described, with every key present, and nothing before or after it.";
+
+/** A plain, version-independent abortable delay, so a caller's cancellation cuts the wait short. */
+function delay(milliseconds: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException("The operation was aborted.", "AbortError"));
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DOMException("The operation was aborted.", "AbortError"));
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, milliseconds);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
 
 /** Keeps a verbose but otherwise valid model field inside the contract limit instead of failing. */
 export function truncateField(text: string, maxLength: number): string {
@@ -354,7 +372,7 @@ export class NvidiaExplanationAdapter implements ExplanationAdapter {
       if (!(failure instanceof TranslationAdapterError) || !failure.retryable || signal.aborted) {
         throw failure;
       }
-      await sleep(this.retryDelayMilliseconds, undefined, { signal });
+      await delay(this.retryDelayMilliseconds, signal);
       try {
         return await this.complete(messages, signal);
       } catch (retryError) {

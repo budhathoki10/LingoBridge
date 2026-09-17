@@ -43,7 +43,11 @@ import {
   saveSavedPhrases,
 } from "../lib/saved-phrases";
 import { saveWord } from "../lib/saved-words";
-import { tokenizeWords, wordUnderstandingCacheKey } from "../lib/word-understanding";
+import {
+  isClickableWord,
+  tokenizeWords,
+  wordUnderstandingCacheKey,
+} from "../lib/word-understanding";
 import {
   chooseSelectionTargetLanguage,
   resolveSelectionSource,
@@ -1217,7 +1221,7 @@ function createController(): InstalledController {
     }
     source.setAttribute("aria-label", "Original text. Choose a word to understand it.");
     for (const token of tokenizeWords(text, context?.sourceLanguage)) {
-      if (!token.isWord) {
+      if (!token.isWord || !isClickableWord(token.text, context?.sourceLanguage)) {
         source.append(document.createTextNode(token.text));
         continue;
       }
@@ -1314,22 +1318,26 @@ function createController(): InstalledController {
       return panel;
     }
     if (!wordResult) return panel;
-    const fields: Array<[string, string | null]> = [
-      ["Translation", wordResult.translation],
-      ["Meaning", wordResult.meaning],
-      ["Part of speech", wordResult.partOfSpeech],
-      ["In this context", wordResult.contextMeaning],
-      ["Example", wordResult.example],
-      ["Pronunciation", wordResult.pronunciation],
+    // "Part of speech" is always in English (a standard grammar term), unlike every other field.
+    const fields: Array<[string, string | null, "en" | "target"]> = [
+      ["Translation", wordResult.translation, "target"],
+      ["Meaning", wordResult.meaning, "target"],
+      ["Part of speech", wordResult.partOfSpeech, "en"],
+      ["In this context", wordResult.contextMeaning, "target"],
+      ["Example", wordResult.example, "target"],
+      ["Pronunciation", wordResult.pronunciation, "target"],
     ];
     const list = document.createElement("dl");
-    for (const [label, value] of fields) {
+    for (const [label, value, language] of fields) {
       if (!value) continue;
       const wrapper = document.createElement("div");
       const term = document.createElement("dt");
       term.textContent = label;
       const detail = document.createElement("dd");
-      if (result) {
+      if (language === "en") {
+        detail.lang = "en";
+        detail.dir = "ltr";
+      } else if (result) {
         detail.lang = result.targetLanguage;
         detail.dir =
           getPreviewLanguage(result.targetLanguage, context?.languages)?.textDirection ?? "auto";
