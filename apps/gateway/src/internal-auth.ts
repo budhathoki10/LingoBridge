@@ -4,5 +4,5 @@ import { createHash, timingSafeEqual } from "node:crypto";
 export function safeEqualSecret(presented: string, expected: string): boolean {
   const left = createHash("sha256").update(presented, "utf8").digest();
   const right = createHash("sha256").update(expected, "utf8").digest();
-  return timingSafeEqual(left, right);
+  return timingSafeEqual(new Uint8Array(left), new Uint8Array(right));
 }

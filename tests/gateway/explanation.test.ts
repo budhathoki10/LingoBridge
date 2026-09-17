@@ -13,6 +13,9 @@ import {
   normalizeDigits,
   NvidiaExplanationAdapter,
   SIMPLER_WORDS_NUDGE,
+  truncateField,
+  WORD_JSON_NUDGE,
+  WORD_UNDERSTANDING_SYSTEM_PROMPT,
 } from "../../apps/gateway/src/nvidia-explanation-adapter";
 import type {
   NvidiaChatCompletionRequest,
@@ -124,6 +127,28 @@ describe("explain route", () => {
     expect(DEFAULT_EXPLANATION_MODEL).toBe(config.explanationModel);
     expect(config.explanationTimeoutMilliseconds).toBe(90_000);
     expect(() => loadGatewayRuntimeConfig({ NVIDIA_EXPLANATION_MODEL: "not a model" })).toThrow();
+  });
+
+  it("configures the OpenRouter backup only in live mode", () => {
+    const fake = loadGatewayRuntimeConfig({ OPENROUTER_API_KEY: "or-key" });
+    expect(fake.openRouterApiKey).toBeNull();
+    expect(fake.openRouterModel).toBe("nex-agi/nex-n2.5-pro:free");
+    expect(fake.openRouterBaseUrl).toBe("https://openrouter.ai/api/v1");
+    expect(fake.explanationPrimaryTimeoutMilliseconds).toBe(20_000);
+
+    const live = loadGatewayRuntimeConfig({
+      LINGOBRIDGE_ALLOWED_EXTENSION_ORIGINS: "chrome-extension://abcdefghijklmnopabcdefghijklmnop",
+      LINGOBRIDGE_TRANSLATION_MODE: "live",
+      MYMEMORY_CONTACT_EMAIL: "owner@example.com",
+      NVIDIA_API_KEY: "nv-key",
+      OPENROUTER_API_KEY: " or-key ",
+      OPENROUTER_MODEL: "google/gemma-4-26b-a4b-it:free",
+    });
+    expect(live.openRouterApiKey).toBe("or-key");
+    expect(live.openRouterModel).toBe("google/gemma-4-26b-a4b-it:free");
+    expect(() => loadGatewayRuntimeConfig({ OPENROUTER_MODEL: "gemma free" })).toThrow(
+      "OPENROUTER_MODEL",
+    );
   });
 });
 
@@ -336,5 +361,176 @@ describe("NvidiaExplanationAdapter", () => {
     await expect(
       busy.explain(explanationRequest, new AbortController().signal),
     ).rejects.toBeInstanceOf(TranslationAdapterError);
+  });
+});
+
+describe("NvidiaExplanationAdapter.understandWord", () => {
+  const wordRequest: WordUnderstandingRequest = {
+    ...explanationRequest,
+    operation: "understand-word",
+    sourceLanguage: "en",
+    sourceText: "Cows drink an enormous amount of water every day.",
+    targetLanguage: "ne",
+    translatedText: "गाईहरूले हरेक दिन ठूलो मात्रामा पानी पिउँछन्।",
+    word: "enormous",
+  };
+  const wordAnswer = {
+    contextMeaning: "यहाँ पानीको मात्रा धेरै ठूलो भएको बुझाउँछ।",
+    example: "The project needed an enormous amount of money.",
+    meaning: "अत्यधिक ठूलो",
+    partOfSpeech: "adjective",
+    pronunciation: "/ɪˈnɔːrməs/",
+    translation: "विशाल",
+    word: "enormous",
+  };
+
+  it("asks once more when the first answer is not readable JSON", async () => {
+    const client = new RecordingNvidiaClient((call) =>
+      reply(call === 1 ? "Sure! Here is the meaning of enormous." : JSON.stringify(wordAnswer))(),
+    );
+    const result = await new NvidiaExplanationAdapter(client).understandWord(
+      wordRequest,
+      new AbortController().signal,
+    );
+
+    expect(client.calls).toHaveLength(2);
+    expect(client.calls[1]?.messages.at(-1)).toEqual({ content: WORD_JSON_NUDGE, role: "user" });
+    expect(result).toMatchObject({ translation: "विशाल", word: "enormous" });
+  });
+
+  it("retries once when NVIDIA is briefly unavailable", async () => {
+    const client = new RecordingNvidiaClient((call) => {
+      if (call === 1) throw Object.assign(new Error("overloaded"), { status: 503 });
+      return reply(JSON.stringify(wordAnswer))();
+    });
+    const result = await new NvidiaExplanationAdapter(
+      client,
+      DEFAULT_EXPLANATION_MODEL,
+      2_048,
+      0,
+    ).understandWord(wordRequest, new AbortController().signal);
+
+    expect(client.calls).toHaveLength(2);
+    expect(result.translation).toBe("विशाल");
+  });
+
+  it("does not retry a request NVIDIA rejected", async () => {
+    const client = new RecordingNvidiaClient(() => {
+      throw Object.assign(new Error("bad request"), { status: 400 });
+    });
+    await expect(
+      new NvidiaExplanationAdapter(client, DEFAULT_EXPLANATION_MODEL, 2_048, 0).understandWord(
+        wordRequest,
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ retryable: false });
+    expect(client.calls).toHaveLength(1);
+  });
+
+  it("gives up after the single retry when NVIDIA stays unavailable", async () => {
+    const client = new RecordingNvidiaClient(() => {
+      throw Object.assign(new Error("overloaded"), { status: 503 });
+    });
+    await expect(
+      new NvidiaExplanationAdapter(client, DEFAULT_EXPLANATION_MODEL, 2_048, 0).understandWord(
+        wordRequest,
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ code: "provider-unavailable", retryable: true });
+    expect(client.calls).toHaveLength(2);
+  });
+
+  it("fails as retryable when both answers are unreadable", async () => {
+    const client = new RecordingNvidiaClient(reply("not json"));
+    await expect(
+      new NvidiaExplanationAdapter(client).understandWord(
+        wordRequest,
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ code: "provider-unavailable", retryable: true });
+    expect(client.calls).toHaveLength(2);
+  });
+
+  it("trims overlong fields to the contract instead of rejecting the answer", async () => {
+    const verbose = {
+      ...wordAnswer,
+      example: "e".repeat(400),
+      partOfSpeech: "adjective (describes an extremely large size or quantity)",
+      pronunciation: "   ",
+    };
+    const client = new RecordingNvidiaClient(reply(JSON.stringify(verbose)));
+    const result = await new NvidiaExplanationAdapter(client).understandWord(
+      wordRequest,
+      new AbortController().signal,
+    );
+
+    expect(client.calls).toHaveLength(1);
+    expect(wordUnderstandingResultSchema.safeParse(result).success).toBe(true);
+    expect(result.partOfSpeech).toBe("adjective (describes an extremely large");
+    expect(result.example).toHaveLength(300);
+    expect(result.pronunciation).toBeNull();
+  });
+
+  it("asks for every word field in the reader's language except part of speech", async () => {
+    const client = new RecordingNvidiaClient(reply(JSON.stringify(wordAnswer)));
+    await new NvidiaExplanationAdapter(client).understandWord(
+      wordRequest,
+      new AbortController().signal,
+    );
+    expect(client.calls[0]?.messages[0]?.content).toContain(
+      'except "word" and "partOfSpeech", which are always in English',
+    );
+    expect(client.calls[0]?.messages[1]?.content).toContain("Reader's language: Nepali (ne)");
+  });
+
+  it("asks for the selected word's pronunciation, not the translation's", async () => {
+    expect(WORD_UNDERSTANDING_SYSTEM_PROMPT).toContain(
+      "how to say the selected source-language word itself",
+    );
+    expect(WORD_UNDERSTANDING_SYSTEM_PROMPT).toContain('Nepali "इनोर्मस"');
+  });
+
+  it("drops a pronunciation that only repeats the translation", async () => {
+    const echo = new RecordingNvidiaClient(
+      reply(JSON.stringify({ ...wordAnswer, pronunciation: " विशाल ", translation: "विशाल" })),
+    );
+    const echoed = await new NvidiaExplanationAdapter(echo).understandWord(
+      wordRequest,
+      new AbortController().signal,
+    );
+    expect(echoed.pronunciation).toBeNull();
+
+    const spoken = new RecordingNvidiaClient(
+      reply(JSON.stringify({ ...wordAnswer, pronunciation: "इनोर्मस", translation: "विशाल" })),
+    );
+    const kept = await new NvidiaExplanationAdapter(spoken).understandWord(
+      wordRequest,
+      new AbortController().signal,
+    );
+    expect(kept.pronunciation).toBe("इनोर्मस");
+  });
+
+  it("returns word-understanding numbers in plain digits", async () => {
+    const client = new RecordingNvidiaClient(
+      reply(
+        JSON.stringify({
+          ...wordAnswer,
+          contextMeaning: "लगभग ३० देखि ५० ग्यालन पानी।",
+          example: "गाईले दिनमा ३० लिटर पानी पिउँछ।",
+        }),
+      ),
+    );
+    const result = await new NvidiaExplanationAdapter(client).understandWord(
+      wordRequest,
+      new AbortController().signal,
+    );
+    expect(result.contextMeaning).toBe(normalizeDigits("लगभग ३० देखि ५० ग्यालन पानी।"));
+    expect(result.contextMeaning).toContain("30 देखि 50");
+    expect(result.example).toBe("गाईले दिनमा 30 लिटर पानी पिउँछ।");
+  });
+
+  it("keeps multi-byte characters whole when truncating", () => {
+    expect(truncateField("विशाल विशाल", 5)).toBe("विशाल".slice(0, 5));
+    expect(truncateField("  😀😀😀  ", 2)).toBe("😀😀");
   });
 });

@@ -1,6 +1,19 @@
+import { COMMON_ENGLISH_WORDS } from "./common-english-words";
+
 export interface WordToken {
   isWord: boolean;
   text: string;
+}
+
+/**
+ * Whether a word from the original selected text is worth an explicit "understand this word"
+ * button. Only English text is filtered today, because a curated common-word list only exists for
+ * English; every other source language, and any word this function can't classify, stays
+ * clickable, matching the extension's existing behavior.
+ */
+export function isClickableWord(word: string, sourceLanguage: string | undefined): boolean {
+  if ((sourceLanguage ?? "").toLowerCase() !== "en") return true;
+  return !COMMON_ENGLISH_WORDS.has(word.toLowerCase());
 }
 
 /** Uses Unicode word boundaries, preserving whitespace and punctuation as ordinary text. */

@@ -12,10 +12,18 @@ add latency, cost, and unwanted text processing.
 
 - Make words in the original selected text interactive only after translation succeeds.
 - Use Unicode word segmentation so punctuation remains ordinary text.
+- Only make a word interactive if it is likely to be worth explaining: for English source text,
+  skip a bundled list of common English words (articles, pronouns, prepositions, and other
+  high-frequency vocabulary) so buttons target meaningful words instead of glue words; every other
+  source language keeps every word interactive, since no equivalent curated list exists for them
+  yet (added 17 September 2026).
 - Send one chosen word, the selected text, its existing translation, and the language pair through
   the existing gateway and Nemotron 3 Ultra consent boundary.
 - Require structured, validated output containing the word translation, simple meaning, part of
-  speech, contextual meaning, one example, and optional pronunciation.
+  speech, contextual meaning, one example, and optional pronunciation, all written in the language
+  the text was translated into (amended 17 September 2026; pronunciation is spelled in that
+  language's script), except part of speech, which stays a standard English grammar term because
+  translating it produced garbled results (amended again 17 September 2026).
 - Cache results only for the current open translator, keyed by word, context, and language pair.
 - Save nothing automatically. Save word creates a separate local vocabulary record and, for a
   connected account, a user-owned dashboard vocabulary record.

@@ -150,7 +150,7 @@ async function localLanguagePreferences(worker: Worker): Promise<{
   });
 }
 
-test("favorite targets can be pinned and switched without sending text before consent", async ({
+test("favorite targets can be pinned and switched without sending any text", async ({
   browserName: _browserName,
 }, testInfo) => {
   const context = await chromium.launchPersistentContext("", {
@@ -179,7 +179,7 @@ test("favorite targets can be pinned and switched without sending text before co
     await clickClosedShadowHost(page);
     await expect
       .poll(() => page.locator(hostSelector).getAttribute("data-lingobridge-state"))
-      .toMatch(/^(consent|success)$/u);
+      .toMatch(/^(consent|ready)$/u);
 
     const beforePin = translateRequests.value;
     await operateClosedShadowControl(page, "button", "Remove French from favorites", "click");
@@ -195,7 +195,7 @@ test("favorite targets can be pinned and switched without sending text before co
     await operateClosedShadowControl(page, "summary", "Manage favorite languages", "click");
     await operateClosedShadowControl(page, "input", "Favorite Hindi", "click");
     expect(await page.locator(hostSelector).getAttribute("data-lingobridge-state")).toMatch(
-      /^(consent|success)$/u,
+      /^(consent|ready)$/u,
     );
     await operateClosedShadowControl(page, "input", "Favorite Arabic", "click");
     await page.screenshot({ path: testInfo.outputPath("favorite-picker.png") });
@@ -225,7 +225,7 @@ test("favorite targets can be pinned and switched without sending text before co
       .toBe("hi");
     await expect
       .poll(() => page.locator(hostSelector).getAttribute("data-lingobridge-state"))
-      .toMatch(/^(consent|success)$/u);
+      .toMatch(/^(consent|ready)$/u);
     const beforeHindiPin = translateRequests.value;
     await operateClosedShadowControl(page, "button", "Add Hindi to favorites", "click");
     await expect
@@ -237,13 +237,11 @@ test("favorite targets can be pinned and switched without sending text before co
     expect(bounds).not.toBeNull();
     expect((bounds?.x ?? 0) + (bounds?.width ?? 0)).toBeLessThanOrEqual(312);
     await page.screenshot({ path: testInfo.outputPath("favorite-targets.png") });
-    await operateClosedShadowControl(page, "button", "Translate to French", "click");
+    await operateClosedShadowControl(page, "button", "Use French", "click");
     await expect
       .poll(async () => (await localLanguagePreferences(worker)).targetLanguage)
       .toBe("fr");
-    if ((await page.locator(hostSelector).getAttribute("data-lingobridge-state")) === "consent") {
-      expect(translateRequests.value).toBe(beforePin);
-    }
+    expect(translateRequests.value).toBe(beforePin);
     await page.setViewportSize({ width: 190, height: 500 });
     const narrowBounds = await page.locator(hostSelector).boundingBox();
     expect(narrowBounds).not.toBeNull();
@@ -296,6 +294,13 @@ test("select -> magic icon -> click -> preferred-language translation", async ({
     expect(iconBounds?.y).toBeGreaterThanOrEqual(8);
 
     await clickClosedShadowHost(page);
+    await expect(host).toHaveAttribute("data-lingobridge-state", "ready");
+    expect(translationRequests.value).toBe(0);
+    await operateClosedShadowControl(page, "select", "Target language", { select: "hi" });
+    await expect(host).toHaveAttribute("data-lingobridge-state", "ready");
+    await operateClosedShadowControl(page, "select", "Target language", { select: "ne" });
+    expect(translationRequests.value).toBe(0);
+    await operateClosedShadowControl(page, "button", "Translate into Nepali", "click");
     await expect(host).toHaveAttribute("data-lingobridge-state", "success");
     await expect(host).toHaveAttribute("data-lingobridge-target", "ne");
     await expect(host).toHaveAttribute("data-lingobridge-provider", "google");
@@ -326,6 +331,8 @@ test("select -> magic icon -> click -> preferred-language translation", async ({
     );
     await expect(host).toHaveAttribute("data-lingobridge-state", "icon");
     await clickClosedShadowHost(page);
+    await expect(host).toHaveAttribute("data-lingobridge-state", "ready");
+    await operateClosedShadowControl(page, "button", "Translate into Nepali", "click");
     await expect(host).toHaveAttribute("data-lingobridge-state", "success");
     const longPanelBounds = await host.boundingBox();
     expect(longPanelBounds).not.toBeNull();
@@ -356,6 +363,8 @@ test("a new selection cancels the previous request and replaces the surface", as
     const host = page.locator(hostSelector);
     await expect(host).toHaveAttribute("data-lingobridge-state", "icon");
     await clickClosedShadowHost(page);
+    await expect(host).toHaveAttribute("data-lingobridge-state", "ready");
+    await operateClosedShadowControl(page, "button", "Translate into Nepali", "click");
     await expect(host).toHaveAttribute("data-lingobridge-state", "loading");
     await page.evaluate(() => {
       document.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
@@ -365,6 +374,8 @@ test("a new selection cancels the previous request and replaces the surface", as
     await page.waitForTimeout(300);
     await expect(host).toHaveAttribute("data-lingobridge-state", "icon");
     await clickClosedShadowHost(page);
+    await expect(host).toHaveAttribute("data-lingobridge-state", "ready");
+    await operateClosedShadowControl(page, "button", "Translate into Nepali", "click");
     await expect(host).toHaveAttribute("data-lingobridge-state", "success");
   } finally {
     await context.close();

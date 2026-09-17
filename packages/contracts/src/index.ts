@@ -117,9 +117,13 @@ export const explanationConsentSchema = z
   .object({
     acceptedAt: z.string().datetime({ offset: true }),
     nvidia: z.literal(true),
+    /** Allows the gateway to retry on OpenRouter when NVIDIA cannot answer. */
+    openRouter: z.boolean().optional(),
     version: z.string().min(1).max(40),
   })
   .strict();
+
+export const explanationProviderSchema = z.enum(["nvidia", "openrouter"]);
 
 const explanationSourceTextSchema = translationTextSchema.superRefine((text, context) => {
   if (Array.from(text).length > MAX_EXPLANATION_SOURCE_CODE_POINTS) {
@@ -157,7 +161,7 @@ export const explanationResultSchema = z
       )
       .length(1),
     meaning: z.string().trim().min(1).max(700),
-    provider: z.literal("nvidia"),
+    provider: explanationProviderSchema,
     register: explanationRegisterSchema,
     requestId: requestIdSchema,
     usageNote: z.string().trim().max(300).nullable(),
@@ -184,7 +188,7 @@ export const wordUnderstandingResultSchema = z
     meaning: z.string().trim().min(1).max(500),
     partOfSpeech: z.string().trim().min(1).max(40),
     pronunciation: z.string().trim().min(1).max(160).nullable(),
-    provider: z.literal("nvidia"),
+    provider: explanationProviderSchema,
     requestId: requestIdSchema,
     translation: z.string().trim().min(1).max(300),
     word: z.string().trim().min(1).max(100),
@@ -289,6 +293,7 @@ export const gatewayVersionSchema = z
   .strict();
 
 export type ExplanationConsent = z.infer<typeof explanationConsentSchema>;
+export type ExplanationProvider = z.infer<typeof explanationProviderSchema>;
 export type ExplanationRegister = z.infer<typeof explanationRegisterSchema>;
 export type ExplanationRequest = z.infer<typeof explanationRequestSchema>;
 export type ExplanationResult = z.infer<typeof explanationResultSchema>;

@@ -29,6 +29,7 @@ import {
   type SelectionMagicMessage,
   selectionRegistrationMatches,
 } from "../lib/selection-magic";
+import { keepWorkerAlive } from "../lib/worker-keepalive";
 
 const CONTENT_SCRIPT_FILE = "/content-scripts/selection.js";
 const CONTEXT_MENU_ID = "lingobridge-translate-selection";
@@ -211,7 +212,9 @@ function serveGatewayBridgePort(port: Browser.runtime.Port): void {
   }
   const controller = new AbortController();
   let answered = false;
+  let stopKeepAlive: (() => void) | undefined;
   port.onDisconnect.addListener(() => {
+    stopKeepAlive?.();
     if (!answered) controller.abort();
   });
   port.onMessage.addListener((message) => {
@@ -230,7 +233,9 @@ function serveGatewayBridgePort(port: Browser.runtime.Port): void {
       port.disconnect();
       return;
     }
+    stopKeepAlive = keepWorkerAlive(() => browser.runtime.getPlatformInfo());
     void runGatewayBridgeRequest(request, controller).then((response) => {
+      stopKeepAlive?.();
       answered = true;
       try {
         port.postMessage(response);

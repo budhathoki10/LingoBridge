@@ -7,7 +7,13 @@ import {
   parseConnectionRequest,
 } from "@lingobridge/auth";
 import { syncResponseSchema } from "@lingobridge/contracts/account";
-import { findUserByIdentity, getPhraseRecord, runSync } from "@lingobridge/database";
+import {
+  findUserByIdentity,
+  getPhraseRecord,
+  runSync,
+  upsertSavedWord,
+} from "@lingobridge/database";
+import ExcelJS from "exceljs";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildContentSecurityPolicy, isProtectedPath, proxy } from "../../apps/dashboard/src/proxy";
@@ -255,14 +261,19 @@ describe("dashboard mutations", () => {
       dashboard.services,
     );
     expect(phraseExport.headers.get("Content-Disposition")).toContain("lingobridge-phrases-");
-    const phraseText = await phraseExport.text();
-    expect(phraseText).toBe(`Source:\nAlice only\n\nTranslation:\n${secret.translatedText}\n`);
-    expect(phraseText).toContain("Source:\nAlice only");
-    expect(phraseText).toContain(`Translation:\n${secret.translatedText}`);
-    expect(phraseText).not.toContain("LingoBridge Saved Phrases");
-    expect(phraseText).not.toContain("Note:\nmine");
-    expect(phraseText).not.toContain("Languages:");
-    expect(phraseText).not.toContain("Provider:");
+    expect(phraseExport.headers.get("Content-Disposition")).toContain(".xlsx");
+    expect(phraseExport.headers.get("Content-Type")).toBe(
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    const phraseWorkbook = new ExcelJS.Workbook();
+    await phraseWorkbook.xlsx.load(await phraseExport.arrayBuffer());
+    const phraseSheet = phraseWorkbook.getWorksheet("Saved phrases");
+    expect(phraseSheet?.getRow(1).getCell(1).text).toBe("Source");
+    expect(phraseSheet?.getRow(2).getCell(1).text).toBe("Alice only");
+    expect(phraseSheet?.getRow(2).getCell(2).text).toBe(secret.translatedText);
+    expect(phraseSheet?.rowCount).toBe(2); // header row plus the one live phrase; the note is not exported
+    const phraseWorkbookText = JSON.stringify(phraseWorkbook.model);
+    expect(phraseWorkbookText).not.toContain("mine");
     const stale = await handleUpdateNote(
       post(
         "/api/dashboard/phrases/note",
@@ -272,6 +283,56 @@ describe("dashboard mutations", () => {
       dashboard.services,
     );
     expect(stale.status).toBe(409);
+  });
+
+  it("exports vocabulary as a real Excel workbook, scoped to the signed-in user", async () => {
+    const alice = await signInThroughHandlers(dashboard, "alice-vocab@example.test");
+    const bob = await signInThroughHandlers(dashboard, "bob-vocab@example.test");
+    const aliceId = await userId("alice-vocab@example.test");
+    await upsertSavedWord(dashboard.database, aliceId, {
+      contextMeaning: "It describes something very large here.",
+      example: "The building was enormous.",
+      id: crypto.randomUUID(),
+      meaning: "Very large",
+      partOfSpeech: "adjective",
+      pronunciation: "ih-NOR-muhs",
+      savedAt: dashboard.clock.now().toISOString(),
+      sourceLanguage: "en",
+      sourceText: "The building was enormous.",
+      targetLanguage: "ne",
+      translation: "विशाल",
+      word: "enormous",
+    });
+
+    const bobExport = await handleExport(
+      new Request(`${DASHBOARD_ORIGIN}/api/dashboard/export?scope=vocabulary`, {
+        headers: { Cookie: bob.cookies },
+      }),
+      dashboard.services,
+    );
+    expect(bobExport.headers.get("Content-Type")).toBe(
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    const bobWorkbook = new ExcelJS.Workbook();
+    await bobWorkbook.xlsx.load(await bobExport.arrayBuffer());
+    expect(bobWorkbook.getWorksheet("Vocabulary")?.rowCount).toBe(1); // header row only
+
+    const aliceExport = await handleExport(
+      new Request(`${DASHBOARD_ORIGIN}/api/dashboard/export?scope=vocabulary`, {
+        headers: { Cookie: alice.cookies },
+      }),
+      dashboard.services,
+    );
+    expect(aliceExport.headers.get("Content-Disposition")).toContain("lingobridge-vocabulary-");
+    expect(aliceExport.headers.get("Content-Disposition")).toContain(".xlsx");
+    const aliceWorkbook = new ExcelJS.Workbook();
+    await aliceWorkbook.xlsx.load(await aliceExport.arrayBuffer());
+    const sheet = aliceWorkbook.getWorksheet("Vocabulary");
+    expect(sheet?.getRow(1).getCell(1).text).toBe("Word");
+    const row = sheet?.getRow(2);
+    expect(row?.getCell(1).text).toBe("enormous");
+    expect(row?.getCell(2).text).toBe("विशाल");
+    expect(row?.getCell(4).text).toBe("adjective");
   });
 
   it("delete an account only after recent authentication and revoke every session", async () => {

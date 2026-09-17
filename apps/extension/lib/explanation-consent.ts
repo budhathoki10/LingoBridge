@@ -2,11 +2,12 @@ import { type ExplanationConsent, explanationConsentSchema } from "@lingobridge/
 import type { ConsentStorage } from "./online-consent";
 
 /**
- * Explain sends the selected text and its translation to a different NVIDIA model, a general
- * language model the translation consent does not describe. It is asked for once, on the first
- * Explain click, and stored separately.
+ * Explain and word understanding send the selected text and its translation to NVIDIA Nemotron,
+ * and to an OpenRouter model when NVIDIA cannot answer. Translation consent covers neither, so this
+ * is asked for once, on the first click, and stored separately. The version changes whenever the
+ * named providers change, so readers who accepted an older list are asked again.
  */
-export const EXPLANATION_CONSENT_VERSION = "explain-nvidia-nemotron-v1";
+export const EXPLANATION_CONSENT_VERSION = "explain-nvidia-openrouter-v2";
 const STORAGE_KEY = "lingobridgeExplanationConsent";
 
 function extensionStorage(): ConsentStorage {
@@ -24,6 +25,7 @@ export function createExplanationConsentRepository(storage: ConsentStorage) {
       const consent = explanationConsentSchema.parse({
         acceptedAt: new Date().toISOString(),
         nvidia: true,
+        openRouter: true,
         version: EXPLANATION_CONSENT_VERSION,
       });
       await storage.set({ [STORAGE_KEY]: consent });

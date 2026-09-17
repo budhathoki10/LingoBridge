@@ -15,6 +15,7 @@ export interface GatewayRuntimeConfig {
   capabilityRetryAfterFailureMilliseconds: number;
   explanationMaxTokens: number;
   explanationModel: string;
+  explanationPrimaryTimeoutMilliseconds: number;
   explanationTimeoutMilliseconds: number;
   googleProjectId: string | null;
   hostname: string;
@@ -24,6 +25,9 @@ export interface GatewayRuntimeConfig {
   nvidiaBaseUrl: string;
   nvidiaMaxTokens: number;
   nvidiaModel: string;
+  openRouterApiKey: string | null;
+  openRouterBaseUrl: string;
+  openRouterModel: string;
   operationsMetricsToken: string | null;
   operationsThresholds: OperationsThresholds;
   port: number;
@@ -127,6 +131,11 @@ export function loadGatewayRuntimeConfig(environment: GatewayEnvironment): Gatew
     throw new Error("NVIDIA_EXPLANATION_MODEL must be an NVIDIA API catalog model ID.");
   }
 
+  const openRouterModel = environment.OPENROUTER_MODEL?.trim() || "nex-agi/nex-n2.5-pro:free";
+  if (!/^[a-z0-9-]{1,40}\/[a-z0-9._-]{1,100}(?::[a-z0-9-]{1,20})?$/u.test(openRouterModel)) {
+    throw new Error("OPENROUTER_MODEL must be an OpenRouter model ID.");
+  }
+
   return {
     capabilityCachePath:
       environment.LINGOBRIDGE_CAPABILITY_CACHE_PATH ?? ".data/online-provider-capabilities.json",
@@ -142,6 +151,11 @@ export function loadGatewayRuntimeConfig(environment: GatewayEnvironment): Gatew
     ),
     explanationMaxTokens: readPositiveInteger(environment, "NVIDIA_EXPLANATION_MAX_TOKENS", 4_096),
     explanationModel,
+    explanationPrimaryTimeoutMilliseconds: readPositiveInteger(
+      environment,
+      "LINGOBRIDGE_EXPLANATION_PRIMARY_TIMEOUT_MS",
+      20_000,
+    ),
     explanationTimeoutMilliseconds: readPositiveInteger(
       environment,
       "LINGOBRIDGE_EXPLANATION_TIMEOUT_MS",
@@ -155,6 +169,10 @@ export function loadGatewayRuntimeConfig(environment: GatewayEnvironment): Gatew
     nvidiaBaseUrl: environment.NVIDIA_BASE_URL ?? "https://integrate.api.nvidia.com/v1",
     nvidiaMaxTokens: readPositiveInteger(environment, "NVIDIA_MAX_TOKENS", 2_048),
     nvidiaModel: environment.NVIDIA_MODEL ?? "nvidia/riva-translate-4b-instruct-v2",
+    openRouterApiKey:
+      translationMode === "live" ? environment.OPENROUTER_API_KEY?.trim() || null : null,
+    openRouterBaseUrl: environment.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1",
+    openRouterModel,
     operationsMetricsToken: readOperationsMetricsToken(environment),
     operationsThresholds: {
       characterQuota: readOptionalPositiveNumber(environment, "LINGOBRIDGE_CHARACTER_QUOTA"),

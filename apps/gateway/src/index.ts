@@ -6,6 +6,7 @@ import { CapabilityCatalogueService } from "./capability-catalogue-service.js";
 import { loadGatewayRuntimeConfig } from "./config.js";
 import { FakeExplanationAdapter } from "./fake-explanation-adapter.js";
 import { FakeTranslationAdapter } from "./fake-translation-adapter.js";
+import { FallbackExplanationAdapter } from "./fallback-explanation-adapter.js";
 import { FileCapabilityCatalogueStore } from "./file-capability-catalogue-store.js";
 import { GoogleCapabilitySource } from "./google-capability-source.js";
 import { createGoogleCloudClient } from "./google-translation-adapter.js";
@@ -74,16 +75,36 @@ const capabilityProvider =
       )
     : { get: async () => fakeCapabilityCatalogue };
 // Live explanations reuse the NVIDIA key and client that translation already requires.
-const explanationAdapter =
+const nvidiaExplanationAdapter =
   config.translationMode === "live" && nvidiaClient
     ? new NvidiaExplanationAdapter(
         nvidiaClient,
         config.explanationModel,
         config.explanationMaxTokens,
       )
-    : config.translationMode === "fake"
-      ? new FakeExplanationAdapter()
-      : null;
+    : null;
+// OpenRouter speaks the same chat-completions format, so the NVIDIA client is reused with its URL.
+const openRouterExplanationAdapter = config.openRouterApiKey
+  ? new NvidiaExplanationAdapter(
+      createNvidiaTranslationClient({
+        apiKey: config.openRouterApiKey,
+        baseUrl: config.openRouterBaseUrl,
+      }),
+      config.openRouterModel,
+      config.explanationMaxTokens,
+      750,
+      "openrouter",
+    )
+  : null;
+const explanationAdapter =
+  nvidiaExplanationAdapter && openRouterExplanationAdapter
+    ? new FallbackExplanationAdapter({
+        fallback: openRouterExplanationAdapter,
+        primary: nvidiaExplanationAdapter,
+        primaryTimeoutMilliseconds: config.explanationPrimaryTimeoutMilliseconds,
+      })
+    : (nvidiaExplanationAdapter ??
+      (config.translationMode === "fake" ? new FakeExplanationAdapter() : null));
 const app = createGatewayApp({
   capabilityProvider,
   explanationAdapter,
