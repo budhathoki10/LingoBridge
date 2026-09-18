@@ -1,0 +1,91 @@
+# Render blueprint for the LingoBridge translation gateway (apps/gateway).
+#
+# The gateway holds every provider credential. The extension never calls MyMemory,
+# NVIDIA or OpenRouter directly, so nothing here may ever be copied into the
+# extension package or committed to this repository.
+#
+# Why Render and not a serverless host: the gateway keeps a long-lived process.
+# LINGOBRIDGE_EXPLANATION_TIMEOUT_MS allows 90s for an explanation, which exceeds
+# common serverless limits, and the rate limiter in src/rate-limiter.ts is an
+# in-memory Map. A second instance would silently double every configured limit,
+# so this service must stay single-instance.
+
+services:
+  - type: web
+    name: lingobridge-gateway
+    runtime: node
+    plan: free
+    region: oregon
+    branch: main
+
+    # Install only the gateway and its one workspace dependency, @lingobridge/contracts.
+    # Do NOT use `pnpm build:packages` here: that also builds database and auth, which
+    # this filtered install deliberately leaves out, so it would fail on a missing tsc.
+    buildCommand: >-
+      corepack enable &&
+      pnpm install --frozen-lockfile --filter=@lingobridge/gateway... &&
+      pnpm --filter @lingobridge/contracts build &&
+      pnpm --filter @lingobridge/gateway build
+
+    startCommand: pnpm --filter @lingobridge/gateway start
+
+    # Returns provider-independent status, so it never burns provider quota.
+    healthCheckPath: /v1/health
+
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+
+      # Required. src/config.ts defaults HOST to 127.0.0.1, which on Render would
+      # bind to loopback only and make the service unreachable from outside.
+      # PORT is intentionally not set here — Render injects it and the app reads it.
+      - key: HOST
+        value: 0.0.0.0
+
+      - key: LINGOBRIDGE_TRANSLATION_MODE
+        value: live
+
+      # Exact chrome-extension:// origins, comma separated. Live mode refuses to
+      # start with none, and wildcards are rejected. This is the same placeholder
+      # ID used for LINGOBRIDGE_ALLOWED_EXTENSION_IDS on the dashboard; both must
+      # be replaced with the real Chrome Web Store ID before release.
+      - key: LINGOBRIDGE_ALLOWED_EXTENSION_ORIGINS
+        value: chrome-extension://abcdefghijklmnopabcdefghijklmnop
+
+      # Secrets. sync: false keeps the values out of this file — Render prompts for
+      # them on first deploy and stores them in its own environment.
+      #
+      # Live mode throws without these two.
+      - key: MYMEMORY_CONTACT_EMAIL
+        sync: false
+      - key: NVIDIA_API_KEY
+        sync: false
+
+      # Optional backup for Explain and word understanding when NVIDIA fails or is
+      # slow. Leave empty to disable it.
+      - key: OPENROUTER_API_KEY
+        sync: false
+
+      # Limits and timeouts, matching apps/gateway/.env.example.
+      - key: LINGOBRIDGE_PROVIDER_TIMEOUT_MS
+        value: "10000"
+      - key: LINGOBRIDGE_RATE_WINDOW_MS
+        value: "60000"
+      - key: LINGOBRIDGE_INSTALLATION_RATE_LIMIT
+        value: "20"
+      - key: LINGOBRIDGE_NETWORK_RATE_LIMIT
+        value: "30"
+      - key: LINGOBRIDGE_EXPLANATION_TIMEOUT_MS
+        value: "90000"
+      - key: LINGOBRIDGE_EXPLANATION_PRIMARY_TIMEOUT_MS
+        value: "20000"
+
+      # The capability catalogue cache. On the free plan Render has no persistent
+      # disk, so this file is lost on every restart and the catalogue is re-fetched.
+      # That is a cold-start cost, not a failure — the store already retries.
+      - key: LINGOBRIDGE_CAPABILITY_CACHE_PATH
+        value: .data/online-provider-capabilities.json
+      - key: LINGOBRIDGE_CAPABILITY_FRESH_MS
+        value: "86400000"
+      - key: LINGOBRIDGE_CAPABILITY_RETRY_MS
+        value: "300000"
