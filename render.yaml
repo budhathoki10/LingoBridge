@@ -9,6 +9,11 @@
 # common serverless limits, and the rate limiter in src/rate-limiter.ts is an
 # in-memory Map. A second instance would silently double every configured limit,
 # so this service must stay single-instance.
+#
+# Every variable apps/gateway/src/config.ts reads is listed below, so the deployed
+# configuration is explicit rather than relying on defaults. The three credentials
+# use `sync: false`: Render prompts for them and stores the values itself, and they
+# never appear in this file or in git.
 
 services:
   - type: web
@@ -33,12 +38,15 @@ services:
     healthCheckPath: /v1/health
 
     envVars:
+      # ---------------------------------------------------------------------
+      # Runtime
+      # ---------------------------------------------------------------------
       - key: NODE_VERSION
         value: "22"
 
       # Required. src/config.ts defaults HOST to 127.0.0.1, which on Render would
       # bind to loopback only and make the service unreachable from outside.
-      # PORT is intentionally not set here — Render injects it and the app reads it.
+      # PORT is intentionally absent — Render injects it and the app reads it.
       - key: HOST
         value: 0.0.0.0
 
@@ -46,27 +54,76 @@ services:
         value: live
 
       # Exact chrome-extension:// origins, comma separated. Live mode refuses to
-      # start with none, and wildcards are rejected. This is the same placeholder
-      # ID used for LINGOBRIDGE_ALLOWED_EXTENSION_IDS on the dashboard; both must
-      # be replaced with the real Chrome Web Store ID before release.
-      - key: LINGOBRIDGE_ALLOWED_EXTENSION_ORIGINS
-        value: chrome-extension://abcdefghijklmnopabcdefghijklmnop
-
-      # Secrets. sync: false keeps the values out of this file — Render prompts for
-      # them on first deploy and stores them in its own environment.
+      # start with none, and wildcards are rejected.
       #
+      # This is the unpacked development ID from apps/gateway/.env. The Chrome Web
+      # Store assigns a DIFFERENT id at publish unless a `key` is pinned in the
+      # manifest, so append the store id here (and to the dashboard's
+      # LINGOBRIDGE_ALLOWED_EXTENSION_IDS) before release.
+      - key: LINGOBRIDGE_ALLOWED_EXTENSION_ORIGINS
+        value: chrome-extension://kbnchdmopaamlbpgihdbjjnohinmapje
+
+      # ---------------------------------------------------------------------
+      # Credentials. Values are entered in Render, never here.
+      # ---------------------------------------------------------------------
+
       # Live mode throws without these two.
+      #
+      # MYMEMORY_CONTACT_EMAIL is sent to MyMemory as the `de` parameter on every
+      # request and must be named in the public privacy policy, so it becomes
+      # public. Prefer a dedicated address over a personal one.
       - key: MYMEMORY_CONTACT_EMAIL
         sync: false
       - key: NVIDIA_API_KEY
         sync: false
 
       # Optional backup for Explain and word understanding when NVIDIA fails or is
-      # slow. Leave empty to disable it.
+      # slow. An empty value cleanly disables it; translation is unaffected either
+      # way, since that path is MyMemory then NVIDIA.
       - key: OPENROUTER_API_KEY
         sync: false
 
-      # Limits and timeouts, matching apps/gateway/.env.example.
+      # ---------------------------------------------------------------------
+      # Providers
+      # ---------------------------------------------------------------------
+      - key: MYMEMORY_BASE_URL
+        value: https://api.mymemory.translated.net
+
+      - key: NVIDIA_BASE_URL
+        value: https://integrate.api.nvidia.com/v1
+      - key: NVIDIA_MODEL
+        value: nvidia/riva-translate-4b-instruct-v2
+      - key: NVIDIA_MAX_TOKENS
+        value: "2048"
+
+      - key: OPENROUTER_BASE_URL
+        value: https://openrouter.ai/api/v1
+      - key: OPENROUTER_MODEL
+        value: nex-agi/nex-n2.5-pro:free
+
+      # GOOGLE_CLOUD_PROJECT is deliberately unset: the Google provider stays off
+      # until GCP credentials are wired up. It is an identifier, not a credential,
+      # and setting it would also require Application Default Credentials from the
+      # deployment environment.
+
+      # ---------------------------------------------------------------------
+      # Explanation chain
+      # ---------------------------------------------------------------------
+      - key: NVIDIA_EXPLANATION_MODEL
+        value: nvidia/nemotron-3-ultra-550b-a55b
+      - key: NVIDIA_EXPLANATION_MAX_TOKENS
+        value: "4096"
+
+      # Total budget for an explanation, and how long NVIDIA may take before the
+      # OpenRouter backup is asked instead.
+      - key: LINGOBRIDGE_EXPLANATION_TIMEOUT_MS
+        value: "90000"
+      - key: LINGOBRIDGE_EXPLANATION_PRIMARY_TIMEOUT_MS
+        value: "20000"
+
+      # ---------------------------------------------------------------------
+      # Limits and timeouts
+      # ---------------------------------------------------------------------
       - key: LINGOBRIDGE_PROVIDER_TIMEOUT_MS
         value: "10000"
       - key: LINGOBRIDGE_RATE_WINDOW_MS
@@ -75,14 +132,14 @@ services:
         value: "20"
       - key: LINGOBRIDGE_NETWORK_RATE_LIMIT
         value: "30"
-      - key: LINGOBRIDGE_EXPLANATION_TIMEOUT_MS
-        value: "90000"
-      - key: LINGOBRIDGE_EXPLANATION_PRIMARY_TIMEOUT_MS
-        value: "20000"
 
-      # The capability catalogue cache. On the free plan Render has no persistent
-      # disk, so this file is lost on every restart and the catalogue is re-fetched.
-      # That is a cold-start cost, not a failure — the store already retries.
+      # ---------------------------------------------------------------------
+      # Capability catalogue cache
+      #
+      # The free plan has no persistent disk, so this file is lost on every restart
+      # and the catalogue is re-fetched. That is a cold-start cost, not a failure —
+      # the store already retries.
+      # ---------------------------------------------------------------------
       - key: LINGOBRIDGE_CAPABILITY_CACHE_PATH
         value: .data/online-provider-capabilities.json
       - key: LINGOBRIDGE_CAPABILITY_FRESH_MS
