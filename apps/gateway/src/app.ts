@@ -273,8 +273,13 @@ export function createGatewayApp(dependencies: Partial<GatewayDependencies> = {}
     context.header("Cache-Control", "no-store");
   });
 
+  // Registered outside the "/v1/*" middleware, so it answers without an extension
+  // origin. That makes it the route infrastructure uses: Render's health check and
+  // the keep-alive cron both call it. /v1/health cannot serve that purpose in live
+  // mode because the origin guard refuses a request with no Origin header.
   app.get("/", (context) =>
     context.json({
+      message: "Hello, I am LingoBridge.",
       routes: GATEWAY_ROUTES,
       service: "lingobridge-gateway",
       status: resolvedDependencies.translationMode === "live" ? "ready" : "fake-provider",
