@@ -32,7 +32,15 @@ services:
       pnpm --filter @lingobridge/contracts build &&
       pnpm --filter @lingobridge/gateway build
 
-    startCommand: pnpm --filter @lingobridge/gateway start
+    # Run node directly rather than `pnpm --filter @lingobridge/gateway start`.
+    # Going through pnpm made corepack download pnpm on every boot, costing about
+    # 14 seconds before node even started — paid on every cold start, which a free
+    # instance pays often. It also meant Render's SIGTERM hit pnpm instead of node,
+    # so ordinary shutdowns logged ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL.
+    #
+    # Node resolves @lingobridge/contracts through the symlink pnpm wrote into
+    # apps/gateway/node_modules at install time, so no package manager is needed.
+    startCommand: node apps/gateway/dist/index.js
 
     # Deliberately "/" and not "/v1/health".
     #
