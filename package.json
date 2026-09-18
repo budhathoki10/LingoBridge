@@ -8,6 +8,7 @@
   },
   "scripts": {
     "build": "pnpm -r --if-present build",
+    "build:extension:release": "node scripts/build-extension-release.mjs",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
     "dev:dashboard": "pnpm build:packages && pnpm --filter @lingobridge/dashboard dev",
     "dev:extension": "pnpm --filter @lingobridge/extension dev",
