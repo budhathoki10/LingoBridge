@@ -11,5 +11,16 @@
   # package.json requires Node >= 22.
   NODE_VERSION = "22"
 
+  # Install only the dashboard and the workspaces it depends on:
+  # contracts, database, auth, design-tokens. This skips apps/extension, whose
+  # `prepare` hook runs `wxt prepare` and resolves @lingobridge/contracts at
+  # install time — before `build:packages` has produced its dist/, so it fails
+  # on a clean clone. The extension is not part of this deploy anyway, and
+  # skipping it makes the install smaller.
+  #
+  # Do NOT add NODE_ENV=production here: pnpm would skip devDependencies, and
+  # `build:packages` needs typescript. Next.js sets it in its own server.
+  PNPM_FLAGS = "--filter=@lingobridge/dashboard..."
+
 [[plugins]]
   package = "@netlify/plugin-nextjs"
