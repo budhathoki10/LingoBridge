@@ -11,6 +11,7 @@
  */
 const LOCAL_GATEWAY_ORIGIN = "http://127.0.0.1:8787";
 
-export const GATEWAY_ORIGIN = (
-  import.meta.env.WXT_GATEWAY_ORIGIN ?? LOCAL_GATEWAY_ORIGIN
-).replace(/\/+$/u, "");
+export const GATEWAY_ORIGIN = (import.meta.env.WXT_GATEWAY_ORIGIN ?? LOCAL_GATEWAY_ORIGIN).replace(
+  /\/+$/u,
+  "",
+);
