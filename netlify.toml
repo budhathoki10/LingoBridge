@@ -1,0 +1,15 @@
+# Netlify build for the LingoBridge dashboard (apps/dashboard).
+# The build runs from the workspace root so pnpm can resolve the `workspace:*`
+# dependencies on @lingobridge/contracts, @lingobridge/database, and @lingobridge/auth.
+# Those three must be compiled before `next build`, which is what `build:packages` does.
+
+[build]
+  command = "pnpm build:packages && pnpm --filter @lingobridge/dashboard build"
+  publish = "apps/dashboard/.next"
+
+[build.environment]
+  # package.json requires Node >= 22.
+  NODE_VERSION = "22"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
