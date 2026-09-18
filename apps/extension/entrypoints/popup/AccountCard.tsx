@@ -7,6 +7,7 @@ import {
   normalizeAccountStatus,
 } from "../../lib/account-status";
 import { DASHBOARD_ORIGIN } from "../../lib/dashboard-config";
+import { ExternalIcon } from "./Icons";
 
 function relativeTime(value: string | null): string {
   if (!value) return "not yet";
@@ -71,23 +72,27 @@ export function AccountCard() {
 
   if (!status) {
     return (
-      <section aria-busy="true" className="account-card">
-        <h2>Dashboard sync</h2>
-        <p className="account-card__text">Checking connection…</p>
+      <section aria-busy="true" className="card account-card">
+        <h2 className="card__title">Dashboard sync</h2>
+        <p className="card__text">Checking connection…</p>
       </section>
     );
   }
 
   if (status.connection === "revoked") {
     return (
-      <section className="account-card account-card--warning">
-        <h2>Dashboard disconnected</h2>
-        <p className="account-card__text">
+      <section className="card card--warning account-card">
+        <div className="card__heading">
+          <h2 className="card__title">Dashboard disconnected</h2>
+          <span className="badge badge--warning">Action needed</span>
+        </div>
+        <p className="card__text">
           This extension is no longer connected to your account. Choose what happens to the phrases
           saved on this device.
         </p>
-        <div className="account-card__actions">
+        <div className="card__actions">
           <button
+            className="btn btn--primary"
             disabled={busy !== null}
             onClick={() => void act("lingobridge:account:keep-local")}
             type="button"
@@ -95,7 +100,7 @@ export function AccountCard() {
             Keep phrases here
           </button>
           <button
-            className="account-card__quiet"
+            className="btn"
             disabled={busy !== null}
             onClick={() => void act("lingobridge:account:delete-local")}
             type="button"
@@ -109,29 +114,34 @@ export function AccountCard() {
 
   if (status.connection !== "connected") {
     const connecting = status.connection === "connecting";
+    const error = notice || status.lastError;
     return (
-      <section className="account-card">
-        <h2>Dashboard sync</h2>
-        <p className="account-card__text">
+      <section className="card account-card">
+        <h2 className="card__title">Dashboard sync</h2>
+        <p className="card__text">
           Sync the phrases you save to your dashboard and other devices. Translation works without
           an account.
         </p>
         {connecting ? (
-          <p className="account-card__text" role="status">
+          <p className="card__text" role="status">
             Finish in the Chrome sign-in window. Retry connection brings that window forward.
           </p>
         ) : null}
-        {notice || status.lastError ? (
-          <p className="account-card__error" role="alert">
-            {notice || status.lastError}
+        {error ? (
+          <p className="card__error" role="alert">
+            {error}
           </p>
         ) : null}
-        <div className="account-card__actions">
+        <div className="card__actions">
           <button
+            className="btn btn--primary"
             disabled={busy !== null}
             onClick={() => void act("lingobridge:account:connect")}
             type="button"
           >
+            {busy === "lingobridge:account:connect" ? (
+              <span aria-hidden="true" className="spinner" />
+            ) : null}
             {connecting ? "Retry connection" : "Connect dashboard"}
           </button>
         </div>
@@ -141,55 +151,60 @@ export function AccountCard() {
 
   const who = status.account?.email ?? status.account?.displayName ?? "your account";
   const syncing = status.syncing || busy === "lingobridge:account:sync-now";
+  const waiting = status.pendingChanges > 0 ? ` · ${status.pendingChanges} waiting` : "";
+  const showError = Boolean(status.lastError) && !syncing;
   let detail: string;
   if (syncing) detail = "Syncing…";
   else if (!status.phraseSyncEnabled) detail = "Phrase sync is off for this account.";
-  else if (status.lastError && status.nextAttemptAt) detail = `${status.lastError}`;
-  else detail = `Synced ${relativeTime(status.lastSyncedAt)}`;
+  else detail = `Synced ${relativeTime(status.lastSyncedAt)}${waiting}`;
 
   return (
-    <section className="account-card">
-      <div className="account-card__heading">
-        <h2>Dashboard sync</h2>
-        <span
-          className={`account-card__badge${status.lastError ? " account-card__badge--warning" : ""}`}
-        >
-          {status.lastError ? "Needs attention" : "Connected"}
-        </span>
+    <section className="card account-card">
+      <div className="card__heading">
+        <h2 className="card__title">Dashboard sync</h2>
+        {syncing ? (
+          <span className="badge badge--muted">Syncing</span>
+        ) : status.lastError ? (
+          <span className="badge badge--warning">Needs attention</span>
+        ) : (
+          <span className="badge">Connected</span>
+        )}
       </div>
-      <p className="account-card__text">
+      <p className="card__text">
         Signed in as <strong>{who}</strong>
       </p>
-      <p
-        aria-live="polite"
-        className={status.lastError && !syncing ? "account-card__error" : "account-card__text"}
-      >
+      <p aria-live="polite" className="card__text">
         {detail}
-        {status.pendingChanges > 0 && !syncing ? ` · ${status.pendingChanges} waiting` : ""}
       </p>
+      {showError ? (
+        <p className="card__error" role="alert">
+          {status.lastError}
+          {status.nextAttemptAt
+            ? " It will retry automatically."
+            : " Choose Sync now to try again."}
+        </p>
+      ) : null}
       {notice ? (
-        <p className="account-card__error" role="alert">
+        <p className="card__error" role="alert">
           {notice}
         </p>
       ) : null}
-      <div className="account-card__actions">
+      <div className="card__actions">
         <button
+          className="btn btn--primary"
           disabled={busy !== null || syncing}
           onClick={() => void act("lingobridge:account:sync-now")}
           type="button"
         >
+          {syncing ? <span aria-hidden="true" className="spinner" /> : null}
           Sync now
         </button>
-        <a
-          className="account-card__link"
-          href={`${DASHBOARD_ORIGIN}/overview`}
-          rel="noreferrer"
-          target="_blank"
-        >
+        <a className="btn" href={`${DASHBOARD_ORIGIN}/overview`} rel="noreferrer" target="_blank">
           Open dashboard
+          <ExternalIcon size={14} />
         </a>
         <button
-          className="account-card__quiet"
+          className="btn btn--ghost"
           disabled={busy !== null}
           onClick={() => void act("lingobridge:account:disconnect")}
           type="button"

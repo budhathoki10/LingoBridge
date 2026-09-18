@@ -10,6 +10,9 @@ import {
   type TranslationRequest,
   translationRequestSchema,
   translationResultSchema,
+  type TransliterationRequest,
+  transliterationRequestSchema,
+  transliterationResultSchema,
   type WordUnderstandingRequest,
   wordUnderstandingRequestSchema,
   wordUnderstandingResultSchema,
@@ -29,6 +32,7 @@ const OPERATIONS = [
   "explain",
   "inspect-service",
   "translate",
+  "transliterate",
   "understand-word",
 ] as const;
 
@@ -53,6 +57,7 @@ export type GatewayBridgeRequest = { id: string; type: typeof GATEWAY_BRIDGE_REQ
   | { operation: "inspect-service"; request: null }
   | { operation: "explain"; request: ExplanationRequest }
   | { operation: "translate"; request: TranslationRequest }
+  | { operation: "transliterate"; request: TransliterationRequest }
   | { operation: "understand-word"; request: WordUnderstandingRequest }
 );
 
@@ -110,6 +115,16 @@ export function parseGatewayBridgeRequest(value: unknown): GatewayBridgeRequest 
       id: value.id,
       operation: "understand-word",
       request: parsedWord.data,
+      type: GATEWAY_BRIDGE_REQUEST,
+    };
+  }
+  if (operation === "transliterate") {
+    const parsedText = transliterationRequestSchema.safeParse(value.request);
+    if (!parsedText.success) return null;
+    return {
+      id: value.id,
+      operation: "transliterate",
+      request: parsedText.data,
       type: GATEWAY_BRIDGE_REQUEST,
     };
   }
@@ -188,7 +203,12 @@ function parseResponse(value: unknown): GatewayBridgeResponse {
 export function createBridgeGatewayClient(transport: GatewayBridgeTransport): GatewayClient {
   async function call(
     operation: GatewayBridgeOperation,
-    request: TranslationRequest | ExplanationRequest | WordUnderstandingRequest | null,
+    request:
+      | TranslationRequest
+      | ExplanationRequest
+      | TransliterationRequest
+      | WordUnderstandingRequest
+      | null,
     signal?: AbortSignal,
   ): Promise<unknown> {
     if (signal?.aborted) throw abortError();
@@ -296,6 +316,27 @@ export function createBridgeGatewayClient(transport: GatewayBridgeTransport): Ga
         throw new GatewayClientError(
           "invalid-response",
           "The gateway word explanation did not match the shared contract.",
+          true,
+        );
+      }
+      return parsedResult.data;
+    },
+    async transliterate(request, signal) {
+      const parsedRequest = transliterationRequestSchema.safeParse(request);
+      if (!parsedRequest.success) {
+        throw new GatewayClientError(
+          "invalid-request",
+          "The script conversion request did not match the shared contract.",
+          false,
+        );
+      }
+      const parsedResult = transliterationResultSchema.safeParse(
+        await call("transliterate", parsedRequest.data, signal),
+      );
+      if (!parsedResult.success) {
+        throw new GatewayClientError(
+          "invalid-response",
+          "The gateway script conversion did not match the shared contract.",
           true,
         );
       }

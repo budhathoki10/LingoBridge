@@ -17,6 +17,10 @@ import {
   translationErrorSchema,
   translationRequestSchema,
   translationResultSchema,
+  type TransliterationRequest,
+  type TransliterationResult,
+  transliterationRequestSchema,
+  transliterationResultSchema,
   type WordUnderstandingRequest,
   type WordUnderstandingResult,
   wordUnderstandingRequestSchema,
@@ -60,6 +64,10 @@ export interface GatewayClient {
   inspect(signal?: AbortSignal): Promise<GatewaySnapshot>;
   inspectService(signal?: AbortSignal): Promise<GatewayServiceSnapshot>;
   translate(request: TranslationRequest, signal: AbortSignal): Promise<TranslationResult>;
+  transliterate(
+    request: TransliterationRequest,
+    signal: AbortSignal,
+  ): Promise<TransliterationResult>;
   understandWord(
     request: WordUnderstandingRequest,
     signal: AbortSignal,
@@ -225,6 +233,28 @@ export function createGatewayClient(options: GatewayClientOptions = {}): Gateway
       };
     },
     inspectService,
+
+    async transliterate(request, signal) {
+      const parsedRequest = transliterationRequestSchema.safeParse(request);
+      if (!parsedRequest.success) {
+        throw new GatewayClientError(
+          "invalid-request",
+          "The script conversion request did not match the shared contract.",
+          false,
+        );
+      }
+      const parsedResult = transliterationResultSchema.safeParse(
+        await post(GATEWAY_ROUTES.transliterate, parsedRequest.data, signal),
+      );
+      if (!parsedResult.success) {
+        throw new GatewayClientError(
+          "invalid-response",
+          "The gateway script conversion did not match the shared contract.",
+          true,
+        );
+      }
+      return parsedResult.data;
+    },
 
     async understandWord(request, signal) {
       const parsedRequest = wordUnderstandingRequestSchema.safeParse(request);

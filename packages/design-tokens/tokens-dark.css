@@ -1,0 +1,36 @@
+/* Dark values for surfaces that follow the system color scheme. The in-page translator stays
+   light, because it sits on arbitrary websites and must stay readable on all of them. */
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --n-0: #161615;
+    --n-25: #111110;
+    --n-50: #1b1b1a;
+    --n-100: #20201e;
+    --n-150: #272725;
+    --n-200: #2e2e2b;
+    --n-300: #3b3b38;
+    --n-400: #5c5c57;
+    --n-500: #8d8d86;
+    --n-600: #aaaaa3;
+    --n-700: #cacac4;
+    --n-900: #ededea;
+    --accent: #4f83f5;
+    --accent-hover: #6e98f7;
+    --accent-subtle: #1a2440;
+    --accent-border: #2c3f6b;
+    --accent-text: #8cb0fa;
+    --danger: #f06a55;
+    --danger-hover: #f4856f;
+    --danger-subtle: #2c1714;
+    --danger-border: #5a2a22;
+    --warning: #e3a849;
+    --warning-subtle: #2a2114;
+    --warning-border: #54411f;
+    --success: #5cc389;
+    --success-subtle: #14261b;
+    --success-border: #1f4a2f;
+    --shadow-float: 0 1px 2px rgb(0 0 0 / 40%), 0 12px 32px rgb(0 0 0 / 45%);
+  }
+}

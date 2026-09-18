@@ -14,6 +14,8 @@ import {
   translationErrorSchema,
   translationRequestSchema,
   translationResultSchema,
+  transliterationRequestSchema,
+  transliterationResultSchema,
   wordUnderstandingRequestSchema,
   wordUnderstandingResultSchema,
 } from "@lingobridge/contracts";
@@ -186,7 +188,7 @@ function providerFailure(
   context: Context,
   error: unknown,
   requestId: string,
-  work: "translation" | "explanation" | "word understanding",
+  work: "translation" | "explanation" | "word understanding" | "script conversion",
 ) {
   const cancelled = () =>
     context.json(
@@ -496,6 +498,67 @@ export function createGatewayApp(dependencies: Partial<GatewayDependencies> = {}
         return context.json(parsedResult.data);
       } catch (error) {
         return providerFailure(context, error, request.requestId, "word understanding");
+      }
+    },
+  );
+
+  // Romanized Nepali is rewritten in Nepali script before translation. It needs its own consent flag.
+  app.post(
+    GATEWAY_ROUTES.transliterate,
+    bodyLimit({
+      maxSize: MAX_GATEWAY_REQUEST_BYTES,
+      onError: (context) =>
+        invalidRequest(context, "The script conversion request body is too large.", 413),
+    }),
+    async (context) => {
+      const accepted = await acceptJsonPost(context, resolvedDependencies);
+      if (!accepted.ok) return accepted.response;
+      const parsedRequest = transliterationRequestSchema.safeParse(accepted.payload);
+      if (!parsedRequest.success || parsedRequest.data.consent.transliteration !== true) {
+        return context.json(
+          createError(
+            "invalid-request",
+            "The script conversion request did not match the supported contract.",
+            safeRequestId(accepted.payload),
+            false,
+          ),
+          400,
+        );
+      }
+      const request = parsedRequest.data;
+      const adapter = resolvedDependencies.explanationAdapter;
+      if (!adapter) {
+        return context.json(
+          createError(
+            "provider-unavailable",
+            "Script conversion is not set up on this gateway yet.",
+            request.requestId,
+            false,
+          ),
+          503,
+        );
+      }
+      try {
+        const result = await runWithProviderDeadline(
+          (signal) => adapter.transliterate(request, signal),
+          context.req.raw.signal,
+          resolvedDependencies.explanationTimeoutMilliseconds,
+        );
+        const parsedResult = transliterationResultSchema.safeParse(result);
+        if (!parsedResult.success) {
+          return context.json(
+            createError(
+              "provider-unavailable",
+              "The script conversion provider returned an unusable response.",
+              request.requestId,
+              true,
+            ),
+            502,
+          );
+        }
+        return context.json(parsedResult.data);
+      } catch (error) {
+        return providerFailure(context, error, request.requestId, "script conversion");
       }
     },
   );

@@ -1,4 +1,5 @@
 import { AccountCard } from "./AccountCard";
+import { LogoMark } from "./Icons";
 import { SelectionMagicCard } from "./SelectionMagicCard";
 
 export function App() {
@@ -6,10 +7,10 @@ export function App() {
     <main className="popup-shell">
       <header className="app-header">
         <div className="brand">
-          <img src="/icon/32.png" alt="" width="30" height="30" />
-          <div>
-            <strong>LingoBridge</strong>
-            <span>Translate without leaving the page</span>
+          <LogoMark />
+          <div className="brand__copy">
+            <h1 className="brand__name">LingoBridge</h1>
+            <p className="brand__tagline">Translate without leaving the page</p>
           </div>
         </div>
       </header>

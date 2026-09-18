@@ -68,6 +68,11 @@ class ScriptedAdapter implements ExplanationAdapter {
     throw new TranslationAdapterError("provider-unavailable", "unavailable", true);
   }
 
+  async transliterate(): Promise<never> {
+    this.calls += 1;
+    throw new TranslationAdapterError("provider-unavailable", "unavailable", true);
+  }
+
   understandWord(_request: WordUnderstandingRequest, signal: AbortSignal) {
     this.calls += 1;
     this.lastSignal = signal;

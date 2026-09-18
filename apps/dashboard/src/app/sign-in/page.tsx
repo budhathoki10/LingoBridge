@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { sanitizeReturnPath } from "@lingobridge/auth";
-import { BridgeMark } from "@/components/icons";
+import { Brand } from "@/components/brand";
+import { GoogleMark } from "@/components/icons";
 import { getServices } from "@/server/container";
 import { getPageSession } from "@/server/page-session";
 
@@ -28,16 +29,13 @@ export default async function SignInPage({ searchParams }: { searchParams: Searc
     typeof params.error === "string" ? (ERRORS[params.error] ?? ERRORS["invalid-state"]) : null;
   const signedOut = params.signedOut === "1";
   const development = services.config.authMode === "development";
+  const providerName = services.config.oidc.providerName;
+  const isGoogle = providerName === "Google";
 
   return (
     <main className="standalone">
       <div className="standalone__card">
-        <span className="brand">
-          <span className="brand__mark">
-            <BridgeMark size={14} />
-          </span>
-          LingoBridge
-        </span>
+        <Brand />
         <div className="standalone__heading">
           <h1>Sign in to your dashboard</h1>
           <p>
@@ -59,10 +57,11 @@ export default async function SignInPage({ searchParams }: { searchParams: Searc
 
         {/* A link, not a form: CSP form-action also applies to the redirect to the provider. */}
         <a
-          className="button button--primary"
+          className={isGoogle ? "button button--large" : "button button--primary button--large"}
           href={`/auth/sign-in?returnTo=${encodeURIComponent(returnTo)}`}
         >
-          Continue with {services.config.oidc.providerName}
+          {isGoogle ? <GoogleMark /> : null}
+          Continue with {providerName}
         </a>
 
         {development ? (

@@ -1,3 +1,4 @@
+import { LOGO_GLYPH_PATH, LOGO_TILE_COLOR, LOGO_VIEWBOX } from "@lingobridge/design-tokens/brand";
 import type { ReactNode, SVGProps } from "react";
 
 type IconProps = SVGProps<SVGSVGElement> & { size?: number };
@@ -34,6 +35,14 @@ export const PhrasesIcon = (props: IconProps) => (
   <Icon {...props}>
     <path d="M6 4.5h12a1.5 1.5 0 0 1 1.5 1.5v14l-4-2.5-3.5 2.5-3.5-2.5-4 2.5V6A1.5 1.5 0 0 1 6 4.5Z" />
     <path d="M8.5 9h7M8.5 12.5h4.5" />
+  </Icon>
+);
+
+export const VocabularyIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M5.5 5.5A1.5 1.5 0 0 1 7 4h11.5v13H7a1.5 1.5 0 0 0-1.5 1.5V5.5Z" />
+    <path d="M5.5 18.5A1.5 1.5 0 0 0 7 20h11.5v-3" />
+    <path d="m9.5 13 2-5.5 2 5.5M10.2 11.2h2.6" />
   </Icon>
 );
 
@@ -126,8 +135,32 @@ export const BrowserIcon = (props: IconProps) => (
   </Icon>
 );
 
-export const BridgeMark = (props: IconProps) => (
-  <Icon strokeWidth="2" {...props}>
-    <path d="M4 16c2.5-5 13.5-5 16 0M8 13.5V18M16 13.5V18M4 18h16" />
-  </Icon>
+/** Google's multicolor "G", used only on the Continue with Google button per Google's guidelines. */
+export const GoogleMark = ({ size = 18 }: { size?: number }) => (
+  <svg aria-hidden="true" height={size} viewBox="0 0 48 48" width={size}>
+    <path
+      d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+      fill="#EA4335"
+    />
+    <path
+      d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+      fill="#4285F4"
+    />
+    <path
+      d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+      fill="#FBBC05"
+    />
+    <path
+      d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+      fill="#34A853"
+    />
+  </svg>
+);
+
+/** The brand tile. It keeps the brand blue in both color schemes, like the extension icon. */
+export const LogoMark = ({ size = 24 }: { size?: number }) => (
+  <svg aria-hidden="true" className="brand__mark" height={size} viewBox={LOGO_VIEWBOX} width={size}>
+    <rect fill={LOGO_TILE_COLOR} height="32" rx="8" width="32" />
+    <path d={LOGO_GLYPH_PATH} fill="#fff" />
+  </svg>
 );

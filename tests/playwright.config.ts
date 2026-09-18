@@ -31,6 +31,9 @@ export default defineConfig({
         "pnpm --filter @lingobridge/dashboard exec next dev --hostname 127.0.0.1 --port 3000",
       cwd: path.resolve(testsDirectory, ".."),
       env: {
+        // Blank values win over apps/dashboard/.env.local, so tests never reach a real database.
+        DATABASE_NAME: "",
+        DATABASE_URL: "",
         LINGOBRIDGE_ADMIN_EMAILS: "admin@example.test",
         LINGOBRIDGE_AUTH_MODE: "development",
         LINGOBRIDGE_DASHBOARD_ORIGIN: "http://127.0.0.1:3000",

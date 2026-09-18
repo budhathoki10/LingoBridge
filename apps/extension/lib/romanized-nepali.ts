@@ -28,6 +28,8 @@ const WORDS: Readonly<Record<string, string>> = {
   bhaneko: "भनेको",
   bhannu: "भन्नु",
   bhaat: "भात",
+  bhai: "भाइ",
+  bhok: "भोक",
   bhat: "भात",
   bhayo: "भयो",
   bhetaula: "भेटौँला",
@@ -108,6 +110,8 @@ const WORDS: Readonly<Record<string, string>> = {
   kaha: "कहाँ",
   kasari: "कसरी",
   kaso: "कसो",
+  halkhabar: "हालखबर",
+  kata: "कता",
   kasto: "कस्तो",
   kati: "कति",
   ke: "के",
@@ -135,6 +139,8 @@ const WORDS: Readonly<Record<string, string>> = {
   laijau: "लैजाऊ",
   lyaunu: "ल्याउनु",
   ma: "म",
+  maile: "मैले",
+  malai: "मलाई",
   manche: "मान्छे",
   manchhe: "मान्छे",
   maya: "माया",
@@ -198,6 +204,11 @@ const WORDS: Readonly<Record<string, string>> = {
 };
 
 const VARIANTS: Readonly<Record<string, string>> = {
+  bhaai: "bhai",
+  vai: "bhai",
+  bhoke: "bhok",
+  halkhbar: "halkhabar",
+  haalkhabar: "halkhabar",
   aafu: "aafai",
   afai: "aafai",
   afno: "aafno",
@@ -244,8 +255,6 @@ const VARIANTS: Readonly<Record<string, string>> = {
   khanxu: "khanchu",
   khojchhu: "khojchu",
   khojxu: "khojchu",
-  maile: "ma",
-  malai: "ma",
   merai: "mero",
   nam: "naam",
   parchha: "parcha",
@@ -282,7 +291,8 @@ function lookup(token: string): string | null {
   return WORDS[canonical] ?? null;
 }
 
-export function normalizeRomanizedNepali(text: string): RomanizedNepaliNormalization | null {
+/** Converts every word the dictionary knows, without deciding whether the text is Nepali. */
+export function analyzeRomanizedNepali(text: string): RomanizedNepaliNormalization {
   const pieces = text.match(TOKEN) ?? [];
   let matchedTokens = 0;
   let totalTokens = 0;
@@ -303,13 +313,27 @@ export function normalizeRomanizedNepali(text: string): RomanizedNepaliNormaliza
     }
   }
 
-  if (totalTokens === 0 || matchedTokens < 2) return null;
-  const confidence = matchedTokens / totalTokens;
-  if (confidence < 0.55) return null;
   return {
-    confidence,
+    confidence: totalTokens === 0 ? 0 : matchedTokens / totalTokens,
     matchedTokens,
     text: converted,
     totalTokens,
   };
+}
+
+/** Confident on its own: at least two known words that make up most of the text. */
+export function normalizeRomanizedNepali(text: string): RomanizedNepaliNormalization | null {
+  const analysis = analyzeRomanizedNepali(text);
+  if (analysis.matchedTokens < 2 || analysis.confidence < 0.55) return null;
+  return analysis;
+}
+
+/**
+ * A looser test for chat-style text such as "hello bro k xa timro halkhabar", where English loan
+ * words hide the Nepali. Callers use it only when no other language was detected.
+ */
+export function looksLikeRomanizedNepali(text: string): RomanizedNepaliNormalization | null {
+  const analysis = analyzeRomanizedNepali(text);
+  if (analysis.matchedTokens < 2 || analysis.confidence < 1 / 3) return null;
+  return analysis;
 }

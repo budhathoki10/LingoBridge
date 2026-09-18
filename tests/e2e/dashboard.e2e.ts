@@ -129,6 +129,8 @@ test("sign-in, connection, sync, editing, revocation, and deletion work end to e
   page,
   request,
 }) => {
+  // One flow covers every page at eight widths on a dev server that compiles pages on demand.
+  test.setTimeout(120_000);
   const cspViolations: string[] = [];
   page.on("console", (message) => {
     if (/Content Security Policy/iu.test(message.text())) cspViolations.push(message.text());

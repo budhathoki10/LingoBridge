@@ -11,6 +11,7 @@ export const GATEWAY_ROUTES = {
   explain: "/v1/explain",
   health: "/v1/health",
   translate: "/v1/translate",
+  transliterate: "/v1/transliterate",
   understandWord: "/v1/understand-word",
   version: "/v1/version",
 } as const;
@@ -56,6 +57,8 @@ export const onlineConsentSchema = z
     myMemory: z.boolean().optional(),
     nvidia: z.boolean(),
     nvidiaBackup: z.boolean().optional(),
+    /** Allows romanized Nepali to be rewritten in Nepali script by NVIDIA Nemotron or OpenRouter. */
+    transliteration: z.boolean().optional(),
     version: z.string().min(1).max(40),
   })
   .strict()
@@ -178,6 +181,25 @@ export const wordUnderstandingRequestSchema = z
     targetLanguage: languageCodeSchema,
     translatedText: translationTextSchema,
     word: z.string().trim().min(1).max(100),
+  })
+  .strict();
+
+/** Romanized Nepali rewritten in Nepali script before translation. Nothing is translated here. */
+export const transliterationRequestSchema = z
+  .object({
+    consent: onlineConsentSchema,
+    operation: z.literal("transliterate"),
+    requestId: requestIdSchema,
+    sourceLanguage: z.literal("ne"),
+    text: explanationSourceTextSchema,
+  })
+  .strict();
+
+export const transliterationResultSchema = z
+  .object({
+    provider: explanationProviderSchema,
+    requestId: requestIdSchema,
+    text: z.string().trim().min(1).max(4_000),
   })
   .strict();
 
@@ -307,4 +329,6 @@ export type TranslationError = z.infer<typeof translationErrorSchema>;
 export type TranslationRequest = z.infer<typeof translationRequestSchema>;
 export type TranslationResult = z.infer<typeof translationResultSchema>;
 export type WordUnderstandingRequest = z.infer<typeof wordUnderstandingRequestSchema>;
+export type TransliterationRequest = z.infer<typeof transliterationRequestSchema>;
+export type TransliterationResult = z.infer<typeof transliterationResultSchema>;
 export type WordUnderstandingResult = z.infer<typeof wordUnderstandingResultSchema>;

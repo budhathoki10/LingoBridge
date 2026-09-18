@@ -8,8 +8,20 @@
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
+    <header class="site-header">
+      <div class="brand">
+        <svg aria-hidden="true" class="brand__mark" height="24" viewBox="0 0 32 32" width="24">
+          <rect fill="#2363eb" height="32" rx="8" width="32" />
+          <path
+            d="M11 9H21A5 5 0 0 1 26 14V22H22A6 6 0 0 0 10 22L6 25.5V14A5 5 0 0 1 11 9Z"
+            fill="#fff"
+          />
+        </svg>
+        <span class="brand__name">LingoBridge</span>
+      </div>
+    </header>
     <main>
-      <p class="eyebrow">LingoBridge privacy notice</p>
+      <p class="eyebrow">Privacy notice</p>
       <h1>Online translation</h1>
       <p class="summary">
         Online mode sends only the text you deliberately translate, its language choice, and the
@@ -23,6 +35,12 @@
           request also includes the gateway owner's configured contact email in the provider's
           <code>de</code> parameter. If MyMemory fails or reaches its quota, NVIDIA Riva Translate
           4B Instruct v2 is attempted once only for a supported language direction.
+        </p>
+        <p>
+          When the selected text looks like Nepali typed in English letters, the gateway first sends
+          it to NVIDIA Nemotron 3 Ultra, or once to OpenRouter if NVIDIA fails, only to rewrite it
+          in Nepali script. The rewritten text is then translated as above. If both fail, the
+          extension converts common words on your device instead.
         </p>
       </section>
 

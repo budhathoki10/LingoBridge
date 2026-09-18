@@ -2,119 +2,12 @@
    One accent (the extension's blue), a close-stepped neutral ramp, semantic red/amber/green,
    borders and background steps for surfaces, shadows only on floating layers. */
 
+/* Shared color, type, spacing, radius, and motion tokens come from @lingobridge/design-tokens,
+   imported in layout.tsx before this file. Only dashboard layout values live here. */
+
 :root {
-  color-scheme: light;
-
-  /* Neutral ramp */
-  --n-0: #ffffff;
-  --n-25: #fbfbfa;
-  --n-50: #f7f7f5;
-  --n-100: #f0f0ee;
-  --n-150: #e9e9e6;
-  --n-200: #e1e1dd;
-  --n-300: #cfcfca;
-  --n-400: #a3a39d;
-  --n-500: #75756f;
-  --n-600: #5b5b56;
-  --n-700: #3d3d39;
-  --n-900: #1b1b19;
-
-  --bg: var(--n-25);
-  --surface: var(--n-0);
-  --surface-hover: var(--n-50);
-  --surface-sunken: var(--n-100);
-  --border-subtle: var(--n-150);
-  --border: var(--n-200);
-  --border-strong: var(--n-300);
-  --text: var(--n-900);
-  --text-secondary: var(--n-600);
-  --text-tertiary: var(--n-500);
-
-  --accent: #2363eb;
-  --accent-hover: #1c52c8;
-  --accent-subtle: #eef3fe;
-  --accent-text: #1c52c8;
-  --on-accent: #ffffff;
-
-  --danger: #c4321f;
-  --danger-hover: #a52816;
-  --danger-subtle: #fdf1ef;
-  --danger-border: #f1c7c0;
-  --warning: #9a5b00;
-  --warning-subtle: #fdf6e7;
-  --warning-border: #efd9a6;
-  --success: #1b7a43;
-  --success-subtle: #edf8f1;
-
-  --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
-  --shadow-float: 0 1px 2px rgb(20 20 18 / 6%), 0 8px 24px rgb(20 20 18 / 10%);
-
-  --font-sans:
-    "Roboto Variable", Roboto, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", "Noto Sans", "Noto Sans Devanagari", sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
-
-  --text-12: 0.75rem;
-  --text-13: 0.8125rem;
-  --text-14: 0.875rem;
-  --text-16: 1rem;
-  --text-20: 1.25rem;
-  --text-24: 1.5rem;
-  --text-32: 2rem;
-
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 20px;
-  --space-6: 24px;
-  --space-8: 32px;
-  --space-10: 40px;
-  --space-12: 48px;
-
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
-
-  --duration: 140ms;
-  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
-  --ease-in: cubic-bezier(0.5, 0, 0.75, 0);
-
   --sidebar-width: 232px;
   --content-width: 1080px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --n-0: #161615;
-    --n-25: #111110;
-    --n-50: #1b1b1a;
-    --n-100: #20201e;
-    --n-150: #272725;
-    --n-200: #2e2e2b;
-    --n-300: #3b3b38;
-    --n-400: #5c5c57;
-    --n-500: #8d8d86;
-    --n-600: #aaaaa3;
-    --n-700: #cacac4;
-    --n-900: #ededea;
-    --accent: #4f83f5;
-    --accent-hover: #6e98f7;
-    --accent-subtle: #1a2440;
-    --accent-text: #8cb0fa;
-    --danger: #f06a55;
-    --danger-hover: #f4856f;
-    --danger-subtle: #2c1714;
-    --danger-border: #5a2a22;
-    --warning: #e3a849;
-    --warning-subtle: #2a2114;
-    --warning-border: #54411f;
-    --success: #5cc389;
-    --success-subtle: #14261b;
-    --shadow-float: 0 1px 2px rgb(0 0 0 / 40%), 0 12px 32px rgb(0 0 0 / 45%);
-  }
 }
 
 *,
@@ -303,6 +196,11 @@ textarea {
 .button--icon {
   width: 36px;
   padding: 0;
+}
+
+.button--large {
+  min-height: 40px;
+  padding: 0 var(--space-4);
 }
 
 @media (hover: hover) {

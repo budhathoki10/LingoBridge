@@ -1,6 +1,8 @@
 import {
   type ExplanationRequest,
   explanationResultSchema,
+  type TransliterationRequest,
+  transliterationResultSchema,
   type WordUnderstandingRequest,
   wordUnderstandingResultSchema,
 } from "@lingobridge/contracts";
@@ -50,6 +52,15 @@ export class FakeExplanationAdapter implements ExplanationAdapter {
       register: "neutral",
       requestId: request.requestId,
       usageNote: "Simulated explanation. Live mode uses NVIDIA Nemotron 3 Ultra.",
+    });
+  }
+
+  async transliterate(request: TransliterationRequest, signal: AbortSignal) {
+    await wait(this.delayMilliseconds, signal);
+    return transliterationResultSchema.parse({
+      provider: "nvidia",
+      requestId: request.requestId,
+      text: `नेपाली ${request.text}`,
     });
   }
 

@@ -185,6 +185,12 @@ async function runGatewayBridgeRequest(
     if (request.operation === "explain") {
       return { data: await gatewayClient.explain(request.request, controller.signal), ok: true };
     }
+    if (request.operation === "transliterate") {
+      return {
+        data: await gatewayClient.transliterate(request.request, controller.signal),
+        ok: true,
+      };
+    }
     if (request.operation === "understand-word") {
       return {
         data: await gatewayClient.understandWord(request.request, controller.signal),
