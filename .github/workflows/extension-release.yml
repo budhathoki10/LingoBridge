@@ -1,0 +1,99 @@
+name: Extension release build
+
+# Builds and packages the extension automatically on every change, the same way
+# ci.yml keeps the dashboard build green. It cannot go further than that: Chrome
+# extensions do not auto-deploy. Every version, however small, is reviewed by
+# Google (1-3 days) before it reaches a single user, and nothing in CI can skip
+# that queue. This workflow removes every manual step up to the point where a
+# human uploads to the Chrome Web Store Developer Dashboard and clicks submit.
+on:
+  push:
+    branches: [main]
+    paths:
+      # Only rebuild when something that affects the package actually changed.
+      - "apps/extension/**"
+      - "packages/contracts/**"
+      - "packages/design-tokens/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/extension-release.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and package
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # Only the extension and its workspace dependencies, matching the deploy
+      # filters used for the dashboard and gateway.
+      - name: Install
+        run: pnpm install --frozen-lockfile --filter=@lingobridge/extension...
+
+      - name: Build contracts
+        run: pnpm --filter @lingobridge/contracts build
+
+      - name: Build extension
+        # apps/extension/lib/dashboard-config.ts and lib/gateway-config.ts already
+        # hold the deployed origins as plain constants, so this is the exact same
+        # build a release upload uses.
+        run: pnpm --filter @lingobridge/extension build
+
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(node -p "require('./apps/extension/package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Package zip
+        # manifest.json must sit at the zip root, not inside a wrapping folder,
+        # or the Chrome Web Store rejects the upload outright.
+        run: |
+          cd apps/extension/.output/chrome-mv3
+          zip -r ../lingobridge-extension.zip . -x '.*'
+
+      # A run artifact for every push, so any build is downloadable even before
+      # a version bump. Expires per the repository's artifact retention setting.
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lingobridge-extension-${{ steps.version.outputs.version }}-${{ github.sha }}
+          path: apps/extension/.output/lingobridge-extension.zip
+          retention-days: 90
+
+      # A GitHub Release only when this push's package.json version is new, so
+      # normal commits do not create one on every push. Bump
+      # apps/extension/package.json's "version" (WXT copies it into
+      # manifest.json) when a build is meant for the Store.
+      - name: Check for existing release
+        id: existing
+        run: |
+          if gh release view "extension-v${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Publish release
+        if: steps.existing.outputs.found == 'false'
+        run: |
+          gh release create "extension-v${{ steps.version.outputs.version }}" \
+            apps/extension/.output/lingobridge-extension.zip \
+            --title "Extension v${{ steps.version.outputs.version }}" \
+            --notes "Automated build from ${{ github.sha }}. Manual step still required: upload to the Chrome Web Store Developer Dashboard and submit for review."
+        env:
+          GH_TOKEN: ${{ github.token }}
