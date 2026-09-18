@@ -34,8 +34,16 @@ services:
 
     startCommand: pnpm --filter @lingobridge/gateway start
 
-    # Returns provider-independent status, so it never burns provider quota.
-    healthCheckPath: /v1/health
+    # Deliberately "/" and not "/v1/health".
+    #
+    # In live mode `requireOrigin` is true (config.ts), and the origin middleware in
+    # app.ts covers every "/v1/*" path. Render's health check is a server-to-server
+    # GET with no Origin header and no installation header, so /v1/health answers
+    # 403 and the service never passes its check.
+    #
+    # "/" is registered outside that middleware and returns a provider-independent
+    # status object, so it never burns provider quota either.
+    healthCheckPath: /
 
     envVars:
       # ---------------------------------------------------------------------
