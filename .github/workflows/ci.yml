@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A newer push to the same branch makes an in-flight run redundant. Runs on main
+# are left alone so the default branch keeps a complete history of results.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Format, lint, typecheck, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      # Cache the embedded MongoDB server binary instead of downloading ~100 MB
+      # on every run. tests/support/mongodb-global-setup.ts starts a single-node
+      # replica set from it for the whole suite.
+      MONGOMS_DOWNLOAD_DIR: ${{ github.workspace }}/.cache/mongodb-binaries
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm must be on PATH before setup-node, or the pnpm store cache cannot resolve.
+      # The version comes from the "packageManager" field in the root package.json.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: actions/cache@v4
+        with:
+          path: .cache/mongodb-binaries
+          key: mongodb-binaries-${{ runner.os }}
+
+      # A full, unfiltered install on a clean clone. This is deliberate: it is the
+      # step that would have caught apps/extension's prepare hook failing before it
+      # reached a deploy.
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # format:check && lint && typecheck && test, from the root package.json.
+      # typecheck and test both run build:packages first, so contracts, database
+      # and auth are compiled before anything consumes them.
+      - name: Check
+        run: pnpm check
+
+  dashboard-build:
+    name: Dashboard build (mirrors Netlify)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # Same filtered install Netlify performs via PNPM_FLAGS in netlify.toml.
+      # Selects dashboard + contracts + design-tokens + database + auth, and skips
+      # apps/extension so its prepare hook never runs on the deploy path.
+      - name: Install (dashboard workspaces only)
+        run: pnpm install --frozen-lockfile --filter=@lingobridge/dashboard...
+
+      # Byte-for-byte the build command in netlify.toml. A red result here means
+      # the next Netlify deploy will fail too.
+      #
+      # No environment variables are set on purpose: every data-touching route is
+      # force-dynamic, so a passing build proves nothing secret-dependent is
+      # evaluated at build time.
+      - name: Build
+        run: pnpm build:packages && pnpm --filter @lingobridge/dashboard build
