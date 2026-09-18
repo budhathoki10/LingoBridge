@@ -5,7 +5,7 @@
   "scripts": {
     "build": "wxt build",
     "dev": "wxt",
-    "prepare": "wxt prepare",
+    "prepare": "wxt prepare || exit 0",
     "typecheck": "wxt prepare && tsc --noEmit"
   },
   "dependencies": {
