@@ -1323,3 +1323,114 @@ fieldset.setting {
   padding: 0;
   list-style: none;
 }
+
+/* Public privacy policy: a readable document column, not a card, so a long page scrolls naturally. */
+.policy {
+  min-height: 100dvh;
+  padding: var(--space-8) var(--space-4);
+  padding-bottom: calc(var(--space-12) + env(safe-area-inset-bottom));
+}
+
+.policy__document {
+  display: grid;
+  width: 100%;
+  max-width: 720px;
+  gap: var(--space-8);
+  margin: 0 auto;
+}
+
+.policy__header {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.policy__eyebrow {
+  margin: var(--space-6) 0 0;
+  color: var(--accent-text);
+  font-size: var(--text-13);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.policy__header h1 {
+  margin: 0;
+  font-size: var(--text-32);
+  line-height: 1.2;
+}
+
+.policy__lead {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-16);
+  line-height: 1.6;
+}
+
+.policy section {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.policy h2 {
+  margin: 0;
+  font-size: var(--text-20);
+  line-height: 1.3;
+}
+
+.policy p,
+.policy li {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-16);
+  line-height: 1.65;
+}
+
+.policy strong {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.policy ul {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+.policy a {
+  color: var(--accent-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.policy a:focus-visible {
+  border-radius: var(--radius-sm);
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.policy code {
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+.policy__footer {
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--text-14);
+}
+
+@media (min-width: 640px) {
+  .policy {
+    padding-top: var(--space-12);
+  }
+
+  .policy__header h1 {
+    font-size: calc(var(--text-32) + 0.25rem);
+  }
+}
