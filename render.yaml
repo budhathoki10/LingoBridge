@@ -72,12 +72,10 @@ services:
       # Exact chrome-extension:// origins, comma separated. Live mode refuses to
       # start with none, and wildcards are rejected.
       #
-      # This is the unpacked development ID from apps/gateway/.env. The Chrome Web
-      # Store assigns a DIFFERENT id at publish unless a `key` is pinned in the
-      # manifest, so append the store id here (and to the dashboard's
-      # LINGOBRIDGE_ALLOWED_EXTENSION_IDS) before release.
+      # The Chrome Web Store id. The dashboard's LINGOBRIDGE_ALLOWED_EXTENSION_IDS
+      # must list the same id, without the chrome-extension:// prefix.
       - key: LINGOBRIDGE_ALLOWED_EXTENSION_ORIGINS
-        value: chrome-extension://kbnchdmopaamlbpgihdbjjnohinmapje
+        value: chrome-extension://ioekknfcfhcohnjfhiodgielimgeobdf
 
       # ---------------------------------------------------------------------
       # Credentials. Values are entered in Render, never here.
