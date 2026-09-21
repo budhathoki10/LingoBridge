@@ -96,7 +96,7 @@ Stores preferences, site-access choices, disabled-site rules, consent state, sav
 
 ### Selection Magic path
 
-1. The user grants Selection Magic access for the current site or all normal websites.
+1. The installed extension has declared HTTP and HTTPS access; the user has not disabled Selection Magic globally or for the current site.
 2. The user completes a pointer or keyboard text selection.
 3. The isolated selection observer waits for the range to remain stable, rejects ineligible or duplicate selections, and shows one magic icon beside the range.
 4. The user clicks the magic icon. Until this click, LingoBridge does not detect, transmit, or translate the selection.
@@ -198,4 +198,4 @@ Chrome's built-in Translator API currently supports many languages but does not 
 
 MyMemory is now the chosen primary online translation service. NVIDIA Riva Translate 4B Instruct v2 is the single fallback for reviewed supported directions. NVIDIA does not include Nepali, so an English–Nepali request cannot fall back when MyMemory is unavailable. Google may still supply capability metadata when configured but is not in the translation route. See `docs/11-language-coverage.md` for the capability policy.
 
-Showing Selection Magic immediately after text selection cannot rely on `activeTab` alone because that permission begins only after an explicit extension gesture. LingoBridge therefore declares optional HTTP/HTTPS host access and requests it during Selection Magic onboarding. Users may grant the current site or all sites; the popup, context menu, and shortcut remain available without persistent access.
+Showing Selection Magic immediately after text selection cannot rely on `activeTab` alone because that permission begins only after an explicit extension gesture. LingoBridge therefore declares HTTP/HTTPS host access at installation and clearly discloses why. The observer still reads only the completed active selection, and the popup, context menu, and shortcut remain available when Chrome restricts access.

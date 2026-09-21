@@ -13,8 +13,7 @@ export default defineConfig({
   manifest: {
     name: "LingoBridge",
     description: "Translate selected text without leaving the page.",
-    host_permissions: [`${GATEWAY_ORIGIN}/*`, `${DASHBOARD_ORIGIN}/*`],
-    optional_host_permissions: ["http://*/*", "https://*/*"],
+    host_permissions: ["http://*/*", "https://*/*", `${GATEWAY_ORIGIN}/*`, `${DASHBOARD_ORIGIN}/*`],
     permissions: ["activeTab", "alarms", "contextMenus", "identity", "scripting", "storage"],
     commands: {
       "translate-selection": {

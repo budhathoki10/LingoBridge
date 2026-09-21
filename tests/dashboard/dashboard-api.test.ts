@@ -495,7 +495,22 @@ describe("configuration", () => {
       OIDC_CLIENT_SECRET: "server-only-client-secret",
       OIDC_ISSUER: "https://issuer.example",
     };
-    expect(loadDashboardConfig(production).authMode).toBe("oidc");
+    expect(loadDashboardConfig(production)).toMatchObject({
+      authMode: "oidc",
+      gatewayUrl: "https://lingobridge-gateway-t9zx.onrender.com",
+    });
+    expect(
+      loadDashboardConfig({
+        ...production,
+        LINGOBRIDGE_GATEWAY_URL: "https://gateway.example/",
+      }).gatewayUrl,
+    ).toBe("https://gateway.example");
+    expect(
+      loadDashboardConfig({
+        LINGOBRIDGE_AUTH_MODE: "development",
+        LINGOBRIDGE_DASHBOARD_ORIGIN: "http://127.0.0.1:3000",
+      }).gatewayUrl,
+    ).toBe("http://127.0.0.1:8787");
     expect(() =>
       loadDashboardConfig({ ...production, LINGOBRIDGE_AUTH_MODE: "development" }),
     ).toThrow();

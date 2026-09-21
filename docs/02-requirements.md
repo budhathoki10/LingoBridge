@@ -97,9 +97,9 @@
 
 ## Quality requirements
 
-- Installation does not require all-site access. Onboarding requests optional site access with a clear explanation before Selection Magic is enabled.
+- Installation requests HTTP and HTTPS site access so Selection Magic is available on ordinary websites without repeated per-site setup. The store listing and onboarding clearly explain the access.
 - The basic popup works without page access.
-- Users can grant Selection Magic on the current site or all normal websites and can revoke it at any time.
+- Users can turn Selection Magic off globally, disable it for individual sites, or restrict its access through Chrome.
 - Translation errors preserve the source text and provide a retry.
 - The interface works with keyboard navigation and 200% browser zoom.
 - No remote executable code is loaded by the extension.
@@ -116,5 +116,5 @@
 7. MyMemory fails for an English–Nepali request, LingoBridge does not call the unsupported NVIDIA model and instead preserves the source with a retry message.
 8. A user searches for any language in the reviewed MyMemory catalogue, selects a valid pair, and completes a standard translation.
 9. The network is unavailable when loading capabilities, and LingoBridge uses its last-known-good catalogue while clearly marking stale availability.
-10. A user grants Selection Magic, highlights stable visible text, sees one magic icon beside it, clicks the icon, and receives an anchored translation in the saved preferred target language.
+10. After installation, a user highlights stable visible text on an ordinary website, sees one magic icon beside it, clicks the icon, and receives an anchored translation in the saved preferred target language.
 11. A user selects password-field or sensitive-looking text, and LingoBridge does not silently send it online.

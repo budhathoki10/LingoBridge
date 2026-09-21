@@ -6,13 +6,13 @@ Complete these phases serially after the user explicitly authorizes implementati
 
 ## 0 — close architecture gaps
 
-Completed. Google NMT, explicit local activation, current-site-first onboarding, dynamic registration, and version 1 scope are now locked in the architecture and decision records.
+Completed. Google NMT, explicit local activation, install-time all-site Selection Magic access, dynamic registration, and version 1 scope are now locked in the architecture and decision records.
 
 | Phase | Build or decide | Done when |
 | --- | --- | --- |
 | 0.1 | Fix Google Cloud Translation Advanced standard NMT as the initial primary model. | Model, endpoint, authentication, language source, quota, and retention are documented consistently. |
 | 0.2 | Design the explicit Enable on-device action required before Chrome creates or downloads a local translator. | First-use and returning-user local flows are approved. |
-| 0.3 | Choose whether onboarding recommends current-site or all-site access first. | ADR-002 contains the final permission prompt flow. |
+| 0.3 | Choose the Selection Magic site-access model. | ADR-002 documents required HTTP/HTTPS host access and its disclosure. |
 | 0.4 | Specify dynamic content-script registration and removal after permission changes. | No static all-site content script is required at installation. |
 | 0.5 | Lock version 1 features and exclusions. | Every included feature maps to a later phase. |
 
@@ -63,12 +63,12 @@ Phase 3.4 implementation and automated verification completed on 8 September 202
 
 ## 5 — Selection Magic
 
-Completed on 10 September 2026. The popup explains and requests current-site or all-site access, while the background worker dynamically registers or removes the isolated observer only for granted origins. Stable eligible selections show one Shadow DOM magic icon without scanning the page, detecting language, or making a request; clicking it starts source inference, uses the saved preferred target, honours Online consent and sensitive-text confirmation, and displays the actual provider-labelled result. Automated coverage verifies selection eligibility, forbidden and sensitive text, strict messages, language rules, viewport positioning, expiry, permission registration, cancellation, hostile page CSS, narrow and long-content layouts, no request before click, Escape, replacement by a new selection, and per-site disable in bundled Chromium.
+Completed on 10 September 2026 and amended on 21 September 2026. HTTP and HTTPS host access is declared at installation so the background worker can dynamically register the isolated observer across ordinary websites without repeated domain prompts. Stable eligible selections show one Shadow DOM magic icon without scanning the page, detecting language, or making a request; clicking it starts source inference, uses the saved preferred target, honours Online consent and sensitive-text confirmation, and displays the actual provider-labelled result. Automated coverage verifies selection eligibility, forbidden and sensitive text, strict messages, language rules, viewport positioning, expiry, registration, cancellation, hostile page CSS, narrow and long-content layouts, no request before click, Escape, replacement by a new selection, and per-site disable in bundled Chromium.
 
 | Phase | Build | Done when |
 | --- | --- | --- |
-| 5.1 | Add explained current-site and all-site Selection Magic permission onboarding. | Popup still works when permission is denied or revoked. |
-| 5.2 | Register the isolated observer only on granted sites. | One stable eligible selection shows one magic icon without page scanning, language detection, or a translation request. |
+| 5.1 | Declare and explain HTTP/HTTPS host access for Selection Magic. | The store package discloses broad access and the popup still works when Chrome restricts it. |
+| 5.2 | Dynamically register the isolated observer across permitted sites. | One stable eligible selection shows one magic icon without page scanning, language detection, or a translation request. |
 | 5.3 | Reject empty, hidden, password, oversized, duplicate, and extension-owned selections. | Every forbidden test selection produces no translation request. |
 | 5.4 | Build the Shadow DOM magic-icon action, anchored translator, and safe viewport positioning. | Page CSS, scrolling, zoom, narrow screens, and long results do not break the icon or translator. |
 | 5.5 | After the icon click, add source detection and saved preferred-target rules. | Clear, short, uncertain, mixed-script, and same-language cases behave correctly. |

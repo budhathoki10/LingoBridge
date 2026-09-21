@@ -9,9 +9,9 @@ LingoBridge processes text that may be personal, private, or controlled by a hos
 - Use `activeTab` and `scripting` for user-triggered access.
 - Add `contextMenus` for the selection action.
 - Add `storage` for settings and explicitly saved phrases.
-- Declare HTTP and HTTPS sites as optional host permissions. Request current-site or all-site access only when the user enables Selection Magic and after explaining what the extension can read.
-- Selection Magic must stop immediately when access is revoked or the site is disabled.
-- Do not request history, cookies, clipboard-read, downloads, debugger, or webRequest. Do not require all-site access at installation; all-site Selection Magic access is an explained runtime choice.
+- Declare HTTP and HTTPS sites as required host permissions so Selection Magic is available on ordinary websites after installation. Disclose this access before installation and in the Chrome Web Store privacy details.
+- Selection Magic must stop immediately when the feature or current site is disabled, or when Chrome withholds site access.
+- Do not request history, cookies, clipboard-read, downloads, debugger, or webRequest. Broad host access does not permit whole-page scanning: observe only the user's completed active selection and transmit nothing until the magic icon is clicked.
 - Keep incognito access disabled by default.
 
 ## Data classification
@@ -165,7 +165,7 @@ The dashboard uses its own restrictive policy, permits network access only to ap
 
 ## Phase 5 Selection Magic security review
 
-- HTTP and HTTPS origins are optional host permissions. The extension has no statically declared webpage content script; the background worker registers the isolated observer only for origins the user has granted and removes or disables it after revocation or a per-site opt-out.
+- HTTP and HTTPS origins are declared host permissions. The extension has no statically declared webpage content script; the background worker dynamically registers the isolated observer across ordinary websites and removes or disables it after a global or per-site opt-out.
 - The observer reads only the active, completed selection after a short stability delay. It does not scan, index, or observe the full page, and displaying the magic icon performs no source detection or network request.
 - Empty, whitespace-only, hidden, password-field, oversized, duplicate, and extension-owned selections are rejected before the translation surface opens. Temporary selection state is cleared on close, Escape, a new selection, navigation, permission removal, site disable, or expiry.
 - The magic-icon click is the translation activation boundary. Source inference, capability loading, Online-consent checks, and gateway translation begin only after that explicit gesture. Sensitive-looking secrets, card numbers, identity or health numbers, and one-time codes pause before transmission and require a second confirmation.
@@ -210,7 +210,7 @@ The dashboard uses its own restrictive policy, permits network access only to ap
 - Display On-device or Online beside every result.
 - For Online results, display MyMemory or NVIDIA as the actual processor.
 - Link to the privacy policy before the first online translation.
-- Explain current-site versus all-site Selection Magic access before Chrome displays the permission prompt.
+- Explain why Selection Magic needs all-site access in the store listing and onboarding before installation.
 - Provide a visible Selection Magic toggle and per-site disable action.
 - Make online consent revocable.
 - Provide local-data deletion from settings.
