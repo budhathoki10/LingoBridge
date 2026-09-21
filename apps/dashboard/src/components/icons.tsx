@@ -135,6 +135,12 @@ export const BrowserIcon = (props: IconProps) => (
   </Icon>
 );
 
+export const PlayIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="m9 7 8 5-8 5V7Z" fill="currentColor" stroke="none" />
+  </Icon>
+);
+
 /** Google's multicolor "G", used only on the Continue with Google button per Google's guidelines. */
 export const GoogleMark = ({ size = 18 }: { size?: number }) => (
   <svg aria-hidden="true" height={size} viewBox="0 0 48 48" width={size}>

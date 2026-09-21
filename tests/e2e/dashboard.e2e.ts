@@ -4,6 +4,8 @@ import { type APIRequestContext, expect, type Page, test } from "@playwright/tes
 const DASHBOARD = "http://127.0.0.1:3000";
 const EXTENSION_ID = "abcdefghijklmnopabcdefghijklmnop";
 const EXTENSION_ORIGIN = `chrome-extension://${EXTENSION_ID}`;
+const STORE_URL =
+  "https://chromewebstore.google.com/detail/lingobridge/ioekknfcfhcohnjfhiodgielimgeobdf";
 const REDIRECT_URI = `https://${EXTENSION_ID}.chromiumapp.org/lingobridge`;
 const PROTECTED_PAGES = [
   "/overview",
@@ -102,6 +104,63 @@ async function expectNoHorizontalOverflow(page: Page, label: string) {
   );
   expect(overflow, `${label} scrolls horizontally by ${overflow}px`).toBeLessThanOrEqual(0);
 }
+
+test("public landing page explains the product and links to the published extension", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const response = await page.goto(DASHBOARD, { waitUntil: "domcontentloaded" });
+  expect(response?.status()).toBe(200);
+  expect(response?.headers()["content-security-policy"]).toContain(
+    "frame-src https://www.youtube-nocookie.com",
+  );
+
+  await expect(page).toHaveTitle(/Understand the words in front of you/u);
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Understand the words in front of you." }),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "See LingoBridge in action." })).toBeVisible();
+  await expect(
+    page.getByRole("banner").getByRole("link", { exact: true, name: "Sign in" }),
+  ).toHaveAttribute("href", "/overview");
+
+  const installLinks = page.getByRole("link", { name: /Add to browser/u });
+  expect(await installLinks.count()).toBeGreaterThanOrEqual(3);
+  for (const link of await installLinks.all()) {
+    await expect(link).toHaveAttribute("href", STORE_URL);
+  }
+
+  await page.getByRole("button", { name: "Play the LingoBridge product demonstration" }).click();
+  await expect(page.getByTitle("LingoBridge product demonstration")).toHaveAttribute(
+    "src",
+    "https://www.youtube-nocookie.com/embed/T9S7SEZ6hco?rel=0&autoplay=1",
+  );
+  await page.getByText("Do I need an account to translate?").click();
+  await expect(
+    page.getByText("No. Translation and local phrase saving work without an account."),
+  ).toBeVisible();
+
+  for (const width of WIDTHS) {
+    const height = width < 768 ? 800 : 900;
+    await page.setViewportSize({ height, width });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expectNoHorizontalOverflow(page, `landing page at ${width}px`);
+    // The trust strip is the section directly after the hero, so it is what has
+    // to peek above the fold for the page to show that it continues.
+    const nextSection = await page
+      .getByRole("region", { name: "What LingoBridge does not do" })
+      .boundingBox();
+    expect(nextSection?.y, `hero should reveal the next section at ${width}px`).toBeLessThan(
+      height,
+    );
+  }
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.reload();
+  await expect(
+    page.getByRole("img", { name: "An English sentence translated into Nepali" }),
+  ).toContainText("उहाँको उडानको बोर्डिङ");
+});
 
 test("signed-out visitors cannot open protected pages", async ({ page, request }) => {
   for (const path of [...PROTECTED_PAGES, "/admin"]) {

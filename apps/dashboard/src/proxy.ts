@@ -23,6 +23,7 @@ export function buildContentSecurityPolicy(nonce: string, development: boolean):
     // Development tooling injects styles without a nonce; production styles are bundled files.
     development ? "style-src 'self' 'unsafe-inline'" : "style-src 'self'",
     "img-src 'self' data:",
+    "frame-src https://www.youtube-nocookie.com",
     "font-src 'self'",
     "connect-src 'self'",
     "object-src 'none'",
