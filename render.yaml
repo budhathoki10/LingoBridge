@@ -72,10 +72,11 @@ services:
       # Exact chrome-extension:// origins, comma separated. Live mode refuses to
       # start with none, and wildcards are rejected.
       #
-      # The Chrome Web Store id. The dashboard's LINGOBRIDGE_ALLOWED_EXTENSION_IDS
-      # must list the same id, without the chrome-extension:// prefix.
+      # Allow the Chrome Web Store package and the repository's unpacked development build.
+      # The dashboard's LINGOBRIDGE_ALLOWED_EXTENSION_IDS must list the same ids without
+      # the chrome-extension:// prefix.
       - key: LINGOBRIDGE_ALLOWED_EXTENSION_ORIGINS
-        value: chrome-extension://ioekknfcfhcohnjfhiodgielimgeobdf
+        value: chrome-extension://ioekknfcfhcohnjfhiodgielimgeobdf,chrome-extension://kbnchdmopaamlbpgihdbjjnohinmapje
 
       # ---------------------------------------------------------------------
       # Credentials. Values are entered in Render, never here.
