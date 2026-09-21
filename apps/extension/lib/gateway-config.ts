@@ -8,4 +8,4 @@
  *
  * To run against a local gateway, change this to http://127.0.0.1:8787.
  */
-export const GATEWAY_ORIGIN = "https://lingobridge-gateway.onrender.com";
+export const GATEWAY_ORIGIN = "https://lingobridge-gateway-t9zx.onrender.com";

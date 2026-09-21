@@ -1,3 +1,4 @@
+import "@fontsource-variable/ibm-plex-sans";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { sanitizeReturnPath } from "@lingobridge/auth";
@@ -5,6 +6,8 @@ import { Brand } from "@/components/brand";
 import { GoogleMark } from "@/components/icons";
 import { getServices } from "@/server/container";
 import { getPageSession } from "@/server/page-session";
+import { SignInStage } from "./sign-in-stage";
+import styles from "./sign-in.module.css";
 
 export const metadata: Metadata = { title: "Sign in" };
 export const dynamic = "force-dynamic";
@@ -33,48 +36,55 @@ export default async function SignInPage({ searchParams }: { searchParams: Searc
   const isGoogle = providerName === "Google";
 
   return (
-    <main className="standalone">
-      <div className="standalone__card">
-        <Brand />
-        <div className="standalone__heading">
-          <h1>Sign in to your dashboard</h1>
-          <p>
-            Review phrases you saved in the extension and manage the devices connected to your
-            account.
-          </p>
+    <main className={styles.page}>
+      <div aria-hidden="true" className={styles.backdrop} />
+      <SignInStage>
+        <div className={styles.top} data-animate="">
+          <Brand href="/" />
+          <p className={styles.tagline}>Understand the words in front of you.</p>
         </div>
 
-        {error ? (
-          <p className="callout callout--danger" role="alert">
-            {error}
-          </p>
-        ) : null}
-        {signedOut && !error ? (
-          <p className="callout" role="status">
-            You’re signed out. Extensions connected to this account were disconnected too.
-          </p>
-        ) : null}
+        <div className={styles.card} data-animate="">
+          <div className={styles.heading}>
+            <h1>Sign in to your dashboard</h1>
+            <p>
+              Review phrases you saved in the extension and manage the devices connected to your
+              account.
+            </p>
+          </div>
 
-        {/* A link, not a form: CSP form-action also applies to the redirect to the provider. */}
-        <a
-          className={isGoogle ? "button button--large" : "button button--primary button--large"}
-          href={`/auth/sign-in?returnTo=${encodeURIComponent(returnTo)}`}
-        >
-          {isGoogle ? <GoogleMark /> : null}
-          Continue with {providerName}
-        </a>
+          {error ? (
+            <p className="callout callout--danger" role="alert">
+              {error}
+            </p>
+          ) : null}
+          {signedOut && !error ? (
+            <p className="callout" role="status">
+              You’re signed out. Extensions connected to this account were disconnected too.
+            </p>
+          ) : null}
 
-        {development ? (
-          <p className="callout callout--warning">
-            Development sign-in is active. Any email works and no password is checked. It can’t run
-            in production.
-          </p>
-        ) : null}
+          {/* A link, not a form: CSP form-action also applies to the redirect to the provider. */}
+          <a
+            className={isGoogle ? "button button--large" : "button button--primary button--large"}
+            href={`/auth/sign-in?returnTo=${encodeURIComponent(returnTo)}`}
+          >
+            {isGoogle ? <GoogleMark /> : null}
+            Continue with {providerName}
+          </a>
 
-        <p className="standalone__footer">
+          {development ? (
+            <p className="callout callout--warning">
+              Development sign-in is active. Any email works and no password is checked. It can’t
+              run in production.
+            </p>
+          ) : null}
+        </div>
+
+        <p className={styles.footer} data-animate="">
           Translation works without an account. Only phrases you choose to save are synced.
         </p>
-      </div>
+      </SignInStage>
     </main>
   );
 }
