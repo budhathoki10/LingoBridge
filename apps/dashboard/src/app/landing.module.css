@@ -1,0 +1,1288 @@
+/* LingoBridge landing page.
+
+   Design system resolved from the "Translator App" profile in ui-ux-pro-max:
+   style = Flat Design + Swiss/Minimalism, palette = global blue + neutral grey +
+   a language accent, pattern = Product Demo + Features, motion = subtle reveal.
+
+   Flat means: surfaces are separated by hairline borders and background steps, not by
+   gradients or stacked shadows. Exactly one shadow token exists, and it is only used by
+   elements that genuinely float over content.
+
+   One typeface: IBM Plex Sans for Latin, with Noto Sans in the same stack purely so
+   Devanagari, CJK, and Arabic render — no second font is ever declared per element.
+
+   Blue is the single brand accent. Terracotta marks translated / non-English content and
+   is never used for interactive chrome. Green and red appear only as real state badges. */
+
+.page {
+  --lb-font:
+    "IBM Plex Sans Variable", "IBM Plex Sans", "Noto Sans Variable", "Noto Sans",
+    "Noto Sans Devanagari", system-ui, -apple-system, sans-serif;
+
+  /* Brand: one blue, no gradient */
+  --lb-blue: #2563eb;
+  --lb-blue-hover: #1d4ed8;
+  --lb-blue-active: #1e40af;
+  --lb-blue-tint: #eff6ff;
+  --lb-blue-line: #dbeafe;
+
+  /* Slate neutrals */
+  --lb-ink: #0b1220;
+  --lb-body: #475569;
+  --lb-muted: #64748b;
+  --lb-line: #e2e8f0;
+  --lb-line-soft: #f1f5f9;
+  --lb-base: #ffffff;
+  --lb-sunken: #f8fafc;
+
+  /* Translated / non-English content */
+  --lb-warm: #c2410c;
+  --lb-warm-tint: #fff7ed;
+  --lb-warm-line: #fed7aa;
+
+  /* State */
+  --lb-pass: #15803d;
+  --lb-pass-tint: #f0fdf4;
+  --lb-pass-line: #bbf7d0;
+  --lb-stop: #b91c1c;
+  --lb-stop-tint: #fef2f2;
+  --lb-stop-line: #fecaca;
+
+  /* Shape */
+  --lb-r-btn: 8px;
+  --lb-r-card: 12px;
+  --lb-r-lg: 16px;
+
+  /* The only shadow in the system: for elements that float over content. */
+  --lb-shadow: 0 1px 2px rgb(11 18 32 / 6%), 0 8px 24px -12px rgb(11 18 32 / 12%);
+
+  /* Rhythm */
+  --lb-section-y: clamp(72px, 9vw, 120px);
+  --lb-gutter: 24px;
+  --lb-max: 1200px;
+
+  min-width: 0;
+  overflow: clip;
+  background: var(--lb-base);
+  color: var(--lb-ink);
+  color-scheme: light;
+  font-family: var(--lb-font);
+  font-size: 1rem;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (min-width: 768px) {
+  .page {
+    --lb-gutter: 40px;
+  }
+}
+
+/* ---------- Shared containers ---------- */
+
+.sectionInner,
+.heroInner,
+.videoInner,
+.installInner,
+.headerInner,
+.footerInner {
+  width: 100%;
+  max-width: var(--lb-max);
+  margin-inline: auto;
+  padding-inline: var(--lb-gutter);
+}
+
+.howSection,
+.capabilitiesSection,
+.automationSection,
+.dashboardSection,
+.faqSection,
+.videoSection {
+  padding-block: var(--lb-section-y);
+  /* Clears the 64px sticky header so a nav anchor does not land a heading
+     underneath it. */
+  scroll-margin-top: 64px;
+}
+
+/* Alternating surface steps give the page rhythm without a single gradient. */
+.videoSection,
+.automationSection,
+.faqSection {
+  background: var(--lb-sunken);
+  border-block: 1px solid var(--lb-line);
+}
+
+/* ---------- Type scale ---------- */
+
+.page h1 {
+  margin: 0;
+  font-size: clamp(1.9375rem, 6.4vw, 3.5rem);
+  font-weight: 600;
+  line-height: 1.06;
+  letter-spacing: -0.032em;
+  text-wrap: balance;
+}
+
+.page h2 {
+  margin: 0;
+  font-size: clamp(1.75rem, 3.2vw, 2.5rem);
+  font-weight: 600;
+  line-height: 1.14;
+  letter-spacing: -0.026em;
+  text-wrap: balance;
+}
+
+.page h3 {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.012em;
+}
+
+.page p {
+  margin: 0;
+}
+
+/* Section lead: one consistent heading block for every section. */
+.sectionLead {
+  max-width: 34ch;
+  margin-bottom: clamp(40px, 5vw, 64px);
+}
+
+.sectionLead > p {
+  margin-top: 16px;
+  color: var(--lb-body);
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  text-wrap: pretty;
+}
+
+@media (min-width: 768px) {
+  .sectionLead {
+    max-width: 52ch;
+  }
+}
+
+/* ---------- Buttons ---------- */
+
+.headerCta,
+.primaryAction,
+.secondaryAction,
+.installAction {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 18px;
+  border: 1px solid transparent;
+  border-radius: var(--lb-r-btn);
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 550;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.headerCta,
+.primaryAction,
+.installAction {
+  background: var(--lb-blue);
+  border-color: var(--lb-blue);
+  color: #ffffff;
+}
+
+.headerCta:hover,
+.primaryAction:hover,
+.installAction:hover {
+  background: var(--lb-blue-hover);
+  border-color: var(--lb-blue-hover);
+}
+
+.headerCta:active,
+.primaryAction:active,
+.installAction:active {
+  background: var(--lb-blue-active);
+  border-color: var(--lb-blue-active);
+}
+
+.secondaryAction {
+  background: var(--lb-base);
+  border-color: var(--lb-line);
+  color: var(--lb-ink);
+}
+
+.secondaryAction:hover {
+  border-color: #cbd5e1;
+  background: var(--lb-sunken);
+}
+
+.headerCta {
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 0.875rem;
+}
+
+.primaryAction,
+.installAction {
+  min-height: 48px;
+  padding: 0 22px;
+  font-size: 1rem;
+}
+
+.secondaryAction {
+  min-height: 48px;
+  padding: 0 22px;
+  font-size: 1rem;
+}
+
+/* Text link with an arrow. */
+.quietLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  color: var(--lb-blue);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: color 160ms ease;
+}
+
+.quietLink:hover {
+  color: var(--lb-blue-hover);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.quietLink svg {
+  transition: transform 160ms ease;
+}
+
+.quietLink:hover svg {
+  transform: translateX(2px);
+}
+
+/* Focus is never removed; it is restated so it reads on every surface. */
+.page a:focus-visible,
+.page button:focus-visible,
+.page summary:focus-visible {
+  outline: 2px solid var(--lb-blue);
+  outline-offset: 2px;
+  border-radius: var(--lb-r-btn);
+}
+
+/* ---------- Header ---------- */
+
+.siteHeader {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  border-bottom: 1px solid var(--lb-line);
+  background: color-mix(in srgb, var(--lb-base) 88%, transparent);
+  backdrop-filter: saturate(1.6) blur(12px);
+}
+
+.headerInner {
+  display: flex;
+  height: 64px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.siteHeader :global(.brand) {
+  color: var(--lb-ink);
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.primaryNav {
+  display: none;
+  align-items: center;
+  gap: 4px;
+}
+
+.primaryNav a {
+  padding: 8px 12px;
+  border-radius: var(--lb-r-btn);
+  color: var(--lb-body);
+  font-size: 0.9375rem;
+  font-weight: 450;
+  text-decoration: none;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease;
+}
+
+.primaryNav a:hover {
+  background: var(--lb-line-soft);
+  color: var(--lb-ink);
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dashboardLink {
+  display: none;
+  min-height: 38px;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: var(--lb-r-btn);
+  color: var(--lb-body);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease;
+}
+
+.dashboardLink:hover {
+  background: var(--lb-line-soft);
+  color: var(--lb-ink);
+}
+
+@media (min-width: 900px) {
+  .primaryNav,
+  .dashboardLink {
+    display: flex;
+  }
+}
+
+/* ---------- Hero ---------- */
+
+.hero {
+  padding-block: clamp(56px, 7vw, 96px) var(--lb-section-y);
+}
+
+.heroInner {
+  display: grid;
+  gap: clamp(48px, 6vw, 72px);
+  align-items: center;
+}
+
+@media (min-width: 1024px) {
+  .heroInner {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+    gap: 64px;
+  }
+}
+
+.heroCopyBlock {
+  min-width: 0;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 20px;
+  padding: 5px 11px 5px 9px;
+  border: 1px solid var(--lb-blue-line);
+  border-radius: 999px;
+  background: var(--lb-blue-tint);
+  color: var(--lb-blue-hover);
+  font-size: 0.8125rem;
+  font-weight: 550;
+  letter-spacing: -0.005em;
+}
+
+.heroCopy {
+  max-width: 46ch;
+  /* The h1 runs at a 1.06 line-height, so it needs a deliberate gap here or the
+     descenders sit on top of this paragraph. */
+  margin-top: 26px;
+  color: var(--lb-body);
+  font-size: clamp(1.0625rem, 1.5vw, 1.1875rem);
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+.heroActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 32px;
+}
+
+/* ---------- Trust strip ---------- */
+
+/* These points sit on a light band, so they clear 4.5:1 — the old copy was
+   white-on-gradient and did not. */
+.trustStrip {
+  border-block: 1px solid var(--lb-line);
+  background: var(--lb-sunken);
+  scroll-margin-top: 64px;
+}
+
+.trustStrip ul {
+  display: grid;
+  gap: 12px 32px;
+  margin: 0;
+  padding-block: 20px;
+  list-style: none;
+}
+
+@media (min-width: 768px) {
+  .trustStrip ul {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding-block: 22px;
+  }
+}
+
+.trustStrip li {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  color: var(--lb-body);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.trustStrip svg {
+  margin-top: 2px;
+  color: var(--lb-pass);
+}
+
+/* ---------- Translation stage (hero visual) ---------- */
+
+.translationStage {
+  position: relative;
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+  padding: clamp(20px, 3vw, 28px);
+  border: 1px solid var(--lb-line);
+  border-radius: var(--lb-r-lg);
+  background: var(--lb-base);
+  box-shadow: var(--lb-shadow);
+}
+
+.languageName {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--lb-muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.sourceLine p {
+  color: var(--lb-ink);
+  font-size: clamp(1.0625rem, 1.9vw, 1.375rem);
+  font-weight: 450;
+  line-height: 1.45;
+  letter-spacing: -0.015em;
+}
+
+.selection {
+  position: relative;
+  display: inline-block;
+  padding: 1px 4px;
+  margin: 0 -1px;
+  border-radius: 4px;
+  isolation: isolate;
+}
+
+.selectionFill {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 4px;
+  background: var(--lb-blue-tint);
+  box-shadow: inset 0 0 0 1px var(--lb-blue-line);
+}
+
+.selectionText {
+  color: var(--lb-blue-hover);
+  font-weight: 550;
+}
+
+.translationMarker {
+  display: inline-flex;
+  /* A grid item blockifies inline-flex, so the chip needs justify-self to hug
+     its label instead of stretching the full row. */
+  justify-self: start;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px 7px 8px;
+  border: 1px solid var(--lb-line);
+  border-radius: var(--lb-r-btn);
+  background: var(--lb-sunken);
+  color: var(--lb-ink);
+  font-size: 0.8125rem;
+  font-weight: 550;
+}
+
+.outputLine {
+  padding-top: 18px;
+  border-top: 1px solid var(--lb-line-soft);
+}
+
+.outputLine .languageName {
+  color: var(--lb-warm);
+}
+
+.outputLine p {
+  color: var(--lb-ink);
+  font-size: clamp(1.0625rem, 1.9vw, 1.375rem);
+  font-weight: 450;
+  line-height: 1.6;
+}
+
+.scriptRail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--lb-line-soft);
+  color: var(--lb-muted);
+  font-size: 0.8125rem;
+}
+
+/* On a phone the hero stacks copy above the stage, so both halves are tightened
+   to keep the fold showing that the page continues. Nothing is hidden. */
+@media (max-width: 767px) {
+  .hero {
+    padding-block: 36px 40px;
+  }
+
+  .heroInner {
+    gap: 28px;
+  }
+
+  .eyebrow {
+    margin-bottom: 14px;
+  }
+
+  .heroCopy {
+    margin-top: 16px;
+    font-size: 1rem;
+  }
+
+  .heroActions {
+    margin-top: 22px;
+  }
+
+  .translationStage {
+    gap: 14px;
+    padding: 18px;
+  }
+
+  .sourceLine p,
+  .outputLine p {
+    font-size: 1rem;
+  }
+
+  .outputLine {
+    padding-top: 14px;
+  }
+
+  .scriptRail {
+    padding-top: 12px;
+    font-size: 0.75rem;
+  }
+}
+
+/* At the narrowest supported width the hero CTAs stack, which costs a whole row,
+   so the remaining space is reclaimed from padding and from the script rail —
+   the rail is aria-hidden decoration and carries no information. */
+@media (max-width: 380px) {
+  .hero {
+    padding-block: 28px 32px;
+  }
+
+  .heroInner {
+    gap: 22px;
+  }
+
+  .heroActions {
+    margin-top: 18px;
+  }
+
+  .translationStage {
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .scriptRail {
+    display: none;
+  }
+}
+
+/* ---------- Product demo ---------- */
+
+.videoInner {
+  display: grid;
+  justify-items: start;
+}
+
+.videoFrame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid var(--lb-line);
+  border-radius: var(--lb-r-lg);
+  background: #0b1220;
+}
+
+.videoFrame iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+.videoPoster {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.videoPosterImage {
+  object-fit: cover;
+}
+
+.videoPosterShade {
+  position: absolute;
+  inset: 0;
+  background: rgb(11 18 32 / 28%);
+  transition: background-color 200ms ease;
+}
+
+.videoPoster:hover .videoPosterShade {
+  background: rgb(11 18 32 / 18%);
+}
+
+.videoPlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 13px 22px;
+  border-radius: 999px;
+  background: var(--lb-base);
+  color: var(--lb-ink);
+  font-size: 0.9375rem;
+  font-weight: 550;
+  box-shadow: var(--lb-shadow);
+  transform: translate(-50%, -50%);
+  transition: background-color 200ms ease;
+}
+
+.videoPoster:hover .videoPlay {
+  background: #ffffff;
+}
+
+.videoInner .quietLink {
+  margin-top: 20px;
+}
+
+/* ---------- Workflow ---------- */
+
+.workflow {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--lb-line);
+  border-radius: var(--lb-r-lg);
+  background: var(--lb-line);
+  list-style: none;
+  overflow: hidden;
+}
+
+@media (min-width: 640px) {
+  .workflow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .workflow {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.workflowItem {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: clamp(24px, 3vw, 32px);
+  background: var(--lb-base);
+}
+
+.stepNumber {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  margin-bottom: 6px;
+  border-radius: var(--lb-r-btn);
+  background: var(--lb-blue-tint);
+  color: var(--lb-blue-hover);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.workflowItem p {
+  color: var(--lb-body);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+/* ---------- Capabilities (bento) ---------- */
+
+.bento {
+  display: grid;
+  gap: 16px;
+}
+
+@media (min-width: 768px) {
+  .bento {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .bento {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  /* The in-place demo is the anchor: a full-width band above the supporting
+     triad, so the grid never leaves an orphaned card and an empty cell. */
+  .primaryCapability {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1fr);
+    column-gap: clamp(32px, 4vw, 56px);
+    align-items: center;
+  }
+
+  .primaryCapability > h3 {
+    grid-column: 1;
+    align-self: end;
+  }
+
+  .primaryCapability > p {
+    grid-column: 1;
+    align-self: start;
+  }
+
+  .primaryCapability .inlineDemo {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    margin-top: 0;
+  }
+}
+
+.primaryCapability,
+.capabilityCard {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: clamp(24px, 3vw, 32px);
+  border: 1px solid var(--lb-line);
+  border-radius: var(--lb-r-lg);
+  background: var(--lb-base);
+}
+
+.capabilityCard {
+  background: var(--lb-sunken);
+}
+
+.primaryCapability > p,
+.capabilityCard > p {
+  color: var(--lb-body);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+.capabilityIcon {
+  display: inline-grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  margin-bottom: 6px;
+  border: 1px solid var(--lb-line);
+  border-radius: var(--lb-r-btn);
+  background: var(--lb-base);
+  color: var(--lb-blue);
+}
+
+/* The inline demo fills the tall card instead of leaving a dead gap in it. */
+.inlineDemo {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 14px;
+  height: 100%;
+  min-height: 180px;
+  margin-top: 12px;
+  padding: clamp(20px, 2.5vw, 28px);
+  border: 1px solid var(--lb-line);
+  border-radius: var(--lb-r-card);
+  background: var(--lb-sunken);
+}
+
+.inlineSource {
+  color: var(--lb-ink);
+  font-size: clamp(1rem, 1.6vw, 1.1875rem);
+  line-height: 1.5;
+  letter-spacing: -0.012em;
+}
+
+.inlineMarker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px 5px 8px;
+  border: 1px solid var(--lb-line);
+  border-radius: 999px;
+  background: var(--lb-base);
+  color: var(--lb-muted);
+  font-size: 0.75rem;
+  font-weight: 550;
+}
+
+.inlineOutput {
+  padding: 12px 14px;
+  border: 1px solid var(--lb-warm-line);
+  border-radius: var(--lb-r-card);
+  background: var(--lb-warm-tint);
+  color: #7c2d12;
+  font-size: clamp(1rem, 1.6vw, 1.1875rem);
+  line-height: 1.6;
+}
+
+.languageSpecimen {
+  margin-top: 4px;
+  color: var(--lb-muted);
+  font-size: 0.9375rem;
+}
+
+.specimenSource {
+  color: var(--lb-warm);
+  font-weight: 550;
+}
+
+/* ---------- Control split ---------- */
+
+.controlSplit {
+  display: grid;
+  gap: 16px;
+}
+
+@media (min-width: 768px) {
+  .controlSplit {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.controlCard {
+  padding: clamp(24px, 3vw, 32px);
+  border: 1px solid var(--lb-line);
+  border-radius: var(--lb-r-lg);
+  background: var(--lb-base);
+}
+
+/* "You decide" is the side that matters most, so it carries the accent edge. */
+.controlCardYou {
+  border-color: var(--lb-blue-line);
+  background: var(--lb-blue-tint);
+}
+
+.controlCard ul {
+  display: grid;
+  gap: 12px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.controlCard li {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  color: var(--lb-body);
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}
+
+.controlCard svg {
+  margin-top: 3px;
+  color: var(--lb-muted);
+}
+
+.controlCardYou li {
+  color: #1e3a5f;
+}
+
+.controlCardYou svg {
+  color: var(--lb-blue);
+}
+
+/* ---------- Dashboard data boundary ---------- */
+
+.dataBoundary {
+  overflow: hidden;
+  border: 1px solid var(--lb-line);
+  border-radius: var(--lb-r-lg);
+  background: var(--lb-base);
+}
+
+.boundaryIntro {
+  display: grid;
+  gap: 6px;
+  padding: clamp(20px, 3vw, 28px);
+  border-bottom: 1px solid var(--lb-line);
+}
+
+.boundaryEyebrow {
+  color: var(--lb-blue);
+  font-size: 0.75rem;
+  font-weight: 650;
+  text-transform: uppercase;
+}
+
+.boundaryIntro h3 {
+  max-width: 560px;
+  margin: 0;
+  font-size: clamp(1.125rem, 2vw, 1.375rem);
+  line-height: 1.3;
+}
+
+.boundaryGroups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.boundaryGroup {
+  padding: clamp(20px, 3vw, 28px);
+}
+
+.boundaryGroup + .boundaryGroup {
+  border-left: 1px solid var(--lb-line);
+}
+
+.boundaryGroupSynced {
+  background: #f8fbff;
+}
+
+.boundaryGroupHeading {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--lb-line-soft);
+}
+
+.boundaryGroupHeading svg {
+  margin-top: 2px;
+  color: var(--lb-muted);
+}
+
+.boundaryGroupSynced .boundaryGroupHeading svg {
+  color: var(--lb-blue);
+}
+
+.boundaryGroupHeading h4,
+.boundaryGroupHeading p {
+  margin: 0;
+}
+
+.boundaryGroupHeading h4 {
+  font-size: 0.9375rem;
+  font-weight: 650;
+}
+
+.boundaryGroupHeading p {
+  margin-top: 3px;
+  color: var(--lb-muted);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.boundaryList {
+  margin: 0;
+  padding: 4px 0 0;
+  list-style: none;
+}
+
+.boundaryList li {
+  display: grid;
+  gap: 3px;
+  padding: 14px 0;
+}
+
+.boundaryList li + li {
+  border-top: 1px solid var(--lb-line-soft);
+}
+
+.boundaryList strong {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.boundaryList span {
+  color: var(--lb-muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.boundaryNote {
+  padding: clamp(16px, 2.5vw, 20px) clamp(20px, 3vw, 28px);
+  background: var(--lb-sunken);
+  color: var(--lb-muted);
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+@media (max-width: 767px) {
+  .boundaryGroups {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .boundaryGroup + .boundaryGroup {
+    border-top: 1px solid var(--lb-line);
+    border-left: 0;
+  }
+}
+
+.inlineActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 32px;
+}
+
+/* ---------- FAQ ---------- */
+
+/* Capped so a question and its answer stay in one comfortable measure
+   instead of stretching the full container width. */
+.faqList {
+  max-width: 860px;
+  border-top: 1px solid var(--lb-line);
+}
+
+.faqItem {
+  border-bottom: 1px solid var(--lb-line);
+}
+
+.faqItem summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 20px 4px;
+  color: var(--lb-ink);
+  font-size: 1.0625rem;
+  font-weight: 550;
+  line-height: 1.45;
+  letter-spacing: -0.012em;
+  cursor: pointer;
+  list-style: none;
+  transition: color 160ms ease;
+}
+
+.faqItem summary::-webkit-details-marker {
+  display: none;
+}
+
+.faqItem summary:hover {
+  color: var(--lb-blue-hover);
+}
+
+/* Plus that becomes a minus — drawn in CSS so it inherits currentColor. */
+.faqSign {
+  position: relative;
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.faqSign::before,
+.faqSign::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 13px;
+  height: 1.5px;
+  border-radius: 1px;
+  background: currentColor;
+  content: "";
+  transform: translate(-50%, -50%);
+  transition: transform 200ms ease;
+}
+
+.faqSign::after {
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.faqItem[open] .faqSign::after {
+  transform: translate(-50%, -50%) rotate(0deg);
+}
+
+.faqAnswer {
+  max-width: 68ch;
+  padding: 0 4px 24px;
+  color: var(--lb-body);
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  text-wrap: pretty;
+}
+
+/* ---------- Closing CTA ---------- */
+
+.installSection {
+  padding-block: var(--lb-section-y);
+  border-top: 1px solid var(--lb-line);
+  background: var(--lb-sunken);
+}
+
+.installInner {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  text-align: center;
+}
+
+.installScripts {
+  color: var(--lb-warm);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.installInner h2 {
+  max-width: 20ch;
+}
+
+.installCopy {
+  max-width: 48ch;
+  color: var(--lb-body);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+}
+
+.installAction {
+  margin-top: 12px;
+}
+
+/* ---------- Footer ---------- */
+
+.footer {
+  border-top: 1px solid var(--lb-line);
+  background: var(--lb-base);
+}
+
+.footerInner {
+  display: grid;
+  gap: 40px;
+  padding-block: clamp(48px, 6vw, 64px);
+}
+
+@media (min-width: 768px) {
+  .footerInner {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+    gap: 48px;
+  }
+}
+
+.footerBrand {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+}
+
+.footer :global(.brand) {
+  color: var(--lb-ink);
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.footerTagline {
+  margin-top: 12px;
+  max-width: 28ch;
+  color: var(--lb-muted);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.footerLinks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 32px 24px;
+}
+
+.footerLinks > div {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+}
+
+.footerLinks strong {
+  margin-bottom: 10px;
+  color: var(--lb-ink);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.footerLinks a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  color: var(--lb-body);
+  font-size: 0.875rem;
+  text-decoration: none;
+  transition: color 160ms ease;
+}
+
+.footerLinks a:hover {
+  color: var(--lb-blue-hover);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.footerBottom {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  align-items: center;
+  justify-content: space-between;
+  max-width: var(--lb-max);
+  margin-inline: auto;
+  padding: 20px var(--lb-gutter);
+  border-top: 1px solid var(--lb-line);
+  color: var(--lb-muted);
+  font-size: 0.8125rem;
+}

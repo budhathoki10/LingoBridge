@@ -10,7 +10,7 @@ export function Brand({ href }: { href?: string }) {
     </>
   );
   return href ? (
-    <Link aria-label="LingoBridge overview" className="brand" href={href}>
+    <Link aria-label="LingoBridge home" className="brand" href={href}>
       {content}
     </Link>
   ) : (
