@@ -158,6 +158,10 @@
   border-top: 1px solid var(--border-subtle);
 }
 
+.sidebar__store {
+  width: 100%;
+}
+
 .search-trigger {
   display: flex;
   width: 100%;

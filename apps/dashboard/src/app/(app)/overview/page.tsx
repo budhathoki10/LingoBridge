@@ -1,9 +1,10 @@
 import { getAccountOverview } from "@lingobridge/database";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRightIcon } from "@/components/icons";
+import { ArrowRightIcon, BrowserIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { formatDate, formatRelative, languageName, plural, providerLabel } from "@/lib/format";
+import { CHROME_WEB_STORE_URL } from "@/lib/links";
 import { requirePageSession } from "@/server/page-session";
 
 export const metadata: Metadata = { title: "Overview" };
@@ -52,6 +53,17 @@ export default async function OverviewPage() {
                 </span>
               </li>
             </ol>
+          </div>
+          <div className="card__footer">
+            <a
+              className="button button--primary"
+              href={CHROME_WEB_STORE_URL}
+              rel="noreferrer"
+              target="_blank"
+            >
+              <BrowserIcon size={16} />
+              Add LingoBridge to Chrome
+            </a>
           </div>
         </section>
       )}

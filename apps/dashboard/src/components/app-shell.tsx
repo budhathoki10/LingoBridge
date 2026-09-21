@@ -13,6 +13,7 @@ import {
 } from "react";
 import {
   AdminIcon,
+  BrowserIcon,
   CloseIcon,
   DownloadIcon,
   ExtensionsIcon,
@@ -27,6 +28,7 @@ import {
 } from "./icons";
 import { Brand } from "./brand";
 import { DashboardProviders } from "./providers";
+import { CHROME_WEB_STORE_URL } from "@/lib/links";
 
 interface NavItem {
   href: string;
@@ -114,6 +116,21 @@ function AccountFooter({ csrfToken, user }: { csrfToken: string; user: ShellUser
         </button>
       </form>
     </div>
+  );
+}
+
+function ChromeStoreLink({ onNavigate }: { onNavigate?: () => void }) {
+  return (
+    <a
+      className="button button--primary button--small sidebar__store"
+      href={CHROME_WEB_STORE_URL}
+      onClick={onNavigate}
+      rel="noreferrer"
+      target="_blank"
+    >
+      <BrowserIcon size={16} />
+      Add to browser
+    </a>
   );
 }
 
@@ -300,6 +317,15 @@ export function AppShell({
       ...navigate,
       {
         group: "Actions",
+        id: "add-to-chrome",
+        keywords: "install browser extension chrome web store",
+        label: "Add LingoBridge to Chrome",
+        run: () => {
+          window.open(CHROME_WEB_STORE_URL, "_blank", "noopener,noreferrer");
+        },
+      },
+      {
+        group: "Actions",
         id: "export-phrases",
         keywords: "download excel spreadsheet xlsx backup",
         label: "Export saved phrases (Excel)",
@@ -358,6 +384,7 @@ export function AppShell({
           {searchTrigger}
           <Navigation isAdmin={user.isAdmin} />
           <div className="sidebar__footer">
+            <ChromeStoreLink />
             <a className="nav__link" href="/api/dashboard/export?scope=phrases">
               <DownloadIcon size={16} />
               Export phrases
@@ -418,6 +445,7 @@ export function AppShell({
             </div>
             <Navigation isAdmin={user.isAdmin} onNavigate={closeDrawer} />
             <div className="sidebar__footer">
+              <ChromeStoreLink onNavigate={closeDrawer} />
               <AccountFooter csrfToken={csrfToken} user={user} />
             </div>
           </div>

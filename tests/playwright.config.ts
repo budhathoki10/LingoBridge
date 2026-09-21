@@ -35,6 +35,7 @@ export default defineConfig({
         DATABASE_NAME: "",
         DATABASE_URL: "",
         LINGOBRIDGE_ADMIN_EMAILS: "admin@example.test",
+        LINGOBRIDGE_ALLOWED_EXTENSION_IDS: "*",
         LINGOBRIDGE_AUTH_MODE: "development",
         LINGOBRIDGE_DASHBOARD_ORIGIN: "http://127.0.0.1:3000",
         LINGOBRIDGE_EMBEDDED_DATABASE_DIR: "memory",

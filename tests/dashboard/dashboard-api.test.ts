@@ -125,6 +125,7 @@ describe("protected route boundary", () => {
     const response = proxy(new NextRequest(`${DASHBOARD_ORIGIN}/sign-in`));
     const policy = response.headers.get("Content-Security-Policy") ?? "";
     expect(policy).toMatch(/script-src 'self' 'nonce-[A-Za-z0-9+/=]+' 'strict-dynamic'/u);
+    expect(policy).toContain("frame-src https://www.youtube-nocookie.com");
     expect(policy).toContain("frame-ancestors 'none'");
     expect(policy).toContain("object-src 'none'");
     expect(buildContentSecurityPolicy("n", false)).not.toContain("unsafe");
