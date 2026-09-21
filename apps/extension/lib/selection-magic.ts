@@ -17,7 +17,7 @@ export interface SelectionMagicSettings {
 
 export const DEFAULT_SELECTION_MAGIC_SETTINGS: SelectionMagicSettings = {
   disabledOrigins: [],
-  enabled: false,
+  enabled: true,
 };
 
 export type SelectionRejectionReason =

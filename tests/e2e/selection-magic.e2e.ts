@@ -12,8 +12,26 @@ import {
 
 const testsDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const extensionPath = path.resolve(testsDirectory, "../apps/extension/.output/chrome-mv3");
+const productionGatewayOrigin = "https://lingobridge-gateway-t9zx.onrender.com";
+const localGatewayOrigin = "http://127.0.0.1:8787";
 const fixtureUrl = "http://127.0.0.1:8787/v1/health";
 const hostSelector = "lingobridge-selection-root";
+
+async function launchExtensionContext(): Promise<BrowserContext> {
+  const context = await chromium.launchPersistentContext("", {
+    channel: "chromium",
+    headless: true,
+    args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`],
+  });
+  await context.route(`${productionGatewayOrigin}/**`, async (route) => {
+    const requested = new URL(route.request().url());
+    const response = await route.fetch({
+      url: `${localGatewayOrigin}${requested.pathname}${requested.search}`,
+    });
+    await route.fulfill({ response });
+  });
+  return context;
+}
 
 async function extensionWorker(context: BrowserContext): Promise<Worker> {
   return context.serviceWorkers()[0] ?? context.waitForEvent("serviceworker");
@@ -153,11 +171,7 @@ async function localLanguagePreferences(worker: Worker): Promise<{
 test("favorite targets can be pinned and switched without sending any text", async ({
   browserName: _browserName,
 }, testInfo) => {
-  const context = await chromium.launchPersistentContext("", {
-    channel: "chromium",
-    headless: true,
-    args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`],
-  });
+  const context = await launchExtensionContext();
   try {
     const worker = await extensionWorker(context);
     await configureSelectionMagic(worker);
@@ -257,11 +271,7 @@ test("favorite targets can be pinned and switched without sending any text", asy
 test("select -> magic icon -> click -> preferred-language translation", async ({
   browserName: _browserName,
 }, testInfo) => {
-  const context = await chromium.launchPersistentContext("", {
-    channel: "chromium",
-    headless: true,
-    args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`],
-  });
+  const context = await launchExtensionContext();
 
   try {
     const worker = await extensionWorker(context);
@@ -273,7 +283,7 @@ test("select -> magic icon -> click -> preferred-language translation", async ({
       expect.arrayContaining([
         expect.objectContaining({
           id: "lingobridge-selection-magic",
-          matches: expect.arrayContaining(["http://127.0.0.1:8787/*"]),
+          matches: expect.arrayContaining(["http://*/*", "https://*/*"]),
         }),
       ]),
     );
@@ -348,11 +358,7 @@ test("select -> magic icon -> click -> preferred-language translation", async ({
 });
 
 test("a new selection cancels the previous request and replaces the surface", async () => {
-  const context = await chromium.launchPersistentContext("", {
-    channel: "chromium",
-    headless: true,
-    args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`],
-  });
+  const context = await launchExtensionContext();
 
   try {
     const worker = await extensionWorker(context);
@@ -383,11 +389,7 @@ test("a new selection cancels the previous request and replaces the surface", as
 });
 
 test("forbidden and sensitive selections never send silently", async () => {
-  const context = await chromium.launchPersistentContext("", {
-    channel: "chromium",
-    headless: true,
-    args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`],
-  });
+  const context = await launchExtensionContext();
 
   try {
     const worker = await extensionWorker(context);
@@ -434,27 +436,29 @@ test("forbidden and sensitive selections never send silently", async () => {
   }
 });
 
-test("popup remains usable at its 200-percent-zoom width without webpage permission", async ({
+test("popup remains usable at its 200-percent-zoom width with automatic webpage access", async ({
   browserName: _browserName,
 }, testInfo) => {
-  const context = await chromium.launchPersistentContext("", {
-    channel: "chromium",
-    headless: true,
-    args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`],
-  });
+  const context = await launchExtensionContext();
 
   try {
     const worker = await extensionWorker(context);
     const extensionId = new URL(worker.url()).host;
-    const registrations = await worker.evaluate(async () =>
-      chrome.scripting.getRegisteredContentScripts(),
-    );
-    expect(registrations).toEqual([]);
+    await expect
+      .poll(() =>
+        worker.evaluate(async () => {
+          const registrations = await chrome.scripting.getRegisteredContentScripts();
+          return registrations.find(
+            (registration) => registration.id === "lingobridge-selection-magic",
+          )?.matches;
+        }),
+      )
+      .toEqual(expect.arrayContaining(["http://*/*", "https://*/*"]));
 
     const page = await context.newPage();
     await page.setViewportSize({ height: 500, width: 190 });
     await page.goto(`chrome-extension://${extensionId}/popup.html`);
-    // Chrome's own pages cannot be granted, so the popup shows only the brand and dashboard card.
+    // Chrome's own pages cannot host the overlay, so the popup hides the site-specific control.
     await expect(page.getByRole("button", { name: "Connect dashboard" })).toBeVisible();
     await expect(page.locator(".site-access")).toHaveCount(0);
     await expect(page.getByText("Saved phrases")).toHaveCount(0);

@@ -16,6 +16,17 @@ import {
 } from "../../apps/extension/lib/selection-magic";
 
 describe("Selection Magic settings and permissions", () => {
+  it("starts enabled on a fresh installation but preserves an explicit global opt-out", () => {
+    expect(normalizeSelectionMagicSettings(undefined)).toEqual({
+      disabledOrigins: [],
+      enabled: true,
+    });
+    expect(normalizeSelectionMagicSettings({ disabledOrigins: [], enabled: false })).toEqual({
+      disabledOrigins: [],
+      enabled: false,
+    });
+  });
+
   it("normalizes settings and rejects non-web origins", () => {
     expect(
       normalizeSelectionMagicSettings({

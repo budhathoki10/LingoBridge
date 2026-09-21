@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { GATEWAY_ORIGIN } from "../../lib/gateway-config";
 import {
   ALL_SITE_PATTERNS,
-  DEFAULT_SELECTION_MAGIC_SETTINGS,
-  isPageMatchPattern,
   loadSelectionMagicSettings,
   originToMatchPattern,
   pageOriginFromUrl,
@@ -119,17 +116,11 @@ export function SelectionMagicCard() {
 
   function turnOff(): void {
     if (state.kind !== "ready") return;
-    void apply(async () => {
-      await saveSelectionMagicSettings(DEFAULT_SELECTION_MAGIC_SETTINGS);
-      const permissions = await browser.permissions.getAll();
-      const gatewayPattern = originToMatchPattern(GATEWAY_ORIGIN);
-      const removable = (permissions.origins ?? []).filter(
-        (pattern) => isPageMatchPattern(pattern) && pattern !== gatewayPattern,
-      );
-      if (removable.length > 0) {
-        await browser.permissions.remove({ origins: removable });
-      }
-    }, "Selection Magic couldn’t be turned off completely.");
+    void apply(
+      () =>
+        saveSelectionMagicSettings({ disabledOrigins: [], enabled: false }).then(() => undefined),
+      "Selection Magic couldn’t be turned off completely.",
+    );
   }
 
   if (state.kind === "loading") return null;

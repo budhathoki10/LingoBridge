@@ -6,7 +6,7 @@
 2. LingoBridge suggests a target from the browser language and asks the user to confirm it.
 3. LingoBridge explains two processing choices: On-device and Online.
 4. The user can start with pasted text without granting page access.
-5. LingoBridge offers Selection Magic and recommends current-site access first. All-site access remains an optional explained choice.
+5. Selection Magic is available on ordinary websites immediately after installation. Chrome shows the declared site-access warning, and LingoBridge explains that selecting text sends nothing until the nearby icon is clicked.
 6. Signing in is optional. Translation and local saved phrases work without an account; sign-in is offered only for dashboard access and deliberate cross-device sync.
 
 ## Enable On-device translation
@@ -29,7 +29,7 @@
 8. Escape or Close dismisses it. Selecting different text replaces it rather than stacking another translator.
 9. The temporary source text expires when the surface closes or after a short timeout.
 
-If Selection Magic lacks site access, LingoBridge does nothing silently until the user invokes the context menu, shortcut, or popup. It never tricks the user into believing selection access is active.
+If Chrome restricts access on a site, or the user disables Selection Magic there, LingoBridge does nothing silently until the user invokes the context menu, shortcut, or popup. Restricted browser pages such as `chrome://` pages and the Chrome Web Store cannot host the overlay.
 
 ## Translate writing
 

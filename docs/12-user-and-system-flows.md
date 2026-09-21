@@ -47,24 +47,17 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A[Install LingoBridge] --> B[Choose preferred target language]
+    A[Install LingoBridge and review Chrome site-access warning] --> B[Choose preferred target language]
     B --> C[Explain On-device and Online processing]
-    C --> D[Popup translation works without page access]
-    D --> E{Enable Selection Magic?}
+    C --> D[Explain that Selection Magic observes only completed selections]
+    D --> E{Selection Magic enabled?}
     E -- No --> F[Use popup, shortcut, or context menu]
-    E -- Yes --> G[Explain what site access allows]
-    G --> H{Access choice}
-    H -- Recommended: current site --> I[Request current-origin permission]
-    H -- Optional: all normal sites --> J[Request optional HTTP and HTTPS access]
-    I --> K{Chrome permission granted?}
-    J --> K
-    K -- No --> F
-    K -- Yes --> L[Activate lightweight selection observer]
+    E -- Yes --> L[Activate lightweight selection observer on ordinary websites]
     L --> M[Offer separate Online processing consent]
     M --> N[Selection Magic ready]
 ```
 
-The permission and online-processing decisions are separate. Site access lets LingoBridge validate the active selection and show the magic icon. Clicking the icon is required before detection or translation starts, and Online consent separately controls whether the selected text may be sent to a provider.
+Site access and online-processing consent remain separate. Declared site access lets LingoBridge validate the active selection and show the magic icon across ordinary websites. Clicking the icon is required before detection or translation starts, and Online consent separately controls whether the selected text may be sent to a provider.
 
 ## 2A. Explicit On-device preparation flow
 

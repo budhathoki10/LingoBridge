@@ -25,6 +25,8 @@ export interface DashboardConfig {
 }
 
 const EXTENSION_ID = /^[a-p]{32}$/u;
+const DEVELOPMENT_GATEWAY_URL = "http://127.0.0.1:8787";
+const PRODUCTION_GATEWAY_URL = "https://lingobridge-gateway-t9zx.onrender.com";
 
 function list(value: string | undefined): string[] {
   return (value ?? "")
@@ -133,10 +135,10 @@ export function loadDashboardConfig(environment: DashboardEnvironment): Dashboar
       databaseUrl || environment.LINGOBRIDGE_EMBEDDED_DATABASE_DIR?.trim() === "memory"
         ? null
         : environment.LINGOBRIDGE_EMBEDDED_DATABASE_DIR?.trim() || ".data/mongodb",
-    gatewayUrl: (environment.LINGOBRIDGE_GATEWAY_URL?.trim() || "http://127.0.0.1:8787").replace(
-      /\/$/u,
-      "",
-    ),
+    gatewayUrl: (
+      environment.LINGOBRIDGE_GATEWAY_URL?.trim() ||
+      (production ? PRODUCTION_GATEWAY_URL : DEVELOPMENT_GATEWAY_URL)
+    ).replace(/\/$/u, ""),
     oidc:
       authMode === "oidc"
         ? {

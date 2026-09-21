@@ -20,7 +20,10 @@ export default defineConfig({
     {
       command: "pnpm --filter @lingobridge/gateway start",
       cwd: path.resolve(testsDirectory, ".."),
-      env: { LINGOBRIDGE_OPERATIONS_METRICS_TOKEN: E2E_METRICS_TOKEN },
+      env: {
+        LINGOBRIDGE_OPERATIONS_METRICS_TOKEN: E2E_METRICS_TOKEN,
+        LINGOBRIDGE_TRANSLATION_MODE: "fake",
+      },
       reuseExistingServer: !process.env.CI,
       timeout: 20_000,
       url: "http://127.0.0.1:8787/v1/health",

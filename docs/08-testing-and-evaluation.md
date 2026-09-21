@@ -12,7 +12,7 @@
 - Selection translation on static pages, dynamic pages, nested elements, and editable fields.
 - Pointer, keyboard, touchpad, double-click, drag, select-all, rapidly changing, repeated, and collapsed selection behaviour.
 - Overlay positioning near every viewport edge, during scroll, resize, zoom, and page navigation.
-- Current-site access, all-site access, revoked access, disabled site, restricted Chrome page, and iframe behaviour.
+- Install-time all-site access, Chrome-managed restriction, globally disabled access, per-site disable, restricted Chrome page, and iframe behaviour.
 - Capability refresh, stale cached catalogue, removed languages, search, favourites, native names, and language swap.
 - Dashboard sign-in, sign-out, extension connection, per-installation revocation, and expired-session recovery.
 - Local-only save, offline save, first sync, idempotent retry, note edit, deletion tombstone, conflict, reconnect, export, and account deletion.
@@ -105,7 +105,7 @@ The extension's locally pinned target-language controls pass five focused prefer
 - Repository quality gate: formatting, lint, all workspace type-checks, and 103 unit/integration tests pass.
 - Bundled Chromium: four journeys pass, covering the click gate and preferred target, hostile CSS and responsive positioning, in-flight cancellation and replacement, password exclusion, sensitive-text confirmation, Escape, per-site disable, and popup translation without webpage access.
 - Production builds pass for the contracts, database, dashboard, gateway, and Chrome Manifest V3 extension.
-- The generated manifest has optional HTTP/HTTPS host permissions and no static `content_scripts` entry. Package scanning found no provider API key or private-key material.
+- The generated manifest has required HTTP/HTTPS host permissions, no static `content_scripts` entry, and no unrelated sensitive permissions. Package scanning found no provider API key or private-key material.
 - Credentialed NVIDIA and Google provider smoke tests remain deployment evidence; Phase 5 browser validation used the deterministic fake gateway and therefore did not transmit selected text to an external provider.
 
 ### Phase 8 local evidence — 14 September 2026
