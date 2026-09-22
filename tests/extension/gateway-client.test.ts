@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createGatewayClient,
   type GatewayClientError,
@@ -47,6 +47,105 @@ describe("extension gateway client", () => {
     expect(snapshot.capabilities.languages.some((language) => language.code === "es")).toBe(true);
     expect(result.translatedText).toBe("Thank you");
     expect(result.requestId).toBe(request.requestId);
+  });
+
+  it("retries a body the gateway did not write, then reports an unreachable service", async () => {
+    let attempts = 0;
+    const client = createGatewayClient({
+      baseUrl: "https://gateway.example",
+      fetcher: async () => {
+        attempts += 1;
+        return new Response("<html>Service Unavailable</html>", {
+          headers: { "Content-Type": "text/html" },
+          status: 503,
+        });
+      },
+      installationIdProvider: async () => "51e8bfee-b285-46ba-928c-44e914935634",
+    });
+
+    vi.useFakeTimers();
+    try {
+      const pending = client.translate(request, new AbortController().signal);
+      const settled = expect(pending).rejects.toMatchObject({
+        code: "network-unavailable",
+        name: "GatewayClientError",
+        retryable: true,
+      } satisfies Partial<GatewayClientError>);
+      await vi.advanceTimersByTimeAsync(10_000);
+      await settled;
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(attempts).toBe(4);
+  });
+
+  it("recovers when the gateway answers a later attempt", async () => {
+    let attempts = 0;
+    const client = createGatewayClient({
+      baseUrl: "https://gateway.example",
+      fetcher: async (input, init) => {
+        attempts += 1;
+        if (attempts === 1) return new Response("502 Bad Gateway", { status: 502 });
+        return appFetcher()(input, init);
+      },
+      installationIdProvider: async () => "51e8bfee-b285-46ba-928c-44e914935634",
+    });
+
+    vi.useFakeTimers();
+    try {
+      const pending = client.translate(request, new AbortController().signal);
+      const settled = expect(pending).resolves.toMatchObject({ translatedText: "Thank you" });
+      await vi.advanceTimersByTimeAsync(10_000);
+      await settled;
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(attempts).toBe(2);
+  });
+
+  it("surfaces a gateway error without spending a second provider call", async () => {
+    let attempts = 0;
+    const client = createGatewayClient({
+      baseUrl: "https://gateway.example",
+      fetcher: async () => {
+        attempts += 1;
+        return Response.json(
+          {
+            code: "provider-unavailable",
+            message: "The translation provider is temporarily unavailable.",
+            requestId: request.requestId,
+            retryable: true,
+          },
+          { status: 503 },
+        );
+      },
+      installationIdProvider: async () => "51e8bfee-b285-46ba-928c-44e914935634",
+    });
+
+    await expect(client.translate(request, new AbortController().signal)).rejects.toMatchObject({
+      code: "provider-unavailable",
+      name: "GatewayClientError",
+    } satisfies Partial<GatewayClientError>);
+    expect(attempts).toBe(1);
+  });
+
+  it("stops retrying as soon as the caller aborts", async () => {
+    const controller = new AbortController();
+    let attempts = 0;
+    const client = createGatewayClient({
+      baseUrl: "https://gateway.example",
+      fetcher: async () => {
+        attempts += 1;
+        controller.abort();
+        return new Response("504 Gateway Timeout", { status: 504 });
+      },
+      installationIdProvider: async () => "51e8bfee-b285-46ba-928c-44e914935634",
+    });
+
+    await expect(client.translate(request, controller.signal)).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    expect(attempts).toBe(1);
   });
 
   it("rejects a success response that violates the result contract", async () => {
