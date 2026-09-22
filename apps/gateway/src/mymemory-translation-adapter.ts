@@ -9,6 +9,38 @@ export interface MyMemoryResponse {
   responseData?: { translatedText?: string | null } | null;
   responseDetails?: string | null;
   responseStatus?: number | string | null;
+  /** Seconds until this caller's quota window resets, from the `Retry-After` response header. */
+  retryAfterSeconds?: number | null;
+}
+
+/**
+ * Why a request failed, in provider terms. Content-free by construction: it carries MyMemory's
+ * own status fields and never the text that was being translated.
+ */
+export interface MyMemoryFailure {
+  detail: string | null;
+  httpStatus: number | null;
+  outcome: "empty" | "quota-exhausted" | "rejected" | "timeout" | "unreachable";
+  quotaFinished: boolean | null;
+  responseStatus: number | string | null;
+  retryAfterSeconds: number | null;
+}
+
+export interface MyMemoryClientOptions {
+  /**
+   * MyMemory's own private Translation Memory key, sent as `key`. Their spec describes it as
+   * granting "customized API limits", but whether it lifts the per-IP daily quota is not
+   * documented and could not be measured without exhausting that quota deliberately. It is sent
+   * when configured because it cannot hurt, not because it is known to help.
+   */
+  privateKey?: string | null;
+  rapidApiHost?: string;
+  /**
+   * Present only when a RapidAPI subscription is configured. It redirects the same API to the
+   * RapidAPI host, where the daily quota belongs to the subscribing account rather than to the
+   * egress IP address the instance happens to share.
+   */
+  rapidApiKey?: string | null;
 }
 
 export interface MyMemoryClient {
@@ -18,8 +50,33 @@ export interface MyMemoryClient {
   ): Promise<MyMemoryResponse>;
 }
 
-export function createMyMemoryClient(baseUrl: string): MyMemoryClient {
-  const endpoint = new URL("get", baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
+function readRetryAfterSeconds(response: Response): number | null {
+  const header = response.headers.get("Retry-After");
+  if (!header) return null;
+  const seconds = Number(header.trim());
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
+}
+
+export function createMyMemoryClient(
+  baseUrl: string,
+  options: MyMemoryClientOptions = {},
+): MyMemoryClient {
+  const privateKey = options.privateKey?.trim() || null;
+  const rapidApiKey = options.rapidApiKey?.trim() || null;
+  const rapidApiHost = options.rapidApiHost?.trim() || null;
+  // RapidAPI serves the same `/get` contract, so only the host and the auth headers change.
+  const endpoint =
+    rapidApiKey && rapidApiHost
+      ? new URL("get", `https://${rapidApiHost}/`)
+      : new URL("get", baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
+  const headers: Record<string, string> =
+    rapidApiKey && rapidApiHost
+      ? {
+          Accept: "application/json",
+          "X-RapidAPI-Host": rapidApiHost,
+          "X-RapidAPI-Key": rapidApiKey,
+        }
+      : { Accept: "application/json" };
 
   return {
     async translate(request, signal) {
@@ -28,26 +85,40 @@ export function createMyMemoryClient(baseUrl: string): MyMemoryClient {
       url.searchParams.set("langpair", `${request.sourceLanguage}|${request.targetLanguage}`);
       url.searchParams.set("de", request.contactEmail);
       url.searchParams.set("mt", "1");
+      if (privateKey) url.searchParams.set("key", privateKey);
 
-      const response = await fetch(url, { headers: { Accept: "application/json" }, signal });
+      const response = await fetch(url, { headers, signal });
       if (!response.ok) {
         throw Object.assign(new Error("MyMemory translation request failed."), {
           status: response.status,
         });
       }
-      return (await response.json()) as MyMemoryResponse;
+      const body = (await response.json()) as MyMemoryResponse;
+      return { ...body, retryAfterSeconds: readRetryAfterSeconds(response) };
     },
   };
+}
+
+function httpStatusOf(error: unknown): number | null {
+  const status =
+    error && typeof error === "object" && "status" in error
+      ? Reflect.get(error, "status")
+      : undefined;
+  return typeof status === "number" ? status : null;
+}
+
+/** Keeps a provider status line short enough to log without turning entries into prose. */
+function truncateDetail(detail: string | null | undefined): string | null {
+  const text = detail?.trim();
+  if (!text) return null;
+  return text.length > 200 ? `${text.slice(0, 200)}…` : text;
 }
 
 function providerError(error: unknown): TranslationAdapterError {
   if (error instanceof DOMException && error.name === "AbortError") {
     return new TranslationAdapterError("timeout", "MyMemory translation timed out.");
   }
-  const status =
-    error && typeof error === "object" && "status" in error
-      ? Reflect.get(error, "status")
-      : undefined;
+  const status = httpStatusOf(error) ?? undefined;
   const retryable =
     typeof status === "number" ? [408, 409, 429, 500, 502, 503, 504].includes(status) : true;
   return new TranslationAdapterError(
@@ -120,6 +191,11 @@ export class MyMemoryTranslationAdapter implements TranslationAdapter {
   constructor(
     private readonly client: MyMemoryClient,
     private readonly contactEmail: string,
+    /**
+     * Told why a request failed, so an outage names itself in the logs instead of arriving as a
+     * bare 503. Quota exhaustion and a rejected key are indistinguishable from the outside.
+     */
+    private readonly onFailure: (failure: MyMemoryFailure) => void = () => undefined,
   ) {}
 
   async translate(request: TranslationRequest, signal: AbortSignal) {
@@ -152,6 +228,14 @@ export class MyMemoryTranslationAdapter implements TranslationAdapter {
         );
         const text = successfulTranslation(response);
         if (!text) {
+          this.onFailure({
+            detail: truncateDetail(response.responseDetails),
+            httpStatus: 200,
+            outcome: response.quotaFinished ? "quota-exhausted" : "rejected",
+            quotaFinished: response.quotaFinished ?? null,
+            responseStatus: response.responseStatus ?? null,
+            retryAfterSeconds: response.retryAfterSeconds ?? null,
+          });
           throw new TranslationAdapterError(
             "provider-unavailable",
             response.quotaFinished
@@ -164,11 +248,28 @@ export class MyMemoryTranslationAdapter implements TranslationAdapter {
       }
     } catch (error) {
       if (error instanceof TranslationAdapterError) throw error;
-      throw providerError(error);
+      const failure = providerError(error);
+      this.onFailure({
+        detail: null,
+        httpStatus: httpStatusOf(error),
+        outcome: failure.code === "timeout" ? "timeout" : "unreachable",
+        quotaFinished: null,
+        responseStatus: null,
+        retryAfterSeconds: null,
+      });
+      throw failure;
     }
 
     const translatedText = translated.join("").trim();
     if (!translatedText) {
+      this.onFailure({
+        detail: null,
+        httpStatus: 200,
+        outcome: "empty",
+        quotaFinished: null,
+        responseStatus: null,
+        retryAfterSeconds: null,
+      });
       throw new TranslationAdapterError(
         "provider-unavailable",
         "MyMemory returned an empty translation.",

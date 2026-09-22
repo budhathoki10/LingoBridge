@@ -9,8 +9,31 @@ export interface GatewayRequestLog {
   status: number;
 }
 
+/**
+ * Why a provider call failed, in the provider's own status terms. It carries no translated text,
+ * so it stays inside the privacy boundary while making an outage diagnosable from the logs.
+ */
+export interface GatewayProviderLog {
+  detail: string | null;
+  event: "gateway.provider";
+  httpStatus: number | null;
+  outcome: string;
+  provider: "mymemory";
+  quotaFinished: boolean | null;
+  responseStatus: number | string | null;
+  retryAfterSeconds: number | null;
+}
+
 export interface GatewayLogger {
   info(event: GatewayRequestLog): void;
+}
+
+/**
+ * Provider failures are operator diagnostics rather than request audit, so they bypass the
+ * request logger and go straight to the console in the same one-line JSON shape.
+ */
+export function logProviderFailure(event: Omit<GatewayProviderLog, "event">): void {
+  console.info(JSON.stringify({ ...event, event: "gateway.provider" }));
 }
 
 export const consoleGatewayLogger: GatewayLogger = {

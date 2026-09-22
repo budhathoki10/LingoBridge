@@ -21,6 +21,9 @@ export interface GatewayRuntimeConfig {
   hostname: string;
   myMemoryBaseUrl: string;
   myMemoryContactEmail: string | null;
+  myMemoryPrivateKey: string | null;
+  myMemoryRapidApiHost: string;
+  myMemoryRapidApiKey: string | null;
   nvidiaApiKey: string | null;
   nvidiaBaseUrl: string;
   nvidiaMaxTokens: number;
@@ -57,6 +60,23 @@ function readMyMemoryContactEmail(environment: GatewayEnvironment): string | nul
     throw new Error("MYMEMORY_CONTACT_EMAIL must be a valid email address.");
   }
   return email;
+}
+
+/**
+ * MyMemory meters its free tier against the caller's IP address, and the email in `de` only
+ * raises that address's ceiling. A Render instance shares one egress address with every other
+ * free service on the host, so neighbouring traffic can exhaust the day's characters before a
+ * single request of ours arrives. A RapidAPI subscription key moves the quota onto the account
+ * that owns the key, which is the only way off the shared meter.
+ */
+const DEFAULT_MYMEMORY_RAPIDAPI_HOST = "mymemory-translation-memory1.p.rapidapi.com";
+
+function readMyMemoryRapidApiHost(environment: GatewayEnvironment): string {
+  const host = environment.MYMEMORY_RAPIDAPI_HOST?.trim() || DEFAULT_MYMEMORY_RAPIDAPI_HOST;
+  if (!/^[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)*\.rapidapi\.com$/u.test(host)) {
+    throw new Error("MYMEMORY_RAPIDAPI_HOST must be a rapidapi.com hostname.");
+  }
+  return host;
 }
 
 function readOptionalPositiveNumber(environment: GatewayEnvironment, name: string): number | null {
@@ -165,6 +185,11 @@ export function loadGatewayRuntimeConfig(environment: GatewayEnvironment): Gatew
     hostname: environment.HOST ?? "127.0.0.1",
     myMemoryBaseUrl: environment.MYMEMORY_BASE_URL ?? "https://api.mymemory.translated.net",
     myMemoryContactEmail: translationMode === "live" ? myMemoryContactEmail : null,
+    myMemoryPrivateKey:
+      translationMode === "live" ? environment.MYMEMORY_PRIVATE_KEY?.trim() || null : null,
+    myMemoryRapidApiHost: readMyMemoryRapidApiHost(environment),
+    myMemoryRapidApiKey:
+      translationMode === "live" ? environment.MYMEMORY_RAPIDAPI_KEY?.trim() || null : null,
     nvidiaApiKey: translationMode === "live" ? nvidiaApiKey : null,
     nvidiaBaseUrl: environment.NVIDIA_BASE_URL ?? "https://integrate.api.nvidia.com/v1",
     nvidiaMaxTokens: readPositiveInteger(environment, "NVIDIA_MAX_TOKENS", 2_048),
