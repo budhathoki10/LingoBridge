@@ -71,12 +71,12 @@ describe("extension gateway client", () => {
         name: "GatewayClientError",
         retryable: true,
       } satisfies Partial<GatewayClientError>);
-      await vi.advanceTimersByTimeAsync(10_000);
+      await vi.advanceTimersByTimeAsync(60_000);
       await settled;
     } finally {
       vi.useRealTimers();
     }
-    expect(attempts).toBe(4);
+    expect(attempts).toBe(6);
   });
 
   it("recovers when the gateway answers a later attempt", async () => {
@@ -95,7 +95,7 @@ describe("extension gateway client", () => {
     try {
       const pending = client.translate(request, new AbortController().signal);
       const settled = expect(pending).resolves.toMatchObject({ translatedText: "Thank you" });
-      await vi.advanceTimersByTimeAsync(10_000);
+      await vi.advanceTimersByTimeAsync(60_000);
       await settled;
     } finally {
       vi.useRealTimers();
