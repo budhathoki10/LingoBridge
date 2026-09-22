@@ -128,7 +128,7 @@ services:
       # Used only when MYMEMORY_RAPIDAPI_KEY is set. Copy it from the RapidAPI
       # console's code snippet (the X-RapidAPI-Host header) if the listing moves.
       - key: MYMEMORY_RAPIDAPI_HOST
-        value: mymemory-translation-memory1.p.rapidapi.com
+        value: translated-mymemory---translation-memory.p.rapidapi.com
 
       - key: NVIDIA_BASE_URL
         value: https://integrate.api.nvidia.com/v1

@@ -69,7 +69,7 @@ function readMyMemoryContactEmail(environment: GatewayEnvironment): string | nul
  * single request of ours arrives. A RapidAPI subscription key moves the quota onto the account
  * that owns the key, which is the only way off the shared meter.
  */
-const DEFAULT_MYMEMORY_RAPIDAPI_HOST = "mymemory-translation-memory1.p.rapidapi.com";
+const DEFAULT_MYMEMORY_RAPIDAPI_HOST = "translated-mymemory---translation-memory.p.rapidapi.com";
 
 function readMyMemoryRapidApiHost(environment: GatewayEnvironment): string {
   const host = environment.MYMEMORY_RAPIDAPI_HOST?.trim() || DEFAULT_MYMEMORY_RAPIDAPI_HOST;

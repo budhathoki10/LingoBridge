@@ -136,7 +136,7 @@ describe("MyMemoryTranslationAdapter", () => {
     };
     try {
       const client = createMyMemoryClient("https://api.mymemory.translated.net", {
-        rapidApiHost: "mymemory-translation-memory1.p.rapidapi.com",
+        rapidApiHost: "translated-mymemory---translation-memory.p.rapidapi.com",
         rapidApiKey: "rapid-key",
       });
       const response = await client.translate(
@@ -155,10 +155,12 @@ describe("MyMemoryTranslationAdapter", () => {
 
     const call = calls[0];
     if (!call) throw new Error("Expected one MyMemory request.");
-    expect(call.url.host).toBe("mymemory-translation-memory1.p.rapidapi.com");
+    expect(call.url.host).toBe("translated-mymemory---translation-memory.p.rapidapi.com");
     expect(call.url.pathname).toBe("/get");
     expect(call.headers.get("X-RapidAPI-Key")).toBe("rapid-key");
-    expect(call.headers.get("X-RapidAPI-Host")).toBe("mymemory-translation-memory1.p.rapidapi.com");
+    expect(call.headers.get("X-RapidAPI-Host")).toBe(
+      "translated-mymemory---translation-memory.p.rapidapi.com",
+    );
     // The contact email still goes out, so the consent disclosure stays accurate.
     expect(call.url.searchParams.get("de")).toBe("owner@example.com");
   });
@@ -175,7 +177,7 @@ describe("MyMemoryTranslationAdapter", () => {
     };
     try {
       await createMyMemoryClient("https://api.mymemory.translated.net", {
-        rapidApiHost: "mymemory-translation-memory1.p.rapidapi.com",
+        rapidApiHost: "translated-mymemory---translation-memory.p.rapidapi.com",
         rapidApiKey: "   ",
       }).translate(
         {
