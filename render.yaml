@@ -23,6 +23,24 @@ services:
     region: oregon
     branch: main
 
+    # Only redeploy when something the gateway is built from actually changed.
+    #
+    # Without this, every merge to main restarts the instance, including merges that
+    # touch nothing but the extension or the dashboard. A restart takes the service
+    # off the air for about twenty seconds, and during that window the host answers
+    # requests with its own error page rather than the gateway. An extension-only
+    # change was measured causing exactly that outage on 2026-09-22, twenty-five
+    # seconds after the merge.
+    buildFilter:
+      paths:
+        - apps/gateway/**
+        - packages/contracts/**
+        - render.yaml
+        - package.json
+        - pnpm-lock.yaml
+        - pnpm-workspace.yaml
+        - tsconfig.base.json
+
     # Install only the gateway and its one workspace dependency, @lingobridge/contracts.
     # Do NOT use `pnpm build:packages` here: that also builds database and auth, which
     # this filtered install deliberately leaves out, so it would fail on a missing tsc.

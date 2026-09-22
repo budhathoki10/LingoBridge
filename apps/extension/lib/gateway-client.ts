@@ -87,11 +87,16 @@ function endpoint(baseUrl: string, route: string): string {
 /**
  * How long to wait before each retry. The hosted gateway runs on an instance that sleeps when
  * idle and is swapped out on every deploy, and during those windows the host answers with its
- * own error page instead of the gateway. That window closes in seconds, so the panel waits it
- * out rather than reporting an outage the user cannot act on.
+ * own error page instead of the gateway.
+ *
+ * The budget is set from a measured restart: a deploy on 2026-09-22 took 21 seconds from
+ * "Deploying" to "service is live", and the host warns that waking a sleeping instance can add
+ * 50 seconds. These delays total 35 seconds over six attempts, which covers a restart and most
+ * of a wake-up. Longer would outlast the patience the panel's spinner can ask for, and the user
+ * can close the panel to abort at any point.
  */
-const RETRY_DELAYS_MS = [600, 2000, 5000];
-
+const RETRY_DELAYS_MS = [1000, 3000, 6000, 10_000, 15_000];
+  
 /** A body the gateway did not write. Every gateway answer, including its errors, is JSON. */
 const NOT_JSON = Symbol("not-json");
 
