@@ -96,7 +96,7 @@ function endpoint(baseUrl: string, route: string): string {
  * can close the panel to abort at any point.
  */
 const RETRY_DELAYS_MS = [1000, 3000, 6000, 10_000, 15_000];
-  
+
 /** A body the gateway did not write. Every gateway answer, including its errors, is JSON. */
 const NOT_JSON = Symbol("not-json");
 
