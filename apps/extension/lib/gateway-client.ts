@@ -84,15 +84,71 @@ function endpoint(baseUrl: string, route: string): string {
   return new URL(route, `${baseUrl.replace(/\/$/u, "")}/`).toString();
 }
 
-async function parseJson(response: Response): Promise<unknown> {
+/**
+ * How long to wait before each retry. The hosted gateway runs on an instance that sleeps when
+ * idle and is swapped out on every deploy, and during those windows the host answers with its
+ * own error page instead of the gateway. That window closes in seconds, so the panel waits it
+ * out rather than reporting an outage the user cannot act on.
+ */
+const RETRY_DELAYS_MS = [600, 2000, 5000];
+
+/** A body the gateway did not write. Every gateway answer, including its errors, is JSON. */
+const NOT_JSON = Symbol("not-json");
+
+function abortError(): DOMException {
+  return new DOMException("The gateway request was aborted.", "AbortError");
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+function delay(milliseconds: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(abortError());
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(abortError());
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, milliseconds);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+function isLocalGateway(baseUrl: string): boolean {
+  try {
+    const { hostname } = new URL(baseUrl);
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Raised when nothing answered, or when something other than the gateway did. The local hint
+ * would be nonsense against the hosted gateway, which the user cannot start.
+ */
+function unreachable(baseUrl: string): GatewayClientError {
+  return new GatewayClientError(
+    "network-unavailable",
+    isLocalGateway(baseUrl)
+      ? "The local LingoBridge gateway is not running. Start it with pnpm dev:gateway."
+      : "LingoBridge could not reach the translation service. It may still be waking up, so try again in a moment.",
+    true,
+  );
+}
+
+async function parseJson(response: Response): Promise<unknown | typeof NOT_JSON> {
   try {
     return await response.json();
   } catch {
-    throw new GatewayClientError(
-      "invalid-response",
-      "The gateway returned a response that was not valid JSON.",
-      true,
-    );
+    return NOT_JSON;
   }
 }
 
@@ -118,54 +174,59 @@ export function createGatewayClient(options: GatewayClientOptions = {}): Gateway
   const fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
   const installationIdProvider = options.installationIdProvider ?? getAnonymousInstallationId;
 
-  async function get(route: string, signal?: AbortSignal): Promise<unknown> {
-    let response: Response;
+  /**
+   * Sends one request, retrying only the failures that mean the gateway never answered: a
+   * transport error, or a body it did not write. A JSON error from the gateway is its own
+   * verdict and is surfaced at once, so a retry can never spend provider quota twice.
+   */
+  async function requestJson(
+    route: string,
+    init: { body?: string; headers?: Record<string, string>; method: "GET" | "POST" },
+    signal?: AbortSignal,
+  ): Promise<unknown> {
+    for (let attempt = 0; ; attempt += 1) {
+      const retryDelay = RETRY_DELAYS_MS[attempt];
+      let response: Response;
+      try {
+        const installationId = await installationIdProvider();
+        response = await fetcher(endpoint(baseUrl, route), {
+          ...init,
+          headers: { ...init.headers, [ANONYMOUS_INSTALLATION_HEADER]: installationId },
+          signal,
+        });
+      } catch (error) {
+        if (isAbortError(error)) throw error;
+        if (retryDelay === undefined) throw unreachable(baseUrl);
+        await delay(retryDelay, signal);
+        continue;
+      }
 
-    try {
-      const installationId = await installationIdProvider();
-      response = await fetcher(endpoint(baseUrl, route), {
-        headers: { [ANONYMOUS_INSTALLATION_HEADER]: installationId },
-        method: "GET",
-        signal,
-      });
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") throw error;
-      throw new GatewayClientError(
-        "network-unavailable",
-        "The local LingoBridge gateway is not running. Start it with pnpm dev:gateway.",
-        true,
-      );
+      const payload = await parseJson(response);
+      if (payload === NOT_JSON) {
+        if (retryDelay === undefined) throw unreachable(baseUrl);
+        await delay(retryDelay, signal);
+        continue;
+      }
+
+      if (!response.ok) throw requestFailure(payload, response);
+      return payload;
     }
+  }
 
-    const payload = await parseJson(response);
-    if (!response.ok) throw requestFailure(payload, response);
-    return payload;
+  async function get(route: string, signal?: AbortSignal): Promise<unknown> {
+    return requestJson(route, { method: "GET" }, signal);
   }
 
   async function post(route: string, body: unknown, signal: AbortSignal): Promise<unknown> {
-    let response: Response;
-    try {
-      const installationId = await installationIdProvider();
-      response = await fetcher(endpoint(baseUrl, route), {
+    return requestJson(
+      route,
+      {
         body: JSON.stringify(body),
-        headers: {
-          "Content-Type": "application/json",
-          [ANONYMOUS_INSTALLATION_HEADER]: installationId,
-        },
+        headers: { "Content-Type": "application/json" },
         method: "POST",
-        signal,
-      });
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") throw error;
-      throw new GatewayClientError(
-        "network-unavailable",
-        "The local LingoBridge gateway is not running. Start it with pnpm dev:gateway.",
-        true,
-      );
-    }
-    const payload = await parseJson(response);
-    if (!response.ok) throw requestFailure(payload, response);
-    return payload;
+      },
+      signal,
+    );
   }
 
   async function getCapabilities(signal?: AbortSignal): Promise<CapabilityCatalogue> {
