@@ -8,6 +8,7 @@ import { FakeExplanationAdapter } from "./fake-explanation-adapter.js";
 import { FakeTranslationAdapter } from "./fake-translation-adapter.js";
 import { FallbackExplanationAdapter } from "./fallback-explanation-adapter.js";
 import { FileCapabilityCatalogueStore } from "./file-capability-catalogue-store.js";
+import { logProviderFailure } from "./gateway-logger.js";
 import { GoogleCapabilitySource } from "./google-capability-source.js";
 import { createGoogleCloudClient } from "./google-translation-adapter.js";
 import {
@@ -29,7 +30,11 @@ import { MyMemoryPrimaryProviderRouter } from "./provider-router.js";
 const config = loadGatewayRuntimeConfig(process.env);
 const liveProjectId = config.translationMode === "live" ? config.googleProjectId : null;
 const googleClient = liveProjectId ? createGoogleCloudClient() : null;
-const myMemoryClient = createMyMemoryClient(config.myMemoryBaseUrl);
+const myMemoryClient = createMyMemoryClient(config.myMemoryBaseUrl, {
+  privateKey: config.myMemoryPrivateKey,
+  rapidApiHost: config.myMemoryRapidApiHost,
+  rapidApiKey: config.myMemoryRapidApiKey,
+});
 const myMemoryContactEmail = config.myMemoryContactEmail;
 const nvidiaClient = config.nvidiaApiKey
   ? createNvidiaTranslationClient({
@@ -42,7 +47,9 @@ const translationAdapter =
   config.translationMode === "live" && nvidiaClient && myMemoryContactEmail
     ? new MyMemoryPrimaryProviderRouter({
         myMemory: observeTranslationAdapter(
-          new MyMemoryTranslationAdapter(myMemoryClient, myMemoryContactEmail),
+          new MyMemoryTranslationAdapter(myMemoryClient, myMemoryContactEmail, (failure) =>
+            logProviderFailure({ ...failure, provider: "mymemory" }),
+          ),
           "mymemory",
           operationsMetrics,
         ),

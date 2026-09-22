@@ -69,7 +69,7 @@ Use when the browser supports the source-target pair. Benefits include local pro
 
 Use LingoBridge's gateway for active-catalogue pairs absent from Chrome. If later approved, Romanized Nepali and style control also use the gateway. The gateway uses this order:
 
-1. MyMemory is the primary online translator and receives the configured contact email as `de` on every provider request.
+1. MyMemory is the primary online translator and receives the configured contact email as `de` on every provider request. MyMemory meters its free tier per calling IP address, and a shared hosting address can exhaust the day's characters before a single LingoBridge request arrives; setting `MYMEMORY_RAPIDAPI_KEY` routes the same API through RapidAPI so the quota belongs to the subscribing account. The provider, the request contract and the `de` disclosure are unchanged, so online consent is unaffected.
 2. NVIDIA `riva-translate-4b-instruct-v2` is attempted once after a MyMemory failure or quota response when the pair is reviewed as supported and the user accepted both providers.
 3. If NVIDIA does not support the fallback pair, return a visible failure without attempting it.
 

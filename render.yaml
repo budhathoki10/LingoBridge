@@ -92,6 +92,27 @@ services:
       - key: NVIDIA_API_KEY
         sync: false
 
+      # MyMemory meters its free tier per IP address, and this instance shares one
+      # egress address with every other free service on the host. Neighbouring
+      # traffic can spend the day's characters before a single request of ours
+      # arrives, which surfaces as "the translation provider is temporarily
+      # unavailable" for any language NVIDIA cannot cover — Nepali above all.
+      #
+      # A RapidAPI subscription key moves the quota onto the subscribing account.
+      # It is the same MyMemory API and the same `de` contact email, so the online
+      # consent disclosure in docs/06-ai-and-translation.md is unchanged. Leaving
+      # it empty falls back to the public endpoint and the shared meter.
+      - key: MYMEMORY_RAPIDAPI_KEY
+        sync: false
+
+      # MyMemory's own private Translation Memory key, sent as `key`. Their spec
+      # calls it "customized API limits", but whether it lifts the per-IP daily
+      # quota is undocumented and could not be measured without exhausting that
+      # quota on purpose. Sent when set because it cannot hurt; the provider
+      # logging below is what will actually show whether it helps.
+      - key: MYMEMORY_PRIVATE_KEY
+        sync: false
+
       # Optional backup for Explain and word understanding when NVIDIA fails or is
       # slow. An empty value cleanly disables it; translation is unaffected either
       # way, since that path is MyMemory then NVIDIA.
@@ -103,6 +124,11 @@ services:
       # ---------------------------------------------------------------------
       - key: MYMEMORY_BASE_URL
         value: https://api.mymemory.translated.net
+
+      # Used only when MYMEMORY_RAPIDAPI_KEY is set. Copy it from the RapidAPI
+      # console's code snippet (the X-RapidAPI-Host header) if the listing moves.
+      - key: MYMEMORY_RAPIDAPI_HOST
+        value: mymemory-translation-memory1.p.rapidapi.com
 
       - key: NVIDIA_BASE_URL
         value: https://integrate.api.nvidia.com/v1
@@ -139,8 +165,12 @@ services:
       # ---------------------------------------------------------------------
       # Limits and timeouts
       # ---------------------------------------------------------------------
+      # MyMemory throttles as an address approaches its quota rather than failing
+      # outright: measured 0.4s when fresh and 10-15s when throttled. At 10000 a
+      # throttled-but-working provider was reported as an outage, so this sits
+      # above the observed ceiling. The popup shows a spinner for the difference.
       - key: LINGOBRIDGE_PROVIDER_TIMEOUT_MS
-        value: "10000"
+        value: "18000"
       - key: LINGOBRIDGE_RATE_WINDOW_MS
         value: "60000"
       - key: LINGOBRIDGE_INSTALLATION_RATE_LIMIT
