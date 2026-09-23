@@ -6,8 +6,8 @@
    imported in layout.tsx before this file. Only dashboard layout values live here. */
 
 :root {
-  --sidebar-width: 232px;
-  --content-width: 1080px;
+  --sidebar-width: 252px;
+  --content-width: 1120px;
 }
 
 *,

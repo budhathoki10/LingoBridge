@@ -4,6 +4,7 @@ import type { LivePhraseRecord } from "@lingobridge/contracts/account";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { CheckIcon, MinusIcon, SearchIcon, TrashIcon } from "@/components/icons";
+import { Pagination } from "@/components/pagination";
 import { useDashboardApi, useToast } from "@/components/providers";
 import { formatDate, languageName, plural, providerLabel } from "@/lib/format";
 
@@ -543,31 +544,12 @@ export function PhrasesView(props: PhrasesViewProps) {
         </div>
       )}
 
-      {pageCount > 1 ? (
-        <nav aria-label="Pagination" className="pagination">
-          <span className="tabular">
-            Page {props.page} of {pageCount}
-          </span>
-          <span className="pagination__controls">
-            <button
-              className="button button--small"
-              disabled={props.page <= 1 || isPending}
-              onClick={() => updateUrl({ page: props.page - 1 > 1 ? String(props.page - 1) : "" })}
-              type="button"
-            >
-              Previous
-            </button>
-            <button
-              className="button button--small"
-              disabled={props.page >= pageCount || isPending}
-              onClick={() => updateUrl({ page: String(props.page + 1) })}
-              type="button"
-            >
-              Next
-            </button>
-          </span>
-        </nav>
-      ) : null}
+      <Pagination
+        disabled={isPending}
+        onPageChange={(page) => updateUrl({ page: page > 1 ? String(page) : "" })}
+        page={props.page}
+        pageCount={pageCount}
+      />
 
       {selected.size > 0 ? (
         <section aria-label="Selection actions" className="selection-bar">

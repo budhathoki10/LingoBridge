@@ -1,4 +1,5 @@
 import { type SavedWordRecord, savedWordSchema } from "@lingobridge/contracts/account";
+import type { Filter } from "mongodb";
 import { collection, type DbClient, inSession, type VocabularyDocument } from "./client.js";
 
 function toRecord(document: VocabularyDocument): SavedWordRecord {
@@ -31,31 +32,59 @@ export async function upsertSavedWord(
   return word;
 }
 
+function savedWordFilter(userId: string, query = ""): Filter<VocabularyDocument> {
+  const escaped = query.trim().replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return {
+    userId,
+    ...(escaped
+      ? {
+          $or: [
+            { word: { $options: "i", $regex: escaped } },
+            { translation: { $options: "i", $regex: escaped } },
+          ],
+        }
+      : {}),
+  };
+}
+
+export interface SavedWordPage {
+  total: number;
+  words: SavedWordRecord[];
+}
+
+/** Bounded, user-scoped vocabulary page for the dashboard. */
+export async function listSavedWordsPage(
+  client: DbClient,
+  userId: string,
+  options: { limit: number; offset: number; query?: string },
+): Promise<SavedWordPage> {
+  const vocabulary = collection(client, "vocabulary");
+  const filter = savedWordFilter(userId, options.query);
+  const total = await vocabulary.countDocuments(filter, inSession(client));
+  const documents = await vocabulary
+    .find(filter, inSession(client))
+    .sort([
+      ["savedAt", -1],
+      ["id", 1],
+    ])
+    .skip(options.offset)
+    .limit(options.limit)
+    .toArray();
+  return { total, words: documents.map(toRecord) };
+}
+
+export async function countSavedWords(client: DbClient, userId: string): Promise<number> {
+  return collection(client, "vocabulary").countDocuments({ userId }, inSession(client));
+}
+
+/** Full bounded list used by account and spreadsheet exports. */
 export async function listSavedWords(
   client: DbClient,
   userId: string,
   query = "",
 ): Promise<SavedWordRecord[]> {
-  const escaped = query.trim().replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-  const documents = await collection(client, "vocabulary")
-    .find(
-      {
-        userId,
-        ...(escaped
-          ? {
-              $or: [
-                { word: { $options: "i", $regex: escaped } },
-                { translation: { $options: "i", $regex: escaped } },
-              ],
-            }
-          : {}),
-      },
-      inSession(client),
-    )
-    .sort({ savedAt: -1 })
-    .limit(500)
-    .toArray();
-  return documents.map(toRecord);
+  const result = await listSavedWordsPage(client, userId, { limit: 500, offset: 0, query });
+  return result.words;
 }
 
 export async function deleteSavedWords(

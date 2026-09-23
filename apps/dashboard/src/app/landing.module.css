@@ -1,44 +1,33 @@
-/* LingoBridge landing page.
+/* LingoBridge public landing page.
 
-   Design system resolved from the "Translator App" profile in ui-ux-pro-max:
-   style = Flat Design + Swiss/Minimalism, palette = global blue + neutral grey +
-   a language accent, pattern = Product Demo + Features, motion = subtle reveal.
-
-   Flat means: surfaces are separated by hairline borders and background steps, not by
-   gradients or stacked shadows. Exactly one shadow token exists, and it is only used by
-   elements that genuinely float over content.
-
-   One typeface: IBM Plex Sans for Latin, with Noto Sans in the same stack purely so
-   Devanagari, CJK, and Arabic render — no second font is ever declared per element.
-
-   Blue is the single brand accent. Terracotta marks translated / non-English content and
-   is never used for interactive chrome. Green and red appear only as real state badges. */
+   A quiet neutral system with one blue accent. Product content, typography, borders, and
+   small surface steps establish hierarchy; motion is reserved for the translation flow. */
 
 .page {
   --lb-font:
     "IBM Plex Sans Variable", "IBM Plex Sans", "Noto Sans Variable", "Noto Sans",
     "Noto Sans Devanagari", system-ui, -apple-system, sans-serif;
 
-  /* Brand: one blue, no gradient */
-  --lb-blue: #2563eb;
-  --lb-blue-hover: #1d4ed8;
-  --lb-blue-active: #1e40af;
-  --lb-blue-tint: #eff6ff;
-  --lb-blue-line: #dbeafe;
+  /* Brand */
+  --lb-blue: #2363eb;
+  --lb-blue-hover: #1c52c8;
+  --lb-blue-active: #1746aa;
+  --lb-blue-tint: #eef3fe;
+  --lb-blue-line: #c9d8fb;
 
-  /* Slate neutrals */
-  --lb-ink: #0b1220;
-  --lb-body: #475569;
-  --lb-muted: #64748b;
-  --lb-line: #e2e8f0;
-  --lb-line-soft: #f1f5f9;
+  /* Warm neutrals */
+  --lb-ink: #1b1b19;
+  --lb-body: #5b5b56;
+  --lb-muted: #75756f;
+  --lb-line: #e1e1dd;
+  --lb-line-soft: #f0f0ee;
   --lb-base: #ffffff;
-  --lb-sunken: #f8fafc;
+  --lb-sunken: #f7f7f5;
 
   /* Translated / non-English content */
-  --lb-warm: #c2410c;
-  --lb-warm-tint: #fff7ed;
-  --lb-warm-line: #fed7aa;
+  --lb-warm: var(--lb-blue-hover);
+  --lb-warm-tint: var(--lb-blue-tint);
+  --lb-warm-line: var(--lb-blue-line);
 
   /* State */
   --lb-pass: #15803d;
@@ -50,11 +39,11 @@
 
   /* Shape */
   --lb-r-btn: 8px;
-  --lb-r-card: 12px;
-  --lb-r-lg: 16px;
+  --lb-r-card: 10px;
+  --lb-r-lg: 14px;
 
   /* The only shadow in the system: for elements that float over content. */
-  --lb-shadow: 0 1px 2px rgb(11 18 32 / 6%), 0 8px 24px -12px rgb(11 18 32 / 12%);
+  --lb-shadow: 0 1px 2px rgb(20 20 18 / 6%), 0 16px 40px -24px rgb(20 20 18 / 22%);
 
   /* Rhythm */
   --lb-section-y: clamp(72px, 9vw, 120px);
@@ -63,7 +52,7 @@
 
   min-width: 0;
   overflow: clip;
-  background: var(--lb-base);
+  background: #fbfbfa;
   color: var(--lb-ink);
   color-scheme: light;
   font-family: var(--lb-font);
@@ -104,29 +93,36 @@
   scroll-margin-top: 64px;
 }
 
-/* Alternating surface steps give the page rhythm without a single gradient. */
 .videoSection,
 .automationSection,
 .faqSection {
-  background: var(--lb-sunken);
   border-block: 1px solid var(--lb-line);
+  background: var(--lb-sunken);
 }
 
 /* ---------- Type scale ---------- */
 
 .page h1 {
   margin: 0;
-  font-size: clamp(1.9375rem, 6.4vw, 3.5rem);
-  font-weight: 600;
-  line-height: 1.06;
-  letter-spacing: -0.032em;
+  font-size: clamp(2.35rem, 6.2vw, 4.375rem);
+  font-weight: 620;
+  line-height: 1.01;
+  letter-spacing: -0.045em;
   text-wrap: balance;
+}
+
+.page h1 > span {
+  display: block;
+}
+
+.heroAccent {
+  color: var(--lb-ink);
 }
 
 .page h2 {
   margin: 0;
   font-size: clamp(1.75rem, 3.2vw, 2.5rem);
-  font-weight: 600;
+  font-weight: 650;
   line-height: 1.14;
   letter-spacing: -0.026em;
   text-wrap: balance;
@@ -146,14 +142,14 @@
 
 /* Section lead: one consistent heading block for every section. */
 .sectionLead {
-  max-width: 34ch;
+  max-width: 38ch;
   margin-bottom: clamp(40px, 5vw, 64px);
 }
 
 .sectionLead > p {
   margin-top: 16px;
   color: var(--lb-body);
-  font-size: 1.0625rem;
+  font-size: 1.075rem;
   line-height: 1.65;
   text-wrap: pretty;
 }
@@ -220,7 +216,7 @@
 }
 
 .secondaryAction:hover {
-  border-color: #cbd5e1;
+  border-color: #cfcfca;
   background: var(--lb-sunken);
 }
 
@@ -286,8 +282,8 @@
   top: 0;
   z-index: 50;
   border-bottom: 1px solid var(--lb-line);
-  background: color-mix(in srgb, var(--lb-base) 88%, transparent);
-  backdrop-filter: saturate(1.6) blur(12px);
+  background: rgb(255 255 255 / 94%);
+  backdrop-filter: blur(10px);
 }
 
 .headerInner {
@@ -365,12 +361,14 @@
 /* ---------- Hero ---------- */
 
 .hero {
-  padding-block: clamp(56px, 7vw, 96px) var(--lb-section-y);
+  padding-block: clamp(64px, 8vw, 112px) clamp(80px, 9vw, 120px);
+  border-bottom: 1px solid var(--lb-line);
+  background: var(--lb-base);
 }
 
 .heroInner {
   display: grid;
-  gap: clamp(48px, 6vw, 72px);
+  gap: clamp(48px, 6vw, 80px);
   align-items: center;
 }
 
@@ -378,6 +376,16 @@
   .heroInner {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
     gap: 64px;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .hero {
+    padding-block: 44px 20px;
+  }
+
+  .heroInner {
+    gap: 40px;
   }
 }
 
@@ -391,16 +399,16 @@
   gap: 7px;
   margin-bottom: 20px;
   padding: 5px 11px 5px 9px;
-  border: 1px solid var(--lb-blue-line);
-  border-radius: 999px;
-  background: var(--lb-blue-tint);
-  color: var(--lb-blue-hover);
+  border: 1px solid var(--lb-line);
+  border-radius: var(--lb-r-btn);
+  background: var(--lb-sunken);
+  color: var(--lb-body);
   font-size: 0.8125rem;
   font-weight: 550;
   letter-spacing: -0.005em;
 }
 
-.heroCopy {
+.page .heroCopy {
   max-width: 46ch;
   /* The h1 runs at a 1.06 line-height, so it needs a deliberate gap here or the
      descenders sit on top of this paragraph. */
@@ -418,12 +426,33 @@
   margin-top: 32px;
 }
 
+.heroNotes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 18px 0 0;
+  padding: 0;
+  color: var(--lb-muted);
+  font-size: 0.8125rem;
+  list-style: none;
+}
+
+.heroNotes li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.page .heroNotes svg {
+  color: var(--lb-blue-hover);
+}
+
 /* ---------- Trust strip ---------- */
 
 /* These points sit on a light band, so they clear 4.5:1 — the old copy was
    white-on-gradient and did not. */
 .trustStrip {
-  border-block: 1px solid var(--lb-line);
+  border-bottom: 1px solid var(--lb-line);
   background: var(--lb-sunken);
   scroll-margin-top: 64px;
 }
@@ -453,7 +482,7 @@
   line-height: 1.5;
 }
 
-.trustStrip svg {
+.page .trustStrip svg {
   margin-top: 2px;
   color: var(--lb-pass);
 }
@@ -461,17 +490,18 @@
 /* ---------- Translation stage (hero visual) ---------- */
 
 .translationStage {
-  position: relative;
-  display: grid;
-  gap: 18px;
   min-width: 0;
-  padding: clamp(20px, 3vw, 28px);
   border: 1px solid var(--lb-line);
   border-radius: var(--lb-r-lg);
   background: var(--lb-base);
   box-shadow: var(--lb-shadow);
 }
 
+.stageContent {
+  display: grid;
+  gap: 18px;
+  padding: clamp(24px, 3.5vw, 34px);
+}
 .languageName {
   display: block;
   margin-bottom: 8px;
@@ -505,7 +535,7 @@
   z-index: -1;
   border-radius: 4px;
   background: var(--lb-blue-tint);
-  box-shadow: inset 0 0 0 1px var(--lb-blue-line);
+  box-shadow: inset 0 -1px 0 var(--lb-blue-line);
 }
 
 .selectionText {
@@ -521,17 +551,17 @@
   align-items: center;
   gap: 8px;
   padding: 7px 12px 7px 8px;
-  border: 1px solid var(--lb-line);
+  border: 1px solid var(--lb-blue);
   border-radius: var(--lb-r-btn);
-  background: var(--lb-sunken);
-  color: var(--lb-ink);
+  background: var(--lb-blue);
+  color: #ffffff;
   font-size: 0.8125rem;
   font-weight: 550;
 }
 
 .outputLine {
   padding-top: 18px;
-  border-top: 1px solid var(--lb-line-soft);
+  border-top: 1px solid var(--lb-line);
 }
 
 .outputLine .languageName {
@@ -570,7 +600,7 @@
     margin-bottom: 14px;
   }
 
-  .heroCopy {
+  .page .heroCopy {
     margin-top: 16px;
     font-size: 1rem;
   }
@@ -579,9 +609,9 @@
     margin-top: 22px;
   }
 
-  .translationStage {
+  .stageContent {
     gap: 14px;
-    padding: 18px;
+    padding: 20px;
   }
 
   .sourceLine p,
@@ -604,7 +634,7 @@
    the rail is aria-hidden decoration and carries no information. */
 @media (max-width: 380px) {
   .hero {
-    padding-block: 28px 32px;
+    padding-block: 24px;
   }
 
   .heroInner {
@@ -615,13 +645,72 @@
     margin-top: 18px;
   }
 
-  .translationStage {
+  .stageContent {
     gap: 12px;
     padding: 16px;
   }
 
   .scriptRail {
     display: none;
+  }
+}
+
+@media (max-width: 340px) {
+  .headerInner {
+    height: 56px;
+  }
+
+  .headerCta {
+    min-height: 36px;
+    padding-inline: 12px;
+  }
+
+  .hero {
+    padding-block: 18px 22px;
+  }
+
+  .page h1 {
+    font-size: 2.15rem;
+    line-height: 0.98;
+  }
+
+  .page .heroCopy {
+    margin-top: 12px;
+    font-size: 0.9375rem;
+    line-height: 1.5;
+  }
+
+  .heroActions {
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  .primaryAction,
+  .secondaryAction {
+    min-height: 42px;
+  }
+
+  .heroNotes {
+    margin-top: 12px;
+  }
+
+  .heroInner {
+    gap: 14px;
+  }
+
+  .stageContent {
+    gap: 9px;
+    padding: 13px;
+  }
+
+  .sourceLine p,
+  .outputLine p {
+    font-size: 0.9375rem;
+    line-height: 1.45;
+  }
+
+  .outputLine {
+    padding-top: 10px;
   }
 }
 
@@ -637,9 +726,9 @@
   width: 100%;
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  border: 1px solid var(--lb-line);
+  border: 1px solid var(--lb-ink);
   border-radius: var(--lb-r-lg);
-  background: #0b1220;
+  background: var(--lb-ink);
 }
 
 .videoFrame iframe {
@@ -742,6 +831,7 @@
   place-items: center;
   margin-bottom: 6px;
   border-radius: var(--lb-r-btn);
+  border: 1px solid var(--lb-blue-line);
   background: var(--lb-blue-tint);
   color: var(--lb-blue-hover);
   font-size: 0.8125rem;
@@ -756,30 +846,36 @@
   text-wrap: pretty;
 }
 
-/* ---------- Capabilities (bento) ---------- */
+/* ---------- Capabilities ---------- */
 
-.bento {
+.capabilitiesSection {
+  background: var(--lb-base);
+}
+
+.capabilityList {
   display: grid;
-  gap: 16px;
+  border-top: 1px solid var(--lb-line);
+}
+
+.primaryCapability,
+.capabilityCard {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding-block: 28px;
+  border-bottom: 1px solid var(--lb-line);
 }
 
 @media (min-width: 768px) {
-  .bento {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 1024px) {
-  .bento {
+  .capabilityList {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    border-bottom: 1px solid var(--lb-line);
   }
 
-  /* The in-place demo is the anchor: a full-width band above the supporting
-     triad, so the grid never leaves an orphaned card and an empty cell. */
   .primaryCapability {
     grid-column: 1 / -1;
-    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1fr);
-    column-gap: clamp(32px, 4vw, 56px);
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr);
+    column-gap: clamp(32px, 5vw, 72px);
     align-items: center;
   }
 
@@ -798,21 +894,21 @@
     grid-row: 1 / span 2;
     margin-top: 0;
   }
-}
 
-.primaryCapability,
-.capabilityCard {
-  display: grid;
-  align-content: start;
-  gap: 10px;
-  padding: clamp(24px, 3vw, 32px);
-  border: 1px solid var(--lb-line);
-  border-radius: var(--lb-r-lg);
-  background: var(--lb-base);
-}
+  .capabilityCard {
+    padding-inline: 24px;
+    border-right: 1px solid var(--lb-line);
+    border-bottom: 0;
+  }
 
-.capabilityCard {
-  background: var(--lb-sunken);
+  .primaryCapability + .capabilityCard {
+    padding-left: 0;
+  }
+
+  .capabilityCard:last-child {
+    padding-right: 0;
+    border-right: 0;
+  }
 }
 
 .primaryCapability > p,
@@ -825,8 +921,8 @@
 
 .capabilityIcon {
   display: inline-grid;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   place-items: center;
   margin-bottom: 6px;
   border: 1px solid var(--lb-line);
@@ -835,7 +931,6 @@
   color: var(--lb-blue);
 }
 
-/* The inline demo fills the tall card instead of leaving a dead gap in it. */
 .inlineDemo {
   display: grid;
   align-content: center;
@@ -863,19 +958,20 @@
   gap: 7px;
   padding: 5px 11px 5px 8px;
   border: 1px solid var(--lb-line);
-  border-radius: 999px;
+  border-radius: var(--lb-r-btn);
   background: var(--lb-base);
-  color: var(--lb-muted);
+  color: var(--lb-blue-hover);
   font-size: 0.75rem;
   font-weight: 550;
 }
 
 .inlineOutput {
   padding: 12px 14px;
-  border: 1px solid var(--lb-warm-line);
+  border: 1px solid var(--lb-blue-line);
+  border-left: 2px solid var(--lb-blue);
   border-radius: var(--lb-r-card);
-  background: var(--lb-warm-tint);
-  color: #7c2d12;
+  background: var(--lb-base);
+  color: var(--lb-ink);
   font-size: clamp(1rem, 1.6vw, 1.1875rem);
   line-height: 1.6;
 }
@@ -887,7 +983,7 @@
 }
 
 .specimenSource {
-  color: var(--lb-warm);
+  color: var(--lb-blue-hover);
   font-weight: 550;
 }
 
@@ -895,25 +991,34 @@
 
 .controlSplit {
   display: grid;
-  gap: 16px;
+  overflow: hidden;
+  border: 1px solid var(--lb-line);
+  border-radius: var(--lb-r-lg);
+  background: var(--lb-base);
 }
 
 @media (min-width: 768px) {
   .controlSplit {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .controlCard + .controlCard {
+    border-top: 0;
+    border-left: 1px solid var(--lb-line);
+  }
 }
 
 .controlCard {
   padding: clamp(24px, 3vw, 32px);
-  border: 1px solid var(--lb-line);
-  border-radius: var(--lb-r-lg);
   background: var(--lb-base);
+}
+
+.controlCard + .controlCard {
+  border-top: 1px solid var(--lb-line);
 }
 
 /* "You decide" is the side that matters most, so it carries the accent edge. */
 .controlCardYou {
-  border-color: var(--lb-blue-line);
   background: var(--lb-blue-tint);
 }
 
@@ -935,20 +1040,24 @@
   line-height: 1.55;
 }
 
-.controlCard svg {
+.page .controlCard svg {
   margin-top: 3px;
   color: var(--lb-muted);
 }
 
 .controlCardYou li {
-  color: #1e3a5f;
+  color: var(--lb-body);
 }
 
-.controlCardYou svg {
+.page .controlCardYou svg {
   color: var(--lb-blue);
 }
 
 /* ---------- Dashboard data boundary ---------- */
+
+.dashboardSection {
+  background: var(--lb-base);
+}
 
 .dataBoundary {
   overflow: hidden;
@@ -1004,12 +1113,12 @@
   border-bottom: 1px solid var(--lb-line-soft);
 }
 
-.boundaryGroupHeading svg {
+.page .boundaryGroupHeading svg {
   margin-top: 2px;
   color: var(--lb-muted);
 }
 
-.boundaryGroupSynced .boundaryGroupHeading svg {
+.page .boundaryGroupSynced .boundaryGroupHeading svg {
   color: var(--lb-blue);
 }
 
@@ -1051,7 +1160,7 @@
   font-weight: 600;
 }
 
-.boundaryList span {
+.page .boundaryList span {
   color: var(--lb-muted);
   font-size: 0.8125rem;
   line-height: 1.5;
@@ -1101,7 +1210,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  padding: 20px 4px;
+  padding: 22px 4px;
   color: var(--lb-ink);
   font-size: 1.0625rem;
   font-weight: 550;
@@ -1163,8 +1272,9 @@
 
 .installSection {
   padding-block: var(--lb-section-y);
-  border-top: 1px solid var(--lb-line);
-  background: var(--lb-sunken);
+  border-top: 0;
+  background: var(--lb-ink);
+  color: #ffffff;
 }
 
 .installInner {
@@ -1175,7 +1285,7 @@
 }
 
 .installScripts {
-  color: var(--lb-warm);
+  color: #aebddd;
   font-size: 0.9375rem;
   font-weight: 500;
   letter-spacing: 0.01em;
@@ -1187,20 +1297,30 @@
 
 .installCopy {
   max-width: 48ch;
-  color: var(--lb-body);
+  color: #cfcfca;
   font-size: 1.0625rem;
   line-height: 1.6;
 }
 
 .installAction {
   margin-top: 12px;
+  border-color: #ffffff;
+  background: #ffffff;
+  color: var(--lb-ink);
+}
+
+.installAction:hover {
+  border-color: var(--lb-sunken);
+  background: var(--lb-sunken);
+  color: var(--lb-ink);
 }
 
 /* ---------- Footer ---------- */
 
 .footer {
   border-top: 1px solid var(--lb-line);
-  background: var(--lb-base);
+  background: var(--lb-sunken);
+  color: var(--lb-ink);
 }
 
 .footerInner {

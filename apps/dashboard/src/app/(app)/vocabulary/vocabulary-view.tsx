@@ -1,8 +1,10 @@
 "use client";
 
 import type { SavedWordRecord } from "@lingobridge/contracts/account";
-import { useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { SearchIcon, TrashIcon } from "@/components/icons";
+import { Pagination } from "@/components/pagination";
 import { useDashboardApi, useToast } from "@/components/providers";
 import { formatDate } from "@/lib/format";
 
@@ -10,21 +12,73 @@ function plural(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
-export function VocabularyView({ words }: { words: SavedWordRecord[] }) {
+interface VocabularyViewProps {
+  page: number;
+  pageSize: number;
+  query: string;
+  total: number;
+  totalSaved: number;
+  words: SavedWordRecord[];
+}
+
+export function VocabularyView(props: VocabularyViewProps) {
   const api = useDashboardApi();
   const toast = useToast();
-  const [query, setQuery] = useState("");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [isPending, startTransition] = useTransition();
+  const [query, setQuery] = useState(props.query);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
-  const remaining = useMemo(() => words.filter((word) => !hidden.has(word.id)), [hidden, words]);
-  const visible = useMemo(() => {
-    const needle = query.trim().toLocaleLowerCase();
-    if (!needle) return remaining;
-    return remaining.filter(
-      (word) =>
-        word.word.toLocaleLowerCase().includes(needle) ||
-        word.translation.toLocaleLowerCase().includes(needle),
-    );
-  }, [query, remaining]);
+  const [renderedWords, setRenderedWords] = useState(props.words);
+  const searchInput = useRef<HTMLInputElement>(null);
+
+  if (renderedWords !== props.words) {
+    setRenderedWords(props.words);
+    setHidden(new Set());
+  }
+
+  useEffect(() => setQuery(props.query), [props.query]);
+
+  const updateUrl = useCallback(
+    (changes: { page?: string; q?: string }) => {
+      const next = new URLSearchParams(searchParams.toString());
+      for (const [key, value] of Object.entries(changes)) {
+        if (value) next.set(key, value);
+        else next.delete(key);
+      }
+      if (!("page" in changes)) next.delete("page");
+      startTransition(() =>
+        router.replace(`${pathname}${next.size ? `?${next}` : ""}`, { scroll: false }),
+      );
+    },
+    [pathname, router, searchParams],
+  );
+
+  useEffect(() => {
+    if (query === props.query) return;
+    const timer = setTimeout(() => updateUrl({ q: query.trim() }), 250);
+    return () => clearTimeout(timer);
+  }, [props.query, query, updateUrl]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      const typing =
+        ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) || target.isContentEditable;
+      if (event.key === "/" && !typing) {
+        event.preventDefault();
+        searchInput.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const visible = useMemo(
+    () => props.words.filter((word) => !hidden.has(word.id)),
+    [hidden, props.words],
+  );
 
   async function remove(word: SavedWordRecord) {
     setHidden((current) => new Set(current).add(word.id));
@@ -33,6 +87,7 @@ export function VocabularyView({ words }: { words: SavedWordRecord[] }) {
     });
     if (result.ok) {
       toast({ message: `Deleted “${word.word}”`, tone: "neutral" });
+      router.refresh();
       return;
     }
     setHidden((current) => {
@@ -43,7 +98,7 @@ export function VocabularyView({ words }: { words: SavedWordRecord[] }) {
     toast({ message: result.message, tone: "danger" });
   }
 
-  if (remaining.length === 0) {
+  if (props.totalSaved === 0) {
     return (
       <section className="empty">
         <h2>No saved words yet</h2>
@@ -54,6 +109,11 @@ export function VocabularyView({ words }: { words: SavedWordRecord[] }) {
       </section>
     );
   }
+
+  const firstItem = props.total === 0 ? 0 : (props.page - 1) * props.pageSize + 1;
+  const lastItem = Math.min(props.total, props.page * props.pageSize);
+  const pageCount = Math.max(1, Math.ceil(props.total / props.pageSize));
+  const searching = query !== props.query;
 
   return (
     <>
@@ -69,30 +129,59 @@ export function VocabularyView({ words }: { words: SavedWordRecord[] }) {
               id="vocabulary-search"
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search words or translations"
+              ref={searchInput}
               type="search"
               value={query}
             />
+            <span aria-hidden="true" className="kbd">
+              /
+            </span>
           </div>
         </div>
         <div aria-live="polite" className="filter-summary">
           <span className="tabular">
-            {query.trim()
-              ? `${plural(visible.length, "match")} of ${plural(remaining.length, "word")}`
-              : plural(remaining.length, "word")}
+            {isPending || searching
+              ? "Searching…"
+              : props.total === 0
+                ? "No matches"
+                : `${firstItem}–${lastItem} of ${plural(props.total, "word")}`}
           </span>
+          {props.query ? (
+            <button
+              className="button button--ghost button--small"
+              onClick={() => {
+                setQuery("");
+                startTransition(() => router.replace(pathname, { scroll: false }));
+              }}
+              type="button"
+            >
+              Clear search
+            </button>
+          ) : null}
         </div>
       </section>
 
       {visible.length === 0 ? (
         <section className="empty">
-          <h2>No words match “{query.trim()}”</h2>
-          <p>Search looks at the saved word and its translation.</p>
-          <button className="button button--small" onClick={() => setQuery("")} type="button">
-            Clear search
+          <h2>{props.query ? `No words match “${props.query}”` : "Nothing on this page"}</h2>
+          <p>
+            {props.query
+              ? "Search looks at the saved word and its translation."
+              : "The words on this page were deleted. Return to the first page to keep browsing."}
+          </p>
+          <button
+            className="button button--small"
+            onClick={() => {
+              setQuery("");
+              startTransition(() => router.replace(pathname, { scroll: false }));
+            }}
+            type="button"
+          >
+            {props.query ? "Clear search" : "Go to first page"}
           </button>
         </section>
       ) : (
-        <div className="data-list">
+        <div aria-busy={isPending || searching} className="data-list">
           <ul aria-label="Saved vocabulary" className="data-list__rows">
             {visible.map((word) => (
               <li className="row row--vocab" key={word.id}>
@@ -139,6 +228,13 @@ export function VocabularyView({ words }: { words: SavedWordRecord[] }) {
           </ul>
         </div>
       )}
+
+      <Pagination
+        disabled={isPending}
+        onPageChange={(page) => updateUrl({ page: page > 1 ? String(page) : "" })}
+        page={props.page}
+        pageCount={pageCount}
+      />
     </>
   );
 }

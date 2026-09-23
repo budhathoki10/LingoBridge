@@ -1,7 +1,13 @@
 import { getAccountOverview } from "@lingobridge/database";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRightIcon, BrowserIcon } from "@/components/icons";
+import {
+  ArrowRightIcon,
+  BrowserIcon,
+  ExtensionsIcon,
+  PhrasesIcon,
+  PreferencesIcon,
+} from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { formatDate, formatRelative, languageName, plural, providerLabel } from "@/lib/format";
 import { CHROME_WEB_STORE_URL } from "@/lib/links";
@@ -17,14 +23,22 @@ export default async function OverviewPage() {
   const firstName = user.displayName?.split(" ")[0];
 
   return (
-    <div className="page">
+    <div className="page page--overview">
       <PageHeader
+        actions={
+          <span className={`badge ${connected ? "badge--success" : "badge--warning"}`}>
+            <span className="dot" />
+            {connected
+              ? `${plural(overview.activeExtensionSessions, "extension")} connected`
+              : "Setup incomplete"}
+          </span>
+        }
         description="Phrases you chose to save in the extension, and the devices allowed to sync them."
         title={firstName ? `Welcome back, ${firstName}` : "Overview"}
       />
 
       {connected ? null : (
-        <section aria-labelledby="setup-title" className="card">
+        <section aria-labelledby="setup-title" className="card setup-card">
           <div className="card__header">
             <h2 id="setup-title">Connect the extension to start syncing</h2>
             <span className="badge badge--warning">
@@ -62,33 +76,48 @@ export default async function OverviewPage() {
               target="_blank"
             >
               <BrowserIcon size={16} />
-              Add LingoBridge to Chrome
+              Get the Chrome extension
             </a>
           </div>
         </section>
       )}
 
-      <section aria-label="Account summary" className="stats">
-        <div className="stat">
-          <span className="stat__label">Saved phrases</span>
+      <section aria-label="Account summary" className="stats overview-stats">
+        <Link className="stat" href="/phrases">
+          <span className="stat__top">
+            <span className="stat__label">Saved phrases</span>
+            <span aria-hidden="true" className="stat__icon">
+              <PhrasesIcon size={16} />
+            </span>
+          </span>
           <span className="stat__value">{overview.phraseCount.toLocaleString("en")}</span>
           <span className="stat__meta">
             {overview.preferences.phraseSyncEnabled
               ? "Syncing from connected extensions"
               : "Phrase sync is off"}
           </span>
-        </div>
-        <div className="stat">
-          <span className="stat__label">Connected extensions</span>
+        </Link>
+        <Link className="stat" href="/extensions">
+          <span className="stat__top">
+            <span className="stat__label">Connected extensions</span>
+            <span aria-hidden="true" className="stat__icon">
+              <ExtensionsIcon size={16} />
+            </span>
+          </span>
           <span className="stat__value">{overview.activeExtensionSessions}</span>
           <span className="stat__meta">
             {connected
               ? `Last active ${formatRelative(overview.lastExtensionActivityAt, now).toLowerCase()}`
               : "None yet"}
           </span>
-        </div>
-        <div className="stat">
-          <span className="stat__label">Preferred language</span>
+        </Link>
+        <Link className="stat" href="/preferences">
+          <span className="stat__top">
+            <span className="stat__label">Preferred language</span>
+            <span aria-hidden="true" className="stat__icon">
+              <PreferencesIcon size={16} />
+            </span>
+          </span>
           <span className="stat__value">
             {languageName(overview.preferences.preferredTargetLanguage)}
           </span>
@@ -97,7 +126,7 @@ export default async function OverviewPage() {
               ? "On-device processing"
               : "Online translation"}
           </span>
-        </div>
+        </Link>
       </section>
 
       <section aria-labelledby="recent-title" className="section">
