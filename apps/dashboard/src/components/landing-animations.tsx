@@ -18,25 +18,23 @@ export function LandingAnimations() {
       if (reduceMotion) {
         gsap.set("[data-lb-animate], [data-lb-reveal], [data-lb-stagger] > *", {
           clearProps: "all",
-          opacity: 1,
         });
         return;
       }
 
       gsap
-        .timeline({ defaults: { duration: 0.55, ease: "power3.out" } })
-        .from("[data-lb-header]", { opacity: 0, y: -10 })
-        .from("[data-lb-hero-copy] > *", { opacity: 0, stagger: 0.07, y: 18 }, "-=0.28")
-        .from("[data-lb-hero-stage]", { opacity: 0, scale: 0.985, y: 18 }, "-=0.35");
+        .timeline({ defaults: { duration: 0.42, ease: "power2.out" } })
+        .from("[data-lb-header]", { y: -8 })
+        .from("[data-lb-hero-copy] > *", { stagger: 0.05, y: 10 }, "-=0.24")
+        .from("[data-lb-hero-stage]", { scale: 0.99, y: 12 }, "-=0.28");
 
       gsap.utils.toArray<HTMLElement>("[data-lb-reveal]").forEach((element) => {
         ScrollTrigger.create({
           onEnter: () => {
             gsap.from(element, {
-              duration: 0.65,
-              ease: "power3.out",
-              opacity: 0,
-              y: 26,
+              duration: 0.42,
+              ease: "power2.out",
+              y: 14,
             });
           },
           once: true,
@@ -52,11 +50,10 @@ export function LandingAnimations() {
         ScrollTrigger.create({
           onEnter: () => {
             gsap.from(children, {
-              duration: 0.55,
-              ease: "power3.out",
-              opacity: 0,
-              stagger: 0.08,
-              y: 20,
+              duration: 0.4,
+              ease: "power2.out",
+              stagger: 0.055,
+              y: 12,
             });
           },
           once: true,

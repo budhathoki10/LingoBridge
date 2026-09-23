@@ -4,6 +4,7 @@ import { SESSION_COOKIE_CANDIDATES } from "./server/cookies";
 export const PROTECTED_PREFIXES = [
   "/overview",
   "/phrases",
+  "/vocabulary",
   "/preferences",
   "/extensions",
   "/privacy",

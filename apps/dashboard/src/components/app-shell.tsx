@@ -11,11 +11,11 @@ import {
   useRef,
   useState,
 } from "react";
+import { Brand } from "./brand";
+import { DashboardMotion } from "./dashboard-motion";
 import {
   AdminIcon,
-  BrowserIcon,
   CloseIcon,
-  DownloadIcon,
   ExtensionsIcon,
   MenuIcon,
   OverviewIcon,
@@ -26,9 +26,7 @@ import {
   SignOutIcon,
   VocabularyIcon,
 } from "./icons";
-import { Brand } from "./brand";
 import { DashboardProviders } from "./providers";
-import { CHROME_WEB_STORE_URL } from "@/lib/links";
 
 interface NavItem {
   href: string;
@@ -36,14 +34,20 @@ interface NavItem {
   label: string;
 }
 
-const PRIMARY_NAV: NavItem[] = [
-  { href: "/overview", icon: OverviewIcon, label: "Overview" },
+const OVERVIEW_NAV: NavItem = { href: "/overview", icon: OverviewIcon, label: "Overview" };
+
+const LIBRARY_NAV: NavItem[] = [
   { href: "/phrases", icon: PhrasesIcon, label: "Saved phrases" },
   { href: "/vocabulary", icon: VocabularyIcon, label: "My vocabulary" },
+];
+
+const ACCOUNT_NAV: NavItem[] = [
   { href: "/preferences", icon: PreferencesIcon, label: "Preferences" },
   { href: "/extensions", icon: ExtensionsIcon, label: "Connected extensions" },
   { href: "/privacy", icon: PrivacyIcon, label: "Privacy and data" },
 ];
+
+const PRIMARY_NAV: NavItem[] = [OVERVIEW_NAV, ...LIBRARY_NAV, ...ACCOUNT_NAV];
 
 const ADMIN_NAV: NavItem = { href: "/admin", icon: AdminIcon, label: "Operations" };
 
@@ -83,7 +87,11 @@ function Navigation({ isAdmin, onNavigate }: { isAdmin: boolean; onNavigate?: ()
   };
   return (
     <nav aria-label="Dashboard" className="nav">
-      {PRIMARY_NAV.map(renderLink)}
+      {renderLink(OVERVIEW_NAV)}
+      <p className="nav__section">Library</p>
+      {LIBRARY_NAV.map(renderLink)}
+      <p className="nav__section">Account</p>
+      {ACCOUNT_NAV.map(renderLink)}
       {isAdmin ? (
         <>
           <p className="nav__section">Administration</p>
@@ -116,21 +124,6 @@ function AccountFooter({ csrfToken, user }: { csrfToken: string; user: ShellUser
         </button>
       </form>
     </div>
-  );
-}
-
-function ChromeStoreLink({ onNavigate }: { onNavigate?: () => void }) {
-  return (
-    <a
-      className="button button--primary button--small sidebar__store"
-      href={CHROME_WEB_STORE_URL}
-      onClick={onNavigate}
-      rel="noreferrer"
-      target="_blank"
-    >
-      <BrowserIcon size={16} />
-      Add to browser
-    </a>
   );
 }
 
@@ -317,15 +310,6 @@ export function AppShell({
       ...navigate,
       {
         group: "Actions",
-        id: "add-to-chrome",
-        keywords: "install browser extension chrome web store",
-        label: "Add LingoBridge to Chrome",
-        run: () => {
-          window.open(CHROME_WEB_STORE_URL, "_blank", "noopener,noreferrer");
-        },
-      },
-      {
-        group: "Actions",
         id: "export-phrases",
         keywords: "download excel spreadsheet xlsx backup",
         label: "Export saved phrases (Excel)",
@@ -384,11 +368,6 @@ export function AppShell({
           {searchTrigger}
           <Navigation isAdmin={user.isAdmin} />
           <div className="sidebar__footer">
-            <ChromeStoreLink />
-            <a className="nav__link" href="/api/dashboard/export?scope=phrases">
-              <DownloadIcon size={16} />
-              Export phrases
-            </a>
             <AccountFooter csrfToken={csrfToken} user={user} />
           </div>
         </aside>
@@ -445,14 +424,13 @@ export function AppShell({
             </div>
             <Navigation isAdmin={user.isAdmin} onNavigate={closeDrawer} />
             <div className="sidebar__footer">
-              <ChromeStoreLink onNavigate={closeDrawer} />
               <AccountFooter csrfToken={csrfToken} user={user} />
             </div>
           </div>
         </dialog>
 
         <main className="main" id="main" tabIndex={-1}>
-          {children}
+          <DashboardMotion key={pathname}>{children}</DashboardMotion>
         </main>
       </div>
       <CommandPalette

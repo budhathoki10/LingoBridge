@@ -170,7 +170,10 @@ export default function HomePage() {
                 <BrowserIcon size={14} />
                 Chrome extension
               </p>
-              <h1>Understand the words in front of you.</h1>
+              <h1>
+                <span>Understand the words</span>
+                <span className={styles.heroAccent}>in front of you.</span>
+              </h1>
               <p className={styles.heroCopy}>
                 Select text, click the nearby action, and translate without leaving the page. Save
                 only the phrases and vocabulary worth keeping.
@@ -181,6 +184,14 @@ export default function HomePage() {
                   Watch the demo
                 </a>
               </div>
+              <ul aria-label="Product availability" className={styles.heroNotes}>
+                <li>
+                  <CheckIcon size={14} /> Free to install
+                </li>
+                <li>
+                  <CheckIcon size={14} /> Account optional
+                </li>
+              </ul>
             </div>
             <TranslationStage />
           </div>
@@ -253,7 +264,7 @@ export default function HomePage() {
               </p>
             </div>
 
-            <div className={styles.bento} data-lb-stagger="">
+            <div className={styles.capabilityList} data-lb-stagger="">
               <article className={styles.primaryCapability}>
                 <h3>Translate in place</h3>
                 <p>

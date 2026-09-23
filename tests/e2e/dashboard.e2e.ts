@@ -10,6 +10,7 @@ const REDIRECT_URI = `https://${EXTENSION_ID}.chromiumapp.org/lingobridge`;
 const PROTECTED_PAGES = [
   "/overview",
   "/phrases",
+  "/vocabulary",
   "/preferences",
   "/extensions",
   "/privacy",
@@ -94,6 +95,25 @@ function upsert(id: string, sourceText: string, translatedText: string, savedAt:
       sourceText,
       targetLanguage: "ne",
       translatedText,
+    },
+  };
+}
+
+function savedWord(index: number) {
+  return {
+    word: {
+      contextMeaning: `Contextual meaning ${index}`,
+      example: `Example sentence ${index}`,
+      id: `word-${index.toString().padStart(2, "0")}`,
+      meaning: `A clear explanation for saved word ${index}.`,
+      partOfSpeech: index % 2 === 0 ? "noun" : "adjective",
+      pronunciation: null,
+      savedAt: new Date(Date.UTC(2026, 8, 14, 9, index)).toISOString(),
+      sourceLanguage: "en",
+      sourceText: `Source sentence ${index}`,
+      targetLanguage: "ne",
+      translation: `शब्द ${index}`,
+      word: `saved word ${index}`,
     },
   };
 }
@@ -217,11 +237,29 @@ test("sign-in, connection, sync, editing, revocation, and deletion work end to e
   ]);
   expect(pushed.status()).toBe(200);
 
+  const vocabularyResponses = await Promise.all(
+    Array.from({ length: 27 }, (_, index) =>
+      request.post(`${DASHBOARD}/api/v1/vocabulary`, {
+        data: savedWord(index + 1),
+        headers: { Authorization: `Bearer ${tokens.accessToken}`, Origin: EXTENSION_ORIGIN },
+      }),
+    ),
+  );
+  expect(vocabularyResponses.every((response) => response.status() === 200)).toBe(true);
+
   await page.goto(`${DASHBOARD}/phrases`);
   await expect(page.getByText("शुभ प्रभात")).toBeVisible();
   await expect(page.getByText("1–3 of 3 phrases")).toBeVisible();
 
+  await page.goto(`${DASHBOARD}/vocabulary`);
+  await expect(page.getByText("1–25 of 27 words")).toBeVisible();
+  await page.getByRole("button", { name: "Page 2" }).click();
+  await expect(page).toHaveURL(`${DASHBOARD}/vocabulary?page=2`);
+  await expect(page.getByText("26–27 of 27 words")).toBeVisible();
+  await expect(page.getByText("saved word 2", { exact: true })).toBeVisible();
+
   // URL-backed search. Keyboard shortcuts attach after hydration.
+  await page.goto(`${DASHBOARD}/phrases`);
   await page.waitForLoadState("networkidle");
   await page.keyboard.press("/");
   await expect(page.getByLabel("Search source and translated text")).toBeFocused();
