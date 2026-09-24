@@ -72,6 +72,55 @@ describe("authorization request", () => {
     expect(authorize.searchParams.get("redirect_uri")).toBe(`${DASHBOARD_ORIGIN}/auth/callback`);
   });
 
+  it("asks for the account chooser only when switching accounts", async () => {
+    const { authorize } = await startAndAuthorize();
+    expect(authorize.searchParams.has("prompt")).toBe(false);
+
+    const connectPath = "/extension/connect?state=abc&device_label=Chrome";
+    const response = await handleSignInStart(
+      new Request(
+        `${DASHBOARD_ORIGIN}/auth/sign-in?prompt=select_account&returnTo=${encodeURIComponent(connectPath)}`,
+      ),
+      dashboard.services,
+    );
+    const chooser = new URL(response.headers.get("Location") ?? "");
+    expect(chooser.searchParams.get("prompt")).toBe("select_account");
+    expect(chooser.searchParams.has("max_age")).toBe(false);
+  });
+
+  it("switches a signed-in browser to another account and returns to the request", async () => {
+    const connectPath = "/extension/connect?state=abc&device_label=Chrome";
+    const first = await signInThroughHandlers(dashboard, "first@example.test");
+
+    const start = await handleSignInStart(
+      new Request(
+        `${DASHBOARD_ORIGIN}/auth/sign-in?prompt=select_account&returnTo=${encodeURIComponent(connectPath)}`,
+      ),
+      dashboard.services,
+    );
+    const authorize = new URL(start.headers.get("Location") ?? "");
+    const callback = new URL(
+      dashboard.services.developmentIdentity?.issueCode(authorize.searchParams, {
+        email: "second@example.test",
+        name: "Second",
+      }) ?? "",
+    );
+    const completed = await handleCallback(
+      new Request(callback.toString(), {
+        headers: { Cookie: cookieHeader(start, first.cookies) },
+      }),
+      dashboard.services,
+    );
+    expect(completed.headers.get("Location")).toBe(`${DASHBOARD_ORIGIN}${connectPath}`);
+
+    const names = cookieNames(false);
+    const previous = readCookie(first.cookies, names.session);
+    expect(await resolveWebSession(dashboard.services.webAuth, previous)).toBeNull();
+    const next = readCookie(cookieHeader(completed, first.cookies), names.session);
+    const auth = await resolveWebSession(dashboard.services.webAuth, next);
+    expect(auth?.user.email).toBe("second@example.test");
+  });
+
   it("verifies PKCE only for the matching verifier", () => {
     const verifier = "a".repeat(43);
     const challenge = createCodeChallenge(verifier);

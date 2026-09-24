@@ -121,7 +121,7 @@ export class OidcClient {
     codeChallenge: string;
     maxAgeSeconds?: number;
     nonce: string;
-    prompt?: "login";
+    prompt?: "login" | "select_account";
     state: string;
   }): Promise<string> {
     const metadata = await this.#metadataPromise();

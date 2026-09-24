@@ -20,6 +20,9 @@ const PROBLEMS: Record<string, string> = {
 /**
  * Consent screen for connecting one Chrome installation. Nothing is issued until the signed-in
  * user presses Connect; the decision posts back with the session's CSRF token.
+ *
+ * This window can hold a different sign-in from the person's dashboard tab, so it offers the
+ * provider's account chooser and comes back here with the same request once the switch completes.
  */
 export default async function ConnectExtensionPage({
   searchParams,
@@ -32,9 +35,10 @@ export default async function ConnectExtensionPage({
     if (typeof value === "string") params.set(key, value);
   }
 
+  const connectPath = `/extension/connect?${params.toString()}`;
   const session = await getPageSession();
   if (!session) {
-    redirect(`/sign-in?returnTo=${encodeURIComponent(`/extension/connect?${params.toString()}`)}`);
+    redirect(`/sign-in?returnTo=${encodeURIComponent(connectPath)}`);
   }
 
   const parsed = parseConnectionRequest(params, session.services.extensionAuth.allowedExtensionIds);
@@ -52,6 +56,14 @@ export default async function ConnectExtensionPage({
                 This extension will sync with{" "}
                 <strong>{session.user.email ?? session.user.displayName ?? "your account"}</strong>.
                 You can revoke it any time from Connected extensions.
+              </p>
+              <p className="standalone__switch">
+                Not the right account?{" "}
+                <a
+                  href={`/auth/sign-in?prompt=select_account&returnTo=${encodeURIComponent(connectPath)}`}
+                >
+                  Use a different account
+                </a>
               </p>
             </div>
 

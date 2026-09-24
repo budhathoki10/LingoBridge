@@ -53,6 +53,12 @@ async function connectExtension(page: Page, request: APIRequestContext) {
   });
   await page.goto(`${DASHBOARD}/extension/connect?${params}`);
   await expect(page.getByRole("heading", { name: "Connect Chrome on Windows?" })).toBeVisible();
+  const switchAccount = new URL(
+    (await page.getByRole("link", { name: "Use a different account" }).getAttribute("href")) ?? "",
+    DASHBOARD,
+  );
+  expect(switchAccount.searchParams.get("prompt")).toBe("select_account");
+  expect(switchAccount.searchParams.get("returnTo")).toBe(`/extension/connect?${params}`);
   // Chrome's identity API intercepts this redirect in the real extension; here the request is
   // observed and the navigation is left to fail harmlessly.
   const redirect = page.waitForRequest((candidate) =>
