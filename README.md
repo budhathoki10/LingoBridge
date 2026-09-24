@@ -8,6 +8,12 @@ The product is deliberately focused. It translates text selected by the user; it
 
 In Online mode, LingoBridge sends requests to its own gateway. The gateway uses MyMemory as the primary translation service and falls back once to NVIDIA Riva Translate 4B Instruct v2 when MyMemory fails or reports exhausted quota and NVIDIA supports the requested direction. The selected provider is never called directly from the extension.
 
+## Demo
+
+[![Watch the LingoBridge demo: translating selected text and explaining a word in Nepali](apps/dashboard/public/lingobridge-demo-video.jpg)](https://youtu.be/KZHaoS9gsh0)
+
+[Watch the demo on YouTube](https://youtu.be/KZHaoS9gsh0). It shows selected webpage text translated into Nepali, a simple explanation, and a chosen word's meaning, part of speech, context, and example.
+
 ## Why it is useful
 
 - Translate selected webpage text without changing tabs.
