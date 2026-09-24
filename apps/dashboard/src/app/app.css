@@ -1117,6 +1117,15 @@
   color: var(--text-secondary);
 }
 
+.standalone__switch {
+  font-size: var(--text-13);
+}
+
+.standalone__switch a {
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+}
+
 .standalone__footer {
   color: var(--text-tertiary);
   font-size: var(--text-13);

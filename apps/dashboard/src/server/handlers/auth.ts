@@ -18,7 +18,11 @@ function signInError(services: DashboardServices, reason: string, extraCookies: 
   );
 }
 
-/** GET /auth/sign-in?returnTo=/phrases — starts the authorization code flow with PKCE. */
+/**
+ * GET /auth/sign-in?returnTo=/phrases — starts the authorization code flow with PKCE.
+ * `prompt=select_account` shows the provider's account chooser, so a signed-in person can switch
+ * accounts; the previous session ends only once the new sign-in completes.
+ */
 export async function handleSignInStart(
   request: Request,
   services: DashboardServices,
@@ -29,6 +33,7 @@ export async function handleSignInStart(
   const url = new URL(request.url);
   try {
     const start = await beginSignIn(services.webAuth, {
+      chooseAccount: url.searchParams.get("prompt") === "select_account",
       purpose: "sign-in",
       returnTo: url.searchParams.get("returnTo"),
     });

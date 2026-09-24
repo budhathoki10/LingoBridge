@@ -69,7 +69,13 @@ export interface SignInStart {
 
 export async function beginSignIn(
   dependencies: WebAuthDependencies,
-  input: { purpose: LoginPurpose; returnTo: string | null; userId?: string },
+  input: {
+    /** Ask the provider to show its account chooser instead of reusing its current account. */
+    chooseAccount?: boolean;
+    purpose: LoginPurpose;
+    returnTo: string | null;
+    userId?: string;
+  },
 ): Promise<SignInStart> {
   const now = dependencies.now();
   const state = randomToken();
@@ -97,7 +103,11 @@ export async function beginSignIn(
     codeChallenge: createCodeChallenge(codeVerifier),
     nonce,
     state,
-    ...(input.purpose === "reauthenticate" ? { maxAgeSeconds: 0, prompt: "login" as const } : {}),
+    ...(input.purpose === "reauthenticate"
+      ? { maxAgeSeconds: 0, prompt: "login" as const }
+      : input.chooseAccount
+        ? { prompt: "select_account" as const }
+        : {}),
   });
   return { authorizationUrl, bindingExpiresAt: expiresAt, browserBinding };
 }
