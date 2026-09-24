@@ -49,6 +49,17 @@ export interface VerifiedSignIn extends VerifiedIdentity {
 
 const ALLOWED_ALGORITHMS = ["RS256", "PS256", "ES256", "EdDSA"];
 const CLOCK_TOLERANCE_SECONDS = 60;
+const MAX_PICTURE_URL_LENGTH = 2_048;
+
+/** Keeps the `picture` claim only when it is a plain HTTPS URL; anything else is dropped. */
+function profilePictureUrl(claim: unknown): string | null {
+  if (typeof claim !== "string" || claim.length > MAX_PICTURE_URL_LENGTH) return null;
+  try {
+    return new URL(claim).protocol === "https:" ? claim : null;
+  } catch {
+    return null;
+  }
+}
 
 function isHttpsOrLoopback(value: string): boolean {
   try {
@@ -242,6 +253,7 @@ export class OidcClient {
       email,
       emailVerified: claims.email_verified === true,
       issuer: this.config.issuer,
+      pictureUrl: profilePictureUrl(claims.picture),
       subject: claims.sub,
     };
   }

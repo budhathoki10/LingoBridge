@@ -1,6 +1,12 @@
 import { z } from "zod";
 
 export const MAX_TRANSLATION_CODE_POINTS = 5_000;
+/**
+ * One translation request sends at most this much text, which bounds provider usage per click.
+ * The extension trims longer selections to it; the gateway refuses anything longer. Stored text
+ * such as saved phrases keeps the larger MAX_TRANSLATION_CODE_POINTS.
+ */
+export const MAX_TRANSLATION_REQUEST_CODE_POINTS = 500;
 export const MAX_TRANSLATION_UTF8_BYTES = 20 * 1_024;
 export const MAX_TRANSLATION_RESPONSE_UTF8_BYTES = 64 * 1_024;
 export const MAX_GATEWAY_REQUEST_BYTES = 24 * 1_024;
@@ -48,6 +54,9 @@ export const translationTextSchema = z.string().superRefine((text, context) => {
 });
 
 export const providerSchema = z.enum(["on-device", "mymemory", "google", "nvidia"]);
+
+/** Current user-facing disclosure accepted before MyMemory/NVIDIA Online translation. */
+export const ONLINE_PROVIDER_CONSENT_VERSION = "mymemory-primary-nvidia-backup-v2";
 
 export const onlineConsentSchema = z
   .object({
@@ -97,6 +106,13 @@ export const translationRequestSchema = z
   })
   .strict()
   .superRefine((request, context) => {
+    if (Array.from(request.text).length > MAX_TRANSLATION_REQUEST_CODE_POINTS) {
+      context.addIssue({
+        code: "custom",
+        message: `A translation request cannot exceed ${MAX_TRANSLATION_REQUEST_CODE_POINTS} code points`,
+        path: ["text"],
+      });
+    }
     if (
       request.sourceLanguage !== "auto" &&
       request.sourceLanguage.toLowerCase() === request.targetLanguage.toLowerCase()

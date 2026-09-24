@@ -251,6 +251,7 @@ function formatAccountExport(exported: AccountExport): string {
     "ACCOUNT",
     `Display name: ${exported.account.displayName ?? "Not provided"}`,
     `Email: ${exported.account.email ?? "Not provided"}`,
+    `Profile picture: ${exported.account.pictureUrl ?? "Not provided"}`,
     `Role: ${exported.account.role}`,
     `Created: ${exported.account.createdAt}`,
     "",

@@ -13,6 +13,11 @@ export interface GatewaySecurityConfig {
   originPolicy: OriginPolicy;
   providerTimeoutMilliseconds: number;
   requireOrigin: boolean;
+  /**
+   * Translations per installation per window, on top of the general limit. Translation spends the
+   * shared provider quota, so it is held far tighter than Explain or word lookups.
+   */
+  translationRateLimit: RateLimitRule;
 }
 
 export function createOriginPolicy(
@@ -46,4 +51,5 @@ export const developmentSecurityConfig: GatewaySecurityConfig = {
   originPolicy: createOriginPolicy([], true),
   providerTimeoutMilliseconds: 10_000,
   requireOrigin: false,
+  translationRateLimit: { limit: 2, lockoutMilliseconds: 60_000, windowMilliseconds: 60_000 },
 };

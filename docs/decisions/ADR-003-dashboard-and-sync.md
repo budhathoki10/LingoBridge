@@ -1,6 +1,6 @@
 # ADR-003: Dashboard, accounts, and phrase synchronization
 
-Status: **Accepted; Phase 8 implemented and verified locally with development identity; credentialed Google sign-in remains deployment evidence**
+Status: **Accepted; amended on 24 September 2026 to require dashboard connection and accept device-local Online processing during connection; credentialed Google sign-in remains deployment evidence**
 Decision date: **6 September 2026**
 
 ## Context
@@ -10,12 +10,15 @@ LingoBridge requires both a Chrome extension and a web dashboard. A separate das
 ## Decision
 
 - Make the authenticated user dashboard a required product surface.
-- Keep translation and local saving available without an account.
-- Require sign-in only for dashboard access and cloud synchronization.
+- Require a connected, authenticated dashboard account before the extension permits translation.
+- Keep local saving and access to existing local records available after disconnection, but lock new translations.
 - Synchronize only explicitly saved phrases and approved preferences.
 - Never create automatic cloud translation history.
 - Connect the extension through an interactive Chrome identity flow using authorization code with PKCE.
 - Give each extension installation its own revocable session.
+- Show the current Online translation processors on the extension-connection approval page. When
+  the user approves, return the accepted disclosure version through the verified Chrome redirect;
+  the extension may store device-local Online consent only when that version matches exactly.
 - Keep site permissions, disabled sites, sensitive-text decisions, and local-model state on the device.
 - Store user-owned synchronized records in a database with strict ownership checks. MongoDB Atlas
   replaced the original PostgreSQL choice on 15 September 2026; see [ADR-004](ADR-004-mongodb-storage.md).
@@ -30,6 +33,10 @@ LingoBridge requires both a Chrome extension and a web dashboard. A separate das
 The dashboard uses secure web sessions. The extension uses its own short-lived access token and rotating revocable session; it does not copy dashboard cookies. Interactive extension sign-in starts only after the user clicks Connect dashboard. Provider tokens and LingoBridge signing secrets never enter webpage content or logs.
 
 Signing out of the dashboard ends that web session and revokes every extension session on the account in the same transaction (amended 14 September 2026). An extension never keeps syncing for someone who signed out; it learns at its next sync, which also runs when the popup opens, and then offers to keep or delete its local phrases. Web sessions in other browsers are unaffected, and replacing a session by signing in again does not revoke extensions.
+
+Online-processing consent accepted during connection remains a local preference, not account or
+sync data. Disconnecting or revoking the account locks translation even if the local consent record
+still exists. Users cannot accept Online processing through a separate guest path.
 
 ## Data boundary
 
@@ -63,8 +70,8 @@ Google OpenID Connect is the version 1 choice. Its standard authorization-code e
 the dashboard's PKCE, state, and nonce flow; the extension uses Chrome Identity only for the
 LingoBridge connection code and therefore needs no Google token. LingoBridge stores the verified
 issuer and subject, not Google access or refresh tokens. Deleting a LingoBridge account removes its
-LingoBridge data and sessions; it does not delete the user's Google account. The core translator and
-local phrase saving remain available to people without a Google account. A hosted identity broker
+LingoBridge data and sessions; it does not delete the user's Google account. Existing local phrase
+data remains available after disconnection, but translation requires a connected account. A hosted identity broker
 would add another processor and cost boundary without improving this first release.
 
 Production requires a Google web-application client ID and secret, the exact dashboard callback

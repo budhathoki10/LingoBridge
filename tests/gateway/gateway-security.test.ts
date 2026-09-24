@@ -12,6 +12,7 @@ import {
   ANONYMOUS_INSTALLATION_HEADER,
   GATEWAY_ROUTES,
   MAX_GATEWAY_REQUEST_BYTES,
+  MAX_TRANSLATION_REQUEST_CODE_POINTS,
   MAX_TRANSLATION_RESPONSE_UTF8_BYTES,
   type TranslationRequest,
   type TranslationResult,
@@ -170,6 +171,48 @@ describe("gateway abuse controls", () => {
     expect(limited.status).toBe(429);
     expect(limited.headers.get("Retry-After")).toBe("60");
     expect(translationErrorSchema.parse(await limited.json()).code).toBe("rate-limited");
+  });
+
+  it("locks translation for a full minute from the moment the limit is exceeded", async () => {
+    let now = Date.parse("2026-09-24T10:00:00.000Z");
+    const app = createTestApp({ rateLimiter: new MemoryRateLimiter(() => now) });
+    const send = (requestId: string) =>
+      app.request(translateRequest({ ...validRequest, requestId }));
+
+    expect((await send("9a1f6a53-5b4e-4c52-9f0e-4a7d8c1b2e01")).status).toBe(200);
+    now += 50_000;
+    expect((await send("9a1f6a53-5b4e-4c52-9f0e-4a7d8c1b2e02")).status).toBe(200);
+    // Only 10 seconds remain of the first window; the wait must still be the full minute.
+    now += 5_000;
+    const limited = await send("9a1f6a53-5b4e-4c52-9f0e-4a7d8c1b2e03");
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("Retry-After")).toBe("60");
+    expect(translationErrorSchema.parse(await limited.json())).toMatchObject({
+      code: "rate-limited",
+      message: "You can translate 2 times a minute. Try again shortly.",
+    });
+
+    now += 59_000;
+    const stillLocked = await send("9a1f6a53-5b4e-4c52-9f0e-4a7d8c1b2e04");
+    expect(stillLocked.status).toBe(429);
+    expect(stillLocked.headers.get("Retry-After")).toBe("1");
+
+    now += 1_000;
+    expect((await send("9a1f6a53-5b4e-4c52-9f0e-4a7d8c1b2e05")).status).toBe(200);
+    expect((await send("9a1f6a53-5b4e-4c52-9f0e-4a7d8c1b2e06")).status).toBe(200);
+    expect((await send("9a1f6a53-5b4e-4c52-9f0e-4a7d8c1b2e07")).status).toBe(429);
+  });
+
+  it("refuses a translation longer than one request allows", async () => {
+    const app = createTestApp();
+    const response = await app.request(
+      translateRequest({
+        ...validRequest,
+        text: "a".repeat(MAX_TRANSLATION_REQUEST_CODE_POINTS + 1),
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect(translationErrorSchema.parse(await response.json()).code).toBe("invalid-request");
   });
 
   it("limits different installations sharing a network", async () => {

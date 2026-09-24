@@ -170,6 +170,44 @@ test("a rejected Chrome identity launch reports that no window opened", async ()
   }
 });
 
+test("Retry starts a fresh sign-in when the pending one has no window", async () => {
+  const context = await chromium.launchPersistentContext("", {
+    channel: "chromium",
+    headless: true,
+    args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`],
+  });
+
+  try {
+    const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent("serviceworker"));
+    const extensionId = new URL(worker.url()).host;
+    // A flow that never settles and never opens a window: the stuck state Retry used to answer
+    // only with "Find the LingoBridge sign-in window with Alt+Tab".
+    await worker.evaluate(() => {
+      const state = globalThis as typeof globalThis & { launches: number };
+      state.launches = 0;
+      chrome.identity.launchWebAuthFlow = (() => {
+        state.launches += 1;
+        return new Promise(() => undefined);
+      }) as typeof chrome.identity.launchWebAuthFlow;
+    });
+    const launches = () =>
+      worker.evaluate(() => (globalThis as typeof globalThis & { launches: number }).launches);
+    const popup = await context.newPage();
+    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
+    await popup.getByRole("button", { name: "Connect dashboard" }).click();
+    await expect.poll(launches).toBe(1);
+
+    await popup.getByRole("button", { name: "Retry connection" }).click();
+    await expect.poll(launches).toBe(2);
+    await expect(popup.getByText("Alt+Tab", { exact: false })).toHaveCount(0);
+    await expect(
+      popup.getByText("Finish in the Chrome sign-in window.", { exact: false }),
+    ).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});
+
 test("Connect replaces an orphaned Chrome identity flow for this extension", async () => {
   const context = await chromium.launchPersistentContext("", {
     channel: "chromium",

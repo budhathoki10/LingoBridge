@@ -94,6 +94,17 @@ export default async function ConnectExtensionPage({
               </ul>
             </div>
 
+            <div className="section">
+              <h2>Online translation</h2>
+              <p className="connect-disclosure">
+                Connecting also enables Online translation on this Chrome. When you choose
+                Translate, the selected text and language pair go to MyMemory first. NVIDIA may
+                provide a supported backup; OpenRouter is used only as a Romanized Nepali backup.
+                Unsaved translations are not added to your account.{" "}
+                <a href="/privacy-policy">Privacy details</a>
+              </p>
+            </div>
+
             <form action="/extension/connect/decision" className="button-row" method="post">
               <input name="csrf" type="hidden" value={session.csrfToken} />
               <input name="request" type="hidden" value={params.toString()} />

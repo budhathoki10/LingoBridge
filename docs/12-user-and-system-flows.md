@@ -15,16 +15,18 @@ flowchart TD
     G --> H{User clicks icon?}
     H -- No --> F2[Keep text local and wait or dismiss]
     H -- Yes --> I[Open anchored translator]
-    I --> J[Detect source language]
+    I --> C1{Dashboard connected?}
+    C1 -- No --> C2[Show Connect dashboard action and keep text local]
+    C1 -- Yes --> J[Detect source language]
     J --> K[Load saved preferred target language]
     K --> L{Processing mode}
     L -- On-device only --> M{Local pair available?}
     M -- Yes --> N[Translate locally]
     M -- No --> O[Show unsupported local-pair message]
     L -- Online --> P{Online processing consent?}
-    P -- No --> Q[Request consent before sending]
+    P -- No --> Q[Require reconnection through the disclosed approval page]
     P -- Yes --> R{Sensitive-text warning?}
-    Q -- Accepted --> R
+    Q -- Connected --> R
     Q -- Cancel --> T[Keep source locally and do not translate]
     R -- Yes --> R2[Pause and request confirmation]
     R -- No --> S[Send selected text to LingoBridge gateway]
@@ -57,7 +59,7 @@ flowchart TD
     M --> N[Selection Magic ready]
 ```
 
-Site access and online-processing consent remain separate. Declared site access lets LingoBridge validate the active selection and show the magic icon across ordinary websites. Clicking the icon is required before detection or translation starts, and Online consent separately controls whether the selected text may be sent to a provider.
+Site access, dashboard connection, and online-processing consent remain separate. Declared site access lets LingoBridge validate the active selection and show the magic icon across ordinary websites. Clicking the icon is required before detection or translation starts, but translation remains locked until the extension is connected and the connection approval has established current Online consent.
 
 ## 2A. Explicit On-device preparation flow
 
@@ -244,17 +246,20 @@ sequenceDiagram
     U->>E: Click Connect dashboard
     E->>E: Create PKCE verifier and challenge
     E->>I: Start interactive authorization
-    I-->>U: Show sign-in and consent
-    I-->>E: Redirect with one-time authorization code
+    I-->>U: Show sign-in, sync details, and Online-provider disclosure
+    I-->>E: Redirect with one-time authorization code and disclosure version
     E->>A: Exchange code and PKCE verifier
     A-->>E: Short-lived access and revocable extension session
+    E->>E: Save matching Online consent on this device
     E-->>U: Show Connected
     U->>D: Open dashboard
     D->>I: Use secure web session
     D-->>U: Show the same account's saved data
 ```
 
-Translation remains available if the user skips, cancels, or later revokes dashboard connection.
+Translation is unavailable if the user skips, cancels, or later revokes dashboard connection.
+The connection approval page is the only Online-consent path. Connecting never synchronizes the
+consent record to the account; it stores the matching version only on the connected device.
 
 ## 13. Saved-phrase synchronization
 

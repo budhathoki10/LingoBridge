@@ -189,8 +189,16 @@ The dashboard uses its own restrictive policy, permits network access only to ap
   single-use code is bound to an allowlisted Chrome redirect URI and PKCE challenge. Revocable
   access and rotating refresh tokens are stored in the background worker's IndexedDB, outside
   content-script messages, webpage DOM, URLs after exchange, and logs. The background accepts
-  account actions only when Chrome reports an extension-owned sender URL; a webpage content script
-  reports its page URL, while a legitimate extension page may still carry a `sender.tab` value.
+  account mutations only when Chrome reports an extension-owned sender URL; a webpage content
+  script reports its page URL, while a legitimate extension page may still carry a `sender.tab`
+  value. The isolated Selection Magic content script may request only the interactive Connect
+  action after the user clicks its button; it cannot sync, disconnect, delete, or access tokens.
+- The connection approval page names the current Online translation processors. Approval returns
+  the disclosure version through Chrome's state-checked redirect, and the extension stores Online
+  consent only when that version exactly matches its bundled consent version. Older dashboard
+  pages therefore cannot silently enable newer provider consent. The consent stays device-local
+  and independently revocable. Disconnected installations cannot translate and have no separate
+  guest consent path.
 - Synchronization includes only explicitly saved phrase records and allowlisted preferences.
   Local phrases are committed before network work; mutation IDs, revisions, tombstones, bounded
   queues, and retry backoff protect offline edits. The popup discloses that connecting syncs
@@ -210,6 +218,7 @@ The dashboard uses its own restrictive policy, permits network access only to ap
 - Display On-device or Online beside every result.
 - For Online results, display MyMemory or NVIDIA as the actual processor.
 - Link to the privacy policy before the first online translation.
+- Require a connected dashboard session before enabling translation.
 - Explain why Selection Magic needs all-site access in the store listing and onboarding before installation.
 - Provide a visible Selection Magic toggle and per-site disable action.
 - Make online consent revocable.

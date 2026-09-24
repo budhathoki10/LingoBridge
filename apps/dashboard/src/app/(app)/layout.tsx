@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
+import { displayablePictureUrl } from "@/lib/profile-picture";
 import { requirePageSession } from "@/server/page-session";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +10,12 @@ export default async function ProtectedLayout({ children }: { children: ReactNod
   return (
     <AppShell
       csrfToken={csrfToken}
-      user={{ displayName: user.displayName, email: user.email, isAdmin: user.role === "admin" }}
+      user={{
+        displayName: user.displayName,
+        email: user.email,
+        isAdmin: user.role === "admin",
+        pictureUrl: displayablePictureUrl(user.pictureUrl),
+      }}
     >
       {children}
     </AppShell>

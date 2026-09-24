@@ -1,7 +1,7 @@
 import {
   MAX_TRANSLATION_CODE_POINTS,
+  MAX_TRANSLATION_REQUEST_CODE_POINTS,
   MAX_TRANSLATION_UTF8_BYTES,
-  translationTextSchema,
 } from "@lingobridge/contracts";
 
 export const SELECTION_MAGIC_CONTENT_SCRIPT_ID = "lingobridge-selection-magic";
@@ -25,7 +25,6 @@ export type SelectionRejectionReason =
   | "duplicate"
   | "extension-owned"
   | "hidden"
-  | "oversized"
   | "password"
   | "unsupported"
   | "whitespace";
@@ -41,7 +40,7 @@ export interface SelectionEligibilityInput {
 }
 
 export type SelectionEligibility =
-  | { eligible: true; text: string }
+  | { eligible: true; text: string; trimmed: boolean }
   | { eligible: false; reason: SelectionRejectionReason };
 
 export type SensitiveSelectionKind =
@@ -211,11 +210,41 @@ export function evaluateSelection(input: SelectionEligibilityInput): SelectionEl
   if (input.hidden) return { eligible: false, reason: "hidden" };
   if (input.collapsed) return { eligible: false, reason: "collapsed" };
   if (input.text.trim().length === 0) return { eligible: false, reason: "whitespace" };
-  if (!translationTextSchema.safeParse(input.text).success) {
-    return { eligible: false, reason: "oversized" };
-  }
   if (input.duplicate) return { eligible: false, reason: "duplicate" };
-  return { eligible: true, text: input.text };
+  const limited = limitTranslationText(input.text);
+  return { eligible: true, text: limited.text, trimmed: limited.trimmed };
+}
+
+const SENTENCE_END = /[.!?।॥؟。！？]["'”’)\]]*(?=\s|$)/gu;
+const WORD_BREAK = /\s/gu;
+
+function lastBreakAfter(text: string, pattern: RegExp, minimum: number): number | null {
+  let found: number | null = null;
+  for (const match of text.matchAll(pattern)) {
+    const end = (match.index ?? 0) + (pattern === WORD_BREAK ? 0 : match[0].length);
+    if (end >= minimum) found = end;
+  }
+  return found;
+}
+
+/**
+ * Keeps a selection within what one translation may send. A longer selection is cut at the last
+ * sentence end, or failing that the last word break, in the second half of the allowance, so the
+ * reader gets whole sentences rather than half a word.
+ */
+export function limitTranslationText(
+  text: string,
+  limit = MAX_TRANSLATION_REQUEST_CODE_POINTS,
+): { text: string; trimmed: boolean } {
+  const codePoints = Array.from(text);
+  if (codePoints.length <= limit) return { text, trimmed: false };
+  const head = codePoints.slice(0, limit).join("");
+  const minimum = Math.floor(head.length / 2);
+  const cut =
+    lastBreakAfter(head, SENTENCE_END, minimum) ??
+    lastBreakAfter(head, WORD_BREAK, minimum) ??
+    head.length;
+  return { text: head.slice(0, cut).trimEnd(), trimmed: true };
 }
 
 export function selectionFingerprint(text: string, rect: Pick<DOMRect, "left" | "top">): string {

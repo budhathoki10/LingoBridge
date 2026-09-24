@@ -23,7 +23,7 @@ switch sent another request.
   text and privacy page name OpenRouter.
 - Mark each answer with the provider that produced it (`nvidia` or `openrouter`).
 - Open the selection translator in a `ready` state with a Translate button. Only that button, the
-  consent "Allow and translate" button, "Translate anyway", and Retry send text. Choosing a language
+  consent-state "Translate" button, "Translate anyway", and Retry send text. Choosing a language
   records the choice and clears any previous result without sending anything.
 - Keep right-click and keyboard shortcuts opening the same ready translator.
 

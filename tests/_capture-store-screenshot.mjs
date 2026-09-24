@@ -164,7 +164,7 @@ try {
   if (state === "consent") {
     // Accepting consent starts translation immediately with the already-selected
     // target language — there is no separate "Translate" click in this path.
-    await operateClosedShadowControl(page, "button", "Allow and translate", "click");
+    await operateClosedShadowControl(page, "button", "Translate", "click");
   } else {
     await operateClosedShadowControl(page, "button", "Translate into Nepali", "click");
   }

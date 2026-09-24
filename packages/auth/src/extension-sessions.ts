@@ -1,3 +1,4 @@
+import { ONLINE_PROVIDER_CONSENT_VERSION } from "@lingobridge/contracts";
 import {
   deviceLabelSchema,
   type ExtensionTokenRequest,
@@ -125,6 +126,7 @@ export async function approveExtensionConnection(
   );
   const location = new URL(request.redirectUri);
   location.searchParams.set("code", code);
+  location.searchParams.set("online_consent_version", ONLINE_PROVIDER_CONSENT_VERSION);
   location.searchParams.set("state", request.state);
   return location.toString();
 }

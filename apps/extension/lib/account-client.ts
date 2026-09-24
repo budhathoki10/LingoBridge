@@ -1,13 +1,14 @@
+import { ONLINE_PROVIDER_CONSENT_VERSION } from "@lingobridge/contracts";
 import {
   accountApiErrorSchema,
   DASHBOARD_API_ROUTES,
   EXTENSION_CONNECT_PATH,
   type ExtensionTokenResponse,
   extensionTokenResponseSchema,
+  type SavedWordRecord,
   type SyncRequest,
   type SyncResponse,
   syncResponseSchema,
-  type SavedWordRecord,
   vocabularyUpsertResponseSchema,
 } from "@lingobridge/contracts/account";
 import type { CredentialStore, StoredCredentials } from "./account-credentials";
@@ -67,7 +68,7 @@ export function buildConnectUrl(input: {
 }
 
 export type AuthorizationRedirect =
-  | { code: string; kind: "code" }
+  | { code: string; kind: "code"; onlineConsentAccepted: boolean }
   | { kind: "denied" }
   | { kind: "invalid" };
 
@@ -91,7 +92,12 @@ export function parseAuthorizationRedirect(
   if (url.searchParams.get("error") === "access_denied") return { kind: "denied" };
   const code = url.searchParams.get("code");
   return code && /^[A-Za-z0-9_-]{32,128}$/u.test(code)
-    ? { code, kind: "code" }
+    ? {
+        code,
+        kind: "code",
+        onlineConsentAccepted:
+          url.searchParams.get("online_consent_version") === ONLINE_PROVIDER_CONSENT_VERSION,
+      }
     : { kind: "invalid" };
 }
 

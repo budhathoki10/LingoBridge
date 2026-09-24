@@ -45,17 +45,29 @@ export interface GatewayServiceSnapshot {
 export class GatewayClientError extends Error {
   readonly code: TranslationError["code"] | "invalid-response" | "network-unavailable";
   readonly retryable: boolean;
+  /** Seconds until a rate-limited request may be sent again, from the gateway's Retry-After. */
+  readonly retryAfterSeconds: number | null;
 
   constructor(
     code: TranslationError["code"] | "invalid-response" | "network-unavailable",
     message: string,
     retryable: boolean,
+    retryAfterSeconds: number | null = null,
   ) {
     super(message);
     this.name = "GatewayClientError";
     this.code = code;
     this.retryable = retryable;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
+}
+
+/** Accepts only a sane whole number of seconds; anything else is treated as absent. */
+export function parseRetryAfterSeconds(value: unknown): number | null {
+  const seconds = typeof value === "string" ? Number(value) : value;
+  return typeof seconds === "number" && Number.isInteger(seconds) && seconds > 0 && seconds <= 3_600
+    ? seconds
+    : null;
 }
 
 export interface GatewayClient {
@@ -164,6 +176,7 @@ function requestFailure(payload: unknown, response: Response): GatewayClientErro
       parsedError.data.code,
       parsedError.data.message,
       parsedError.data.retryable,
+      parseRetryAfterSeconds(response.headers.get("Retry-After")),
     );
   }
 
