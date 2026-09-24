@@ -1,15 +1,21 @@
+import { MAX_TRANSLATION_CODE_POINTS } from "@lingobridge/contracts";
+import { savedWordSchema } from "@lingobridge/contracts/account";
 import {
-  dashboardConnectionPending,
   accountClient,
+  clearStaleConnectionStatus,
+  dashboardConnectionPending,
   focusDashboardConnection,
   handleAccountMessage,
   PERIODIC_SYNC_ALARM,
-  startDashboardConnection,
   SYNC_ALARM,
+  startDashboardConnection,
   syncService,
 } from "../lib/account-background";
-import { savedWordSchema } from "@lingobridge/contracts/account";
-import { parseAccountMessage } from "../lib/account-status";
+import {
+  ACCOUNT_STATUS_STORAGE_KEY,
+  normalizeAccountStatus,
+  parseAccountMessage,
+} from "../lib/account-status";
 import {
   GATEWAY_BRIDGE_PORT,
   type GatewayBridgeRequest,
@@ -24,9 +30,9 @@ import {
   grantsWebpageAccess,
   loadSelectionMagicSettings,
   parseSelectionMagicMessage,
-  saveSelectionMagicSettings,
   SELECTION_MAGIC_CONTENT_SCRIPT_ID,
   type SelectionMagicMessage,
+  saveSelectionMagicSettings,
   selectionRegistrationMatches,
 } from "../lib/selection-magic";
 import { keepWorkerAlive } from "../lib/worker-keepalive";
@@ -159,7 +165,15 @@ async function translateInTab(tabId: number, text?: string, frameId?: number): P
   await ensureSelectionScript(tabId, frameId);
   await browser.tabs.sendMessage(
     tabId,
-    { text, type: "lingobridge:selection-magic:translate" },
+    // Very long selections are cut here so the page still receives them; the page trims them to
+    // one translation's allowance and tells the reader.
+    {
+      text:
+        text === undefined
+          ? undefined
+          : Array.from(text).slice(0, MAX_TRANSLATION_CODE_POINTS).join(""),
+      type: "lingobridge:selection-magic:translate",
+    },
     frameId === undefined ? undefined : { frameId },
   );
 }
@@ -181,6 +195,18 @@ async function runGatewayBridgeRequest(
     }
     if (request.operation === "inspect-service") {
       return { data: await gatewayClient.inspectService(controller.signal), ok: true };
+    }
+    const stored = await browser.storage.local.get(ACCOUNT_STATUS_STORAGE_KEY);
+    if (normalizeAccountStatus(stored[ACCOUNT_STATUS_STORAGE_KEY]).connection !== "connected") {
+      return {
+        aborted: false,
+        error: {
+          code: "invalid-request",
+          message: "Connect the dashboard before translating.",
+          retryable: false,
+        },
+        ok: false,
+      };
     }
     if (request.operation === "explain") {
       return { data: await gatewayClient.explain(request.request, controller.signal), ok: true };
@@ -267,13 +293,23 @@ function syncSoonIfChanged(): void {
 }
 
 /**
- * Account actions are accepted only from the extension's own pages. Chrome can attach a tab to an
- * extension page opened as a tab, so the sender URL is the boundary; content scripts report the
- * webpage URL even though they also carry this extension's id.
+ * Account mutations are accepted only from extension pages. The one exception is starting the
+ * interactive connection: the isolated Selection Magic panel exposes that explicit user action,
+ * and its sender is this extension on an ordinary HTTP(S) page.
  */
 function isExtensionPageSender(sender: Browser.runtime.MessageSender): boolean {
   if (sender.id !== browser.runtime.id) return false;
   return typeof sender.url === "string" && sender.url.startsWith(browser.runtime.getURL("/"));
+}
+
+function isSelectionContentSender(sender: Browser.runtime.MessageSender): boolean {
+  if (sender.id !== browser.runtime.id || typeof sender.url !== "string") return false;
+  try {
+    const protocol = new URL(sender.url).protocol;
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 function createContextMenu(): void {
@@ -294,6 +330,7 @@ export default defineBackground(() => {
 
   createContextMenu();
   void reconcileSelectionContentScript().catch(() => undefined);
+  void clearStaleConnectionStatus();
 
   browser.runtime.onInstalled.addListener(() => {
     createContextMenu();
@@ -370,8 +407,8 @@ export default defineBackground(() => {
 
     const accountMessage = parseAccountMessage(message);
     if (accountMessage) {
-      if (!isExtensionPageSender(sender)) return undefined;
       if (accountMessage === "lingobridge:account:connect") {
+        if (!isExtensionPageSender(sender) && !isSelectionContentSender(sender)) return undefined;
         if (dashboardConnectionPending()) {
           focusDashboardConnection().then(sendResponse, () =>
             sendResponse({
@@ -385,6 +422,7 @@ export default defineBackground(() => {
         startDashboardConnection();
         return undefined;
       }
+      if (!isExtensionPageSender(sender)) return undefined;
       handleAccountMessage(accountMessage).then(sendResponse, () =>
         sendResponse({ message: "Something went wrong. Try again.", ok: false }),
       );

@@ -19,6 +19,7 @@ export interface User {
   emailVerified: boolean;
   id: string;
   identityIssuer: string;
+  pictureUrl: string | null;
   role: UserRole;
 }
 
@@ -27,6 +28,8 @@ export interface VerifiedIdentity {
   email: string | null;
   emailVerified: boolean;
   issuer: string;
+  /** The provider's profile picture, refreshed at every sign-in like the name. */
+  pictureUrl?: string | null;
   subject: string;
 }
 
@@ -39,6 +42,7 @@ function toUser(document: UserDocument): User {
     emailVerified: document.emailVerified,
     id: document._id,
     identityIssuer: document.identityIssuer,
+    pictureUrl: document.pictureUrl ?? null,
     role: document.role,
   };
 }
@@ -60,6 +64,7 @@ export async function upsertUserFromIdentity(
         displayName: identity.displayName,
         email: identity.email,
         emailVerified: identity.emailVerified,
+        pictureUrl: identity.pictureUrl ?? null,
         role,
         updatedAt: now,
       },

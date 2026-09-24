@@ -4,7 +4,7 @@ Status: **Phase 8 dashboard, identity, and synchronization implemented and focus
 
 ## Purpose
 
-The dashboard gives signed-in users a safe place to manage information they deliberately save from the extension. It is not a feed of everything they translate and is not required for basic translation.
+The dashboard gives signed-in users a safe place to manage information they deliberately save from the extension. It is not a feed of everything they translate. A connected dashboard session is required before the extension permits translation.
 
 ## User navigation
 

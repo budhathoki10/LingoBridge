@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -55,6 +56,7 @@ export interface ShellUser {
   displayName: string | null;
   email: string | null;
   isAdmin: boolean;
+  pictureUrl: string | null;
 }
 
 function initials(user: ShellUser): string {
@@ -102,12 +104,36 @@ function Navigation({ isAdmin, onNavigate }: { isAdmin: boolean; onNavigate?: ()
   );
 }
 
+/**
+ * The account photo from the identity provider, falling back to initials when there is none or it
+ * fails to load. Unoptimized keeps the photo off the image optimizer, so only the browser fetches it.
+ */
+function AccountAvatar({ user }: { user: ShellUser }) {
+  const [pictureFailed, setPictureFailed] = useState(false);
+  return (
+    <span aria-hidden="true" className="account__avatar">
+      {user.pictureUrl && !pictureFailed ? (
+        <Image
+          alt=""
+          className="account__picture"
+          height={32}
+          onError={() => setPictureFailed(true)}
+          referrerPolicy="no-referrer"
+          src={user.pictureUrl}
+          unoptimized
+          width={32}
+        />
+      ) : (
+        initials(user)
+      )}
+    </span>
+  );
+}
+
 function AccountFooter({ csrfToken, user }: { csrfToken: string; user: ShellUser }) {
   return (
     <div className="account">
-      <span aria-hidden="true" className="account__avatar">
-        {initials(user)}
-      </span>
+      <AccountAvatar user={user} />
       <span className="account__text">
         <span className="account__name">{user.displayName || "Signed in"}</span>
         {user.email ? <span className="account__email">{user.email}</span> : null}

@@ -119,12 +119,13 @@ export function AccountCard() {
       <section className="card account-card">
         <h2 className="card__title">Dashboard sync</h2>
         <p className="card__text">
-          Sync the phrases you save to your dashboard and other devices. Translation works without
-          an account.
+          Connect your dashboard account to enable translation and sync the phrases you save across
+          devices.
         </p>
         {connecting ? (
           <p className="card__text" role="status">
-            Finish in the Chrome sign-in window. Retry connection brings that window forward.
+            Finish in the Chrome sign-in window. Retry connection brings it back, or opens a new one
+            if it was closed.
           </p>
         ) : null}
         {error ? (

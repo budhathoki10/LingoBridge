@@ -91,6 +91,7 @@ export async function deleteAccount(
           email: null,
           emailVerified: false,
           identitySubject: `deleted:${userId}`,
+          pictureUrl: null,
           role: "user",
           updatedAt: now,
         },
@@ -157,6 +158,7 @@ export interface AccountExport {
     createdAt: string;
     displayName: string | null;
     email: string | null;
+    pictureUrl: string | null;
     role: "user" | "admin";
   };
   exportedAt: string;
@@ -204,6 +206,7 @@ export async function exportAccount(
       createdAt: user.createdAt,
       displayName: user.displayName,
       email: user.email,
+      pictureUrl: user.pictureUrl,
       role: user.role,
     },
     exportedAt: now.toISOString(),

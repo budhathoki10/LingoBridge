@@ -39,7 +39,7 @@ The language picker reflects the provider's current supported-language catalogue
 - Online processing sends only the text the user chose.
 - AI uncertainty is visible instead of hidden.
 - The user reviews a translation before it can replace text.
-- Signing in is optional for translation but required for dashboard synchronization.
+- Connecting the extension to a signed-in dashboard account is required before translation.
 - The dashboard never becomes an automatic archive of everything translated.
 
 ## What makes it impressive

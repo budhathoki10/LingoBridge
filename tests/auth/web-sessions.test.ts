@@ -306,6 +306,20 @@ describe("ID token verification", () => {
     ).rejects.toMatchObject({ reason: "invalid-id-token" });
   });
 
+  it("keeps an HTTPS profile picture and drops any other", async () => {
+    const picture = "https://lh3.googleusercontent.com/a/photo=s96-c";
+    const https = await signedToken({ nonce: "n", picture });
+    await expect(https.client.verifyIdToken(https.token, { nonce: "n" })).resolves.toMatchObject({
+      pictureUrl: picture,
+    });
+    for (const unsafe of ["http://example.test/a.png", "javascript:alert(1)", 42]) {
+      const rejected = await signedToken({ nonce: "n", picture: unsafe });
+      await expect(
+        rejected.client.verifyIdToken(rejected.token, { nonce: "n" }),
+      ).resolves.toMatchObject({ pictureUrl: null });
+    }
+  });
+
   it("requires a fresh auth_time for re-authentication", async () => {
     const stale = await signedToken({
       auth_time: Math.floor(Date.parse("2026-09-14T09:00:00.000Z") / 1_000),

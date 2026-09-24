@@ -1,7 +1,12 @@
-import { type OnlineConsent, onlineConsentSchema } from "@lingobridge/contracts";
+import {
+  ONLINE_PROVIDER_CONSENT_VERSION,
+  type OnlineConsent,
+  onlineConsentSchema,
+} from "@lingobridge/contracts";
 
 /** Bumped when romanized Nepali conversion joined, so earlier consent is asked for again. */
-export const ONLINE_PROVIDER_CONSENT_VERSION = "mymemory-primary-nvidia-backup-v2";
+export { ONLINE_PROVIDER_CONSENT_VERSION };
+
 const STORAGE_KEY = "lingobridgeOnlineProviderConsent";
 
 export interface ConsentStorage {

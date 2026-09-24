@@ -5,6 +5,7 @@ import {
   type ExplanationRequest,
   type ExplanationResult,
   MAX_EXPLANATION_SOURCE_CODE_POINTS,
+  MAX_TRANSLATION_REQUEST_CODE_POINTS,
   type OnlineConsent,
   type TranslationRequest,
   type TranslationResult,
@@ -12,6 +13,11 @@ import {
   type WordUnderstandingResult,
 } from "@lingobridge/contracts";
 import SURFACE_CSS from "../assets/selection-panel.css?inline";
+import {
+  ACCOUNT_STATUS_STORAGE_KEY,
+  type AccountMessageResult,
+  normalizeAccountStatus,
+} from "../lib/account-status";
 import {
   catalogueToPreviewLanguages,
   getPreviewLanguage,
@@ -24,10 +30,10 @@ import {
 } from "../lib/capability-cache";
 import { acceptExplanationConsent, loadExplanationConsent } from "../lib/explanation-consent";
 import { createBridgeGatewayClient, GATEWAY_BRIDGE_PORT } from "../lib/gateway-bridge";
+import { GatewayClientError } from "../lib/gateway-client";
+import { loadOnlineProviderConsent } from "../lib/online-consent";
 import { ensurePanelFont } from "../lib/panel-font";
 import { iconSvg, logoSvg, magicSvg, type PanelIconName } from "../lib/panel-icons";
-import { GatewayClientError } from "../lib/gateway-client";
-import { acceptOnlineProviderConsent, loadOnlineProviderConsent } from "../lib/online-consent";
 import {
   DEFAULT_POPUP_PREFERENCES,
   loadPopupPreferences,
@@ -46,11 +52,6 @@ import {
 } from "../lib/saved-phrases";
 import { saveWord } from "../lib/saved-words";
 import {
-  isClickableWord,
-  tokenizeWords,
-  wordUnderstandingCacheKey,
-} from "../lib/word-understanding";
-import {
   chooseSelectionTargetLanguage,
   resolveSelectionSource,
   supportedTargetsForSource,
@@ -59,6 +60,7 @@ import {
   computeAnchoredPosition,
   detectSensitiveSelection,
   evaluateSelection,
+  limitTranslationText,
   loadSelectionMagicSettings,
   parseSelectionMagicMessage,
   SELECTION_MAGIC_EXPIRY_MS,
@@ -66,6 +68,11 @@ import {
   type SensitiveSelectionKind,
   selectionFingerprint,
 } from "../lib/selection-magic";
+import {
+  isClickableWord,
+  tokenizeWords,
+  wordUnderstandingCacheKey,
+} from "../lib/word-understanding";
 
 // Page origins are never allowed by the gateway, and Chrome gives a content-script fetch the
 // page's origin. Every gateway call therefore goes through the background worker, which runs on
@@ -140,6 +147,11 @@ const FAKE_EXPLANATION_CONSENT: ExplanationConsent = {
   version: "fake-gateway",
 };
 
+/** Shared across tabs: the gateway limits the installation, not one page. */
+const TRANSLATION_COOLDOWN_STORAGE_KEY = "lingobridgeTranslationCooldownUntil";
+/** Used only if a rate-limited answer arrives without a readable Retry-After. */
+const TRANSLATION_COOLDOWN_FALLBACK_SECONDS = 60;
+
 const REGISTER_LABELS: Record<ExplanationRegister, string> = {
   casual: "Casual",
   formal: "Formal",
@@ -168,10 +180,12 @@ interface CapturedSelection {
    */
   replace?: (translation: string) => boolean;
   text: string;
+  /** Set when the selection was longer than one translation may send and was cut down. */
+  trimmed: boolean;
 }
 
 type SurfaceState =
-  | "consent"
+  | "account-required"
   | "error"
   | "icon"
   | "loading"
@@ -185,6 +199,7 @@ type SurfaceState =
 interface TranslationContext {
   catalogue: CapabilityCatalogue;
   consent: OnlineConsent | null;
+  dashboardConnected: boolean;
   favouriteLanguageCodes: string[];
   gatewayMode: "fake" | "live";
   languages: PreviewLanguage[];
@@ -217,6 +232,17 @@ const STATUS_ICONS: Record<StatusMode, PanelIconName | null> = {
   success: "languages",
   warning: "warning",
 };
+
+/** Containers that scroll inside the panel, restored across redraws. */
+const PRESERVED_SCROLL_SELECTORS = [".body", ".source", ".favorite-picker__list"];
+const FOCUSABLE_SELECTOR = "button, select, input, summary, a[href]";
+
+/** Identifies a control well enough to find its replacement after a redraw. */
+function focusKey(element: Element | null): string | null {
+  if (!(element instanceof HTMLElement) || !element.matches(FOCUSABLE_SELECTOR)) return null;
+  const name = element.id || element.getAttribute("aria-label") || element.textContent?.trim();
+  return name ? `${element.tagName}:${name}` : null;
+}
 
 function elementFromNode(node: Node | null): Element | null {
   if (!node) return null;
@@ -310,10 +336,14 @@ function captureSelection(
       editable: true,
       fingerprint,
       getRect: () => usableRect(field.getBoundingClientRect()),
-      replace: (translation) =>
-        rangeStillMatches(field.value, start, end, captured) &&
-        writeIntoField(field, start, end, translation),
+      // A trimmed selection's translation covers only part of the range, so it never replaces it.
+      replace: eligibility.trimmed
+        ? undefined
+        : (translation) =>
+            rangeStillMatches(field.value, start, end, captured) &&
+            writeIntoField(field, start, end, translation),
       text: captured,
+      trimmed: eligibility.trimmed,
     };
   }
 
@@ -350,7 +380,7 @@ function captureSelection(
       return usableRect(range.getBoundingClientRect());
     },
     replace:
-      host && range
+      host && range && !eligibility.trimmed
         ? (translation) => {
             // The same guard as a form field: the range must still be connected and still hold
             // exactly the text that was translated.
@@ -368,6 +398,7 @@ function captureSelection(
           }
         : undefined,
     text: captured,
+    trimmed: eligibility.trimmed,
   };
 }
 
@@ -431,6 +462,9 @@ function createController(): InstalledController {
   let requestController: AbortController | null = null;
   let requestSequence = 0;
   let preferenceWrite: Promise<void> = Promise.resolve();
+  /** When the gateway will accept this installation's next translation, in epoch milliseconds. */
+  let translationCooldownUntil = 0;
+  let cooldownTimer: number | null = null;
 
   function setHostPosition(width: number, height: number): void {
     if (!host || !activeSelection) return;
@@ -476,7 +510,9 @@ function createController(): InstalledController {
     if (expiryTimer !== null) window.clearTimeout(expiryTimer);
     if (positionFrame !== null) cancelAnimationFrame(positionFrame);
     if (copyFeedbackTimer !== null) window.clearTimeout(copyFeedbackTimer);
+    if (cooldownTimer !== null) window.clearInterval(cooldownTimer);
     copyFeedbackTimer = null;
+    cooldownTimer = null;
     stabilityTimer = null;
     expiryTimer = null;
     positionFrame = null;
@@ -509,12 +545,54 @@ function createController(): InstalledController {
     expiryTimer = window.setTimeout(close, SELECTION_MAGIC_EXPIRY_MS);
   }
 
+  /**
+   * Every state change redraws the panel, so a redraw must not look like a reopen: the stylesheet
+   * stays mounted, the entrance animation plays only on first open, and scroll positions and focus
+   * carry over. Blocks marked with data-animate-key fade in only when that key is new.
+   */
   function renderBase(content: HTMLElement): void {
     const root = ensureHost();
-    root.replaceChildren();
-    const style = document.createElement("style");
-    style.textContent = SURFACE_CSS;
-    root.append(style, content);
+    if (!(root.firstElementChild instanceof HTMLStyleElement)) {
+      root.replaceChildren();
+      const style = document.createElement("style");
+      style.textContent = SURFACE_CSS;
+      root.append(style);
+    }
+    const previous = root.children[1] instanceof HTMLElement ? root.children[1] : null;
+    const redraw =
+      previous?.classList.contains("panel") === true && content.classList.contains("panel");
+
+    if (!redraw) {
+      if (content.classList.contains("panel")) content.classList.add("panel--enter");
+      previous?.remove();
+      root.append(content);
+    } else if (previous) {
+      const scrollPositions = PRESERVED_SCROLL_SELECTORS.map(
+        (selector) => previous.querySelector(selector)?.scrollTop ?? 0,
+      );
+      const focused = focusKey(root.activeElement);
+      const shownKeys = new Set(
+        Array.from(previous.querySelectorAll("[data-animate-key]"), (element) =>
+          element.getAttribute("data-animate-key"),
+        ),
+      );
+      for (const element of content.querySelectorAll("[data-animate-key]")) {
+        if (!shownKeys.has(element.getAttribute("data-animate-key"))) {
+          element.classList.add("fade-in");
+        }
+      }
+      previous.replaceWith(content);
+      PRESERVED_SCROLL_SELECTORS.forEach((selector, index) => {
+        const container = content.querySelector(selector);
+        if (container) container.scrollTop = scrollPositions[index] ?? 0;
+      });
+      if (focused) {
+        const match = Array.from(content.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).find(
+          (element) => focusKey(element) === focused,
+        );
+        match?.focus({ preventScroll: true });
+      }
+    }
     host?.setAttribute("data-lingobridge-state", state ?? "closed");
     queueMicrotask(reposition);
   }
@@ -738,7 +816,7 @@ function createController(): InstalledController {
     if (!context) return;
     context.targetLanguage = code;
     void savePreferredTarget(code);
-    if (state !== "consent") {
+    if (state !== "account-required") {
       requestSequence += 1;
       requestController?.abort();
       requestController = null;
@@ -905,6 +983,13 @@ function createController(): InstalledController {
     favoriteToggle.disabled = targetSelect.disabled;
     favoritePicker.hidden = targetSelect.disabled;
 
+    if (activeSelection?.trimmed) {
+      const note = document.createElement("p");
+      note.className = "notice";
+      note.textContent = `Only the first ${MAX_TRANSLATION_REQUEST_CODE_POINTS} characters are translated. Select less text to translate another part.`;
+      body.insertBefore(note, status);
+    }
+
     if (state === "preparing") {
       statusContent(status, "Detecting the language…", "loading");
       return;
@@ -919,27 +1004,21 @@ function createController(): InstalledController {
       return;
     }
 
-    if (state === "consent") {
+    if (state === "account-required") {
+      const reconnect = context?.dashboardConnected === true;
       statusContent(
         status,
-        "Online translation is off. The selected text has not been sent.",
+        reconnect
+          ? "Reconnect the dashboard to confirm Online translation before continuing."
+          : "Connect the dashboard before translating.",
         "warning",
       );
-      const privacy = document.createElement("p");
-      privacy.className = "notice";
-      privacy.append(
-        "Online mode sends only this selected text to MyMemory first, with NVIDIA as a backup for supported languages. Romanized Nepali is first rewritten in Nepali script by NVIDIA Nemotron, with OpenRouter as a backup. ",
-      );
-      const link = document.createElement("a");
-      link.href = browser.runtime.getURL("/privacy.html");
-      link.target = "_blank";
-      link.rel = "noopener";
-      link.textContent = "Privacy details";
-      privacy.append(link);
-      body.insertBefore(privacy, actions);
       actions.append(
         actionButton("Cancel", close, true),
-        actionButton("Allow and translate", () => void acceptConsentAndTranslate()),
+        actionButton(
+          reconnect ? "Reconnect dashboard" : "Connect dashboard",
+          () => void connectDashboard(),
+        ),
       );
       return;
     }
@@ -968,10 +1047,10 @@ function createController(): InstalledController {
       const targetName =
         getPreviewLanguage(context?.targetLanguage ?? "", context?.languages)?.name ??
         context?.targetLanguage;
-      statusContent(status, `Choose a language, then translate into ${targetName}.`);
       const translate = actionButton("Translate", () => void runTranslation());
       translate.setAttribute("aria-label", `Translate into ${targetName}`);
-      actions.append(translate);
+      actions.append(actionButton("Cancel", close, true), translate);
+      holdForCooldown(translate, body);
       return;
     }
 
@@ -1098,9 +1177,67 @@ function createController(): InstalledController {
       }
       statusContent(status, errorMessage, "error");
       if (errorRetryable) {
-        actions.append(actionButton("Retry", () => void runTranslation(), false, "retry"));
+        const retry = actionButton("Retry", () => void runTranslation(), false, "retry");
+        actions.append(retry);
+        holdForCooldown(retry, body);
       }
     }
+  }
+
+  /** Seconds left before the gateway accepts another translation from this installation. */
+  function cooldownSecondsLeft(): number {
+    return Math.max(0, Math.ceil((translationCooldownUntil - Date.now()) / 1_000));
+  }
+
+  function cooldownText(seconds: number): string {
+    return `Translation limit reached. Try again in ${seconds} ${seconds === 1 ? "second" : "seconds"}.`;
+  }
+
+  /**
+   * Holds a translate button while the limit lasts, with a countdown under it. The countdown is
+   * described by the button rather than announced every second, and the button comes back on its
+   * own the moment the gateway will accept the next translation.
+   */
+  function holdForCooldown(button: HTMLButtonElement, body: HTMLDivElement): void {
+    const seconds = cooldownSecondsLeft();
+    if (seconds === 0) return;
+    button.disabled = true;
+    const hint = document.createElement("p");
+    hint.className = "cooldown";
+    hint.id = "lingobridge-translation-cooldown";
+    hint.textContent = cooldownText(seconds);
+    button.setAttribute("aria-describedby", hint.id);
+    body.append(hint);
+    if (cooldownTimer !== null) return;
+    cooldownTimer = window.setInterval(() => {
+      const left = cooldownSecondsLeft();
+      if (left > 0) {
+        const current = shadow?.querySelector(".cooldown");
+        if (current) current.textContent = cooldownText(left);
+        return;
+      }
+      if (cooldownTimer !== null) window.clearInterval(cooldownTimer);
+      cooldownTimer = null;
+      if (host && (state === "ready" || state === "error")) renderPanel();
+    }, 1_000);
+  }
+
+  async function loadTranslationCooldown(): Promise<void> {
+    const stored = await browser.storage.local
+      .get(TRANSLATION_COOLDOWN_STORAGE_KEY)
+      .catch(() => ({}) as Record<string, unknown>);
+    const until = stored[TRANSLATION_COOLDOWN_STORAGE_KEY];
+    if (typeof until === "number" && Number.isFinite(until)) {
+      translationCooldownUntil = Math.max(translationCooldownUntil, until);
+    }
+  }
+
+  /** Shared through storage, so a panel opened in another tab starts held as well. */
+  function startTranslationCooldown(seconds: number): void {
+    translationCooldownUntil = Date.now() + seconds * 1_000;
+    void browser.storage.local
+      .set({ [TRANSLATION_COOLDOWN_STORAGE_KEY]: translationCooldownUntil })
+      .catch(() => undefined);
   }
 
   function renderInteractiveSource(source: HTMLParagraphElement): void {
@@ -1145,6 +1282,7 @@ function createController(): InstalledController {
     panel.className = wordState === "error" ? "word-panel word-panel--error" : "word-panel";
     panel.setAttribute("aria-label", "Word understanding");
     panel.setAttribute("aria-live", "polite");
+    panel.setAttribute("data-animate-key", `word:${wordState}:${selectedWord}`);
     const head = document.createElement("div");
     head.className = "word-panel__head";
     const title = document.createElement("strong");
@@ -1403,6 +1541,7 @@ function createController(): InstalledController {
     card.className = explanationState === "error" ? "explain explain--error" : "explain";
     card.setAttribute("aria-label", "Explanation");
     card.setAttribute("aria-live", "polite");
+    card.setAttribute("data-animate-key", `explain:${explanationState}`);
 
     const head = document.createElement("div");
     head.className = "explain__head";
@@ -1741,10 +1880,37 @@ function createController(): InstalledController {
     await persistPreferenceChange((preferences) => ({ ...preferences, targetLanguage }));
   }
 
+  async function dashboardConnected(): Promise<boolean> {
+    const stored = await browser.storage.local.get(ACCOUNT_STATUS_STORAGE_KEY);
+    return normalizeAccountStatus(stored[ACCOUNT_STATUS_STORAGE_KEY]).connection === "connected";
+  }
+
+  async function connectDashboard(): Promise<void> {
+    try {
+      const result = (await browser.runtime.sendMessage({
+        type: "lingobridge:account:connect",
+      })) as AccountMessageResult | undefined;
+      if (result?.ok) {
+        close();
+        return;
+      }
+      state = "error";
+      errorMessage = result?.message ?? "The dashboard connection could not be started.";
+      errorRetryable = false;
+      renderPanel();
+    } catch {
+      state = "error";
+      errorMessage = "The dashboard connection could not be started.";
+      errorRetryable = false;
+      renderPanel();
+    }
+  }
+
   async function loadContext(): Promise<TranslationContext> {
-    const [preferences, consent, storedCatalogue, service] = await Promise.all([
+    const [preferences, consent, connected, storedCatalogue, service] = await Promise.all([
       loadPopupPreferences().catch(() => DEFAULT_POPUP_PREFERENCES),
       loadOnlineProviderConsent().catch(() => null),
+      dashboardConnected().catch(() => false),
       loadCachedCapabilityCatalogue().catch(() => null),
       gatewayClient.inspectService(),
     ]);
@@ -1774,6 +1940,7 @@ function createController(): InstalledController {
     return {
       catalogue,
       consent,
+      dashboardConnected: connected,
       favouriteLanguageCodes: preferences.favouriteLanguageCodes,
       gatewayMode: service.version.translationMode,
       languages,
@@ -1792,23 +1959,29 @@ function createController(): InstalledController {
     translateNow = false,
   ): Promise<void> {
     if (!activeSelection) return;
-    if (!sensitiveConfirmed) {
-      sensitiveKind = detectSensitiveSelection(activeSelection.text);
-      if (sensitiveKind) {
-        state = "sensitive";
-        renderPanel();
-        return;
-      }
-    }
     state = "preparing";
     renderPanel();
     try {
       context = await loadContext();
+      await loadTranslationCooldown();
       await savePreferredTarget(context.targetLanguage);
-      if (context.gatewayMode === "live" && !context.consent) {
-        state = "consent";
+      if (!context.dashboardConnected) {
+        state = "account-required";
         renderPanel();
         return;
+      }
+      if (context.gatewayMode === "live" && !context.consent) {
+        state = "account-required";
+        renderPanel();
+        return;
+      }
+      if (!sensitiveConfirmed) {
+        sensitiveKind = detectSensitiveSelection(activeSelection.text);
+        if (sensitiveKind) {
+          state = "sensitive";
+          renderPanel();
+          return;
+        }
       }
       if (!isTranslatablePair()) {
         state = "unsupported-pair";
@@ -1825,19 +1998,6 @@ function createController(): InstalledController {
       state = "error";
       errorMessage = error instanceof Error ? error.message : "Translation could not be prepared.";
       errorRetryable = true;
-      renderPanel();
-    }
-  }
-
-  async function acceptConsentAndTranslate(): Promise<void> {
-    if (!context) return;
-    try {
-      context.consent = await acceptOnlineProviderConsent();
-      await runTranslation();
-    } catch {
-      state = "error";
-      errorMessage = "Online consent could not be saved. The selected text was not sent.";
-      errorRetryable = false;
       renderPanel();
     }
   }
@@ -1871,13 +2031,25 @@ function createController(): InstalledController {
 
   async function runTranslation(): Promise<void> {
     if (!activeSelection || !context) return;
+    context.dashboardConnected = await dashboardConnected().catch(() => false);
+    if (!context.dashboardConnected) {
+      state = "account-required";
+      renderPanel();
+      return;
+    }
     if (context.gatewayMode === "live" && !context.consent) {
-      state = "consent";
+      state = "account-required";
       renderPanel();
       return;
     }
     if (!isTranslatablePair()) {
       state = "unsupported-pair";
+      renderPanel();
+      return;
+    }
+    // A shortcut or menu translate while the limit lasts must not send; show the held button.
+    if (cooldownSecondsLeft() > 0) {
+      state = "ready";
       renderPanel();
       return;
     }
@@ -1898,7 +2070,9 @@ function createController(): InstalledController {
       requestId: crypto.randomUUID(),
       sourceLanguage: context.sourceLanguage,
       targetLanguage: context.targetLanguage,
-      text: context.requestText,
+      // Romanized Nepali is rewritten before sending, and a rewrite can run longer than the
+      // selection; the request must still fit one translation.
+      text: limitTranslationText(context.requestText).text,
     };
     try {
       if (
@@ -1916,7 +2090,7 @@ function createController(): InstalledController {
         if (converted) {
           context.requestText = converted;
           context.romanizedNepaliConverted = true;
-          request.text = converted;
+          request.text = limitTranslationText(converted).text;
         }
       }
       const translated = await gatewayClient.translate(request, requestController.signal);
@@ -1936,6 +2110,12 @@ function createController(): InstalledController {
       renderPanel();
     } catch (error) {
       if (sequence !== requestSequence) return;
+      if (error instanceof GatewayClientError && error.code === "rate-limited") {
+        startTranslationCooldown(error.retryAfterSeconds ?? TRANSLATION_COOLDOWN_FALLBACK_SECONDS);
+        state = "ready";
+        renderPanel();
+        return;
+      }
       state = "error";
       errorMessage =
         error instanceof GatewayClientError

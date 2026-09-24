@@ -52,7 +52,7 @@ Provides an authenticated overview, synchronized saved phrases, search and langu
 
 ### Identity and session service
 
-Authenticates dashboard users through an approved OAuth or OpenID Connect provider. The extension begins an interactive connection only after the user clicks Connect dashboard, uses Chrome's identity redirect flow with authorization code and PKCE, and receives a revocable extension session. Translation itself remains available without an account.
+Authenticates dashboard users through an approved OAuth or OpenID Connect provider. The extension begins an interactive connection only after the user clicks Connect dashboard, uses Chrome's identity redirect flow with authorization code and PKCE, and receives a revocable extension session. Online translation remains locked until that connection succeeds and the matching processor disclosure has been accepted.
 
 ### Phrase sync service
 
@@ -102,8 +102,8 @@ Stores preferences, site-access choices, disabled-site rules, consent state, sav
 4. The user clicks the magic icon. Until this click, LingoBridge does not detect, transmit, or translate the selection.
 5. A local detector proposes the source language when available; otherwise detection is included in the approved online request.
 6. The anchored translator opens with the user's saved preferred target language and a loading state.
-7. If Online consent exists and no sensitive-text warning triggers, the request follows the MyMemory-first online path.
-8. Otherwise the surface waits for required consent or offers On-device mode.
+7. If the extension is connected, matching Online consent exists, and no sensitive-text warning triggers, the request follows the MyMemory-first online path.
+8. Otherwise the surface blocks translation and asks the user to connect or reconnect through the dashboard.
 9. Closing the icon or surface, losing the range, or selecting unrelated text clears the temporary selection state.
 
 ### On-device path
@@ -140,9 +140,15 @@ Stores preferences, site-access choices, disabled-site rules, consent state, sav
 1. The user chooses Connect dashboard in the extension.
 2. Chrome opens an interactive authorization flow using the extension-specific redirect URL and PKCE challenge.
 3. The identity service authenticates the user and returns a one-time authorization code to Chrome's redirect URL.
-4. The extension exchanges the code through the LingoBridge gateway for a short-lived access token and rotating extension session.
-5. The dashboard and extension now reference the same user account without sharing dashboard cookies with webpage content.
-6. The user can revoke that extension session from either surface.
+4. The approval page separately discloses the current Online translation processors. Its signed
+   redirect carries the accepted disclosure version back to the extension.
+5. The extension exchanges the code through the LingoBridge gateway for a short-lived access token
+   and rotating extension session, then stores Online consent locally only when the returned
+   disclosure version exactly matches its bundled version.
+6. The dashboard and extension now reference the same user account without sharing dashboard cookies with webpage content.
+7. The user can revoke that extension session from either surface. Online consent remains a
+   device-local, separately revocable preference rather than synchronized account data.
+8. Revocation or disconnection immediately restores the translation lock on that extension installation.
 
 ### Saved-phrase sync path
 

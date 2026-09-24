@@ -104,6 +104,10 @@ svg {
   border-radius: var(--radius-xl);
   background: var(--bg);
   box-shadow: var(--shadow-float);
+}
+
+/* Only the first open rises in. Redraws for new results must not look like the panel reopening. */
+.panel--enter {
   animation: rise-in 160ms var(--ease-out);
 }
 
@@ -115,6 +119,20 @@ svg {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* A block whose content just changed, such as an explanation arriving, settles in quietly. */
+.fade-in {
+  animation: fade-in 140ms var(--ease-out);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 
@@ -675,6 +693,15 @@ select:disabled {
   display: none;
 }
 
+/* The countdown under a Translate button held back by the translation limit. */
+.cooldown {
+  margin: -6px 0 0;
+  color: var(--danger);
+  font-size: var(--text-11);
+  line-height: 1.4;
+  text-align: right;
+}
+
 .btn {
   display: inline-flex;
   min-height: 30px;
@@ -934,7 +961,8 @@ select:disabled {
 
 @media (prefers-reduced-motion: reduce) {
   .magic,
-  .panel {
+  .panel--enter,
+  .fade-in {
     animation: none;
   }
   .magic,

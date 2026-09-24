@@ -14,14 +14,27 @@ import {
   normalizeAccountStatus,
 } from "./account-status";
 import { DASHBOARD_ORIGIN } from "./dashboard-config";
+import { acceptOnlineProviderConsent } from "./online-consent";
 import { SAVED_PHRASES_STORAGE_KEY } from "./saved-phrases";
 import { createSyncService } from "./sync-service";
 
 export const SYNC_ALARM = "lingobridge-sync-retry";
 export const PERIODIC_SYNC_ALARM = "lingobridge-sync-periodic";
 
+/** What one Connect click knows about Chrome's sign-in window, used to find it again on Retry. */
+interface ConnectionWindow {
+  /** Popup windows that already existed, so the sign-in window can be told apart from them. */
+  baseline: Set<number> | null;
+  redirectUri: string;
+  /** Chrome's sign-in window, recorded when it opens. It keeps this id through Google's pages. */
+  windowId: number | null;
+}
+
 let connectionAttempt: Promise<void> | null = null;
-let windowsBeforeConnection: Set<number> | null = null;
+/** Bumped when an attempt is abandoned, so its late result cannot overwrite the new attempt. */
+let connectionGeneration = 0;
+let connectionWindow: ConnectionWindow | null = null;
+let staleStatusCleared: Promise<void> = Promise.resolve();
 
 function isConcurrentAuthFlow(error: unknown): boolean {
   return (
@@ -68,31 +81,49 @@ export function dashboardConnectionPending(): boolean {
   return connectionAttempt !== null;
 }
 
-/** Bring the existing Chrome Identity window forward instead of silently ignoring Retry. */
+/**
+ * Finds this attempt's sign-in window: first by the id recorded when it opened, then by the
+ * dashboard page it shows, then as the only popup that opened since Connect. Counting popups alone
+ * failed whenever another extension or app had a popup open.
+ */
+async function findConnectionWindow(
+  attempt: ConnectionWindow,
+): Promise<Browser.windows.Window | null> {
+  const windows = await browser.windows
+    .getAll({ populate: true, windowTypes: ["popup"] })
+    .catch(() => []);
+  const recorded = windows.find((window) => window.id === attempt.windowId);
+  if (recorded) return recorded;
+  const showingConnect = windows.filter((window) =>
+    belongsToThisConnection(window, attempt.redirectUri),
+  );
+  if (showingConnect.length === 1) return showingConnect[0] ?? null;
+  const opened = windows.filter(
+    (window) => typeof window.id === "number" && !attempt.baseline?.has(window.id),
+  );
+  return attempt.baseline && opened.length === 1 ? (opened[0] ?? null) : null;
+}
+
+/**
+ * Retry brings the sign-in window forward. When that window no longer exists the old attempt can
+ * never finish, so Retry abandons it and opens a fresh window instead of leaving the user stuck.
+ */
 export async function focusDashboardConnection(): Promise<AccountMessageResult> {
-  const baseline = windowsBeforeConnection;
-  if (!connectionAttempt || !baseline) {
+  const attempt = connectionWindow;
+  if (!attempt) {
     return {
       message: "The connection window is still opening or finishing. Try again shortly.",
       ok: false,
     };
   }
 
-  const windows = await browser.windows.getAll({ windowTypes: ["normal", "popup"] });
-  const candidates = windows.filter(
-    (window) =>
-      window.type === "popup" && typeof window.id === "number" && !baseline.has(window.id),
-  );
-  if (candidates.length !== 1) {
-    return {
-      message: "Find the LingoBridge sign-in window with Alt+Tab, or close it and try again.",
-      ok: false,
-    };
-  }
-
-  const window = candidates[0];
+  const window = await findConnectionWindow(attempt);
   if (!window || typeof window.id !== "number") {
-    return { message: "The connection window could not be found.", ok: false };
+    connectionGeneration += 1;
+    connectionAttempt = null;
+    connectionWindow = null;
+    startDashboardConnection();
+    return { message: null, ok: true };
   }
   await browser.windows.update(
     window.id,
@@ -116,24 +147,45 @@ async function updateConnectionStatus(
   });
 }
 
+/**
+ * A worker that starts fresh has no attempt in flight, so a stored "connecting" status is left
+ * over from a worker Chrome stopped mid-connection. Without this the popup kept asking the user to
+ * finish in a sign-in window that no longer belonged to anything.
+ */
+export function clearStaleConnectionStatus(): Promise<void> {
+  staleStatusCleared = (async () => {
+    const stored = await browser.storage.local.get(ACCOUNT_STATUS_STORAGE_KEY);
+    const current = normalizeAccountStatus(stored[ACCOUNT_STATUS_STORAGE_KEY]);
+    if (current.connection === "connecting" && !connectionAttempt) {
+      await updateConnectionStatus("disconnected", null);
+    }
+  })().catch(() => undefined);
+  return staleStatusCleared;
+}
+
 /** The popup can close when Chrome opens the identity window; the worker owns the whole attempt. */
 export function startDashboardConnection(): void {
   if (connectionAttempt) return;
+  const generation = ++connectionGeneration;
+  const current = () => generation === connectionGeneration;
   connectionAttempt = (async () => {
+    // The startup cleanup must not overwrite the "connecting" status written below.
+    await staleStatusCleared;
     await updateConnectionStatus("connecting", null);
     const result = await connectDashboard();
-    if (!result.ok) {
+    if (!result.ok && current()) {
       await updateConnectionStatus("disconnected", result.message);
     }
   })()
     .catch(async () => {
+      if (!current()) return;
       await updateConnectionStatus(
         "disconnected",
         "The connection couldn’t be completed. Try again.",
       ).catch(() => undefined);
     })
     .finally(() => {
-      connectionAttempt = null;
+      if (current()) connectionAttempt = null;
     });
 }
 
@@ -192,24 +244,30 @@ export async function connectDashboard(): Promise<AccountMessageResult> {
   });
 
   let responseUrl: string | undefined;
-  windowsBeforeConnection = await browser.windows
-    .getAll({ windowTypes: ["normal", "popup"] })
-    .then(
-      (windows) =>
-        new Set(
-          windows.map((window) => window.id).filter((id): id is number => typeof id === "number"),
-        ),
-    )
-    .catch(() => null);
+  const attempt: ConnectionWindow = {
+    baseline: await browser.windows
+      .getAll({ windowTypes: ["normal", "popup"] })
+      .then(
+        (windows) =>
+          new Set(
+            windows.map((window) => window.id).filter((id): id is number => typeof id === "number"),
+          ),
+      )
+      .catch(() => null),
+    redirectUri,
+    windowId: null,
+  };
+  connectionWindow = attempt;
   let identityWindowAppeared = false;
   const onWindowCreated = (window: Browser.windows.Window) => {
     if (
       window.type !== "popup" ||
       typeof window.id !== "number" ||
-      windowsBeforeConnection?.has(window.id)
+      attempt.baseline?.has(window.id)
     )
       return;
     identityWindowAppeared = true;
+    attempt.windowId ??= window.id;
     // Chrome can create the identity popup behind the active browser window. Surface it as soon
     // as it exists; the toolbar popup itself will close when the focus moves.
     void browser.windows.update(window.id, { focused: true }).catch(() => undefined);
@@ -248,7 +306,7 @@ export async function connectDashboard(): Promise<AccountMessageResult> {
     };
   } finally {
     browser.windows.onCreated.removeListener(onWindowCreated);
-    windowsBeforeConnection = null;
+    if (connectionWindow === attempt) connectionWindow = null;
   }
 
   const redirect = parseAuthorizationRedirect(responseUrl, redirectUri, state);
@@ -263,6 +321,11 @@ export async function connectDashboard(): Promise<AccountMessageResult> {
       redirectUri,
     });
     await syncService.markConnected(tokens.account);
+    if (redirect.onlineConsentAccepted) {
+      // The signed-in approval page showed this exact disclosure version. A storage failure keeps
+      // the existing first-translation consent fallback instead of weakening the send boundary.
+      await acceptOnlineProviderConsent().catch(() => undefined);
+    }
     browser.alarms.create(PERIODIC_SYNC_ALARM, { periodInMinutes: 15 });
     void syncService.run();
     return { message: null, ok: true };

@@ -21,6 +21,7 @@ import {
   type GatewayClient,
   GatewayClientError,
   type GatewayServiceSnapshot,
+  parseRetryAfterSeconds,
 } from "./gateway-client";
 
 export const GATEWAY_BRIDGE_REQUEST = "lingobridge:gateway:request";
@@ -70,6 +71,7 @@ export interface GatewayBridgeFailure {
   code: GatewayBridgeErrorCode;
   message: string;
   retryable: boolean;
+  retryAfterSeconds?: number | null;
 }
 
 export type GatewayBridgeResponse =
@@ -153,12 +155,18 @@ export function parseGatewayBridgeAbort(value: unknown): GatewayBridgeAbort | nu
 
 export function toGatewayBridgeFailure(error: unknown): GatewayBridgeFailure {
   if (error instanceof GatewayClientError) {
-    return { code: error.code, message: error.message, retryable: error.retryable };
+    return {
+      code: error.code,
+      message: error.message,
+      retryable: error.retryable,
+      retryAfterSeconds: error.retryAfterSeconds,
+    };
   }
   return {
     code: "internal-error",
     message: "The translation could not be completed.",
     retryable: true,
+    retryAfterSeconds: null,
   };
 }
 
@@ -195,7 +203,12 @@ function parseResponse(value: unknown): GatewayBridgeResponse {
   }
   return {
     aborted: false,
-    error: { code: code as GatewayBridgeErrorCode, message, retryable },
+    error: {
+      code: code as GatewayBridgeErrorCode,
+      message,
+      retryable,
+      retryAfterSeconds: parseRetryAfterSeconds(failure?.retryAfterSeconds),
+    },
     ok: false,
   };
 }
@@ -227,7 +240,12 @@ export function createBridgeGatewayClient(transport: GatewayBridgeTransport): Ga
       const parsed = parseResponse(raw);
       if (parsed.ok) return parsed.data;
       if (parsed.aborted) throw abortError();
-      throw new GatewayClientError(parsed.error.code, parsed.error.message, parsed.error.retryable);
+      throw new GatewayClientError(
+        parsed.error.code,
+        parsed.error.message,
+        parsed.error.retryable,
+        parsed.error.retryAfterSeconds ?? null,
+      );
     } catch (error) {
       if (error instanceof DOMException) throw error;
       if (signal?.aborted) throw abortError();

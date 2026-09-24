@@ -3,6 +3,7 @@ import {
   anonymousInstallationIdSchema,
   capabilityCatalogueSchema,
   MAX_TRANSLATION_CODE_POINTS,
+  MAX_TRANSLATION_REQUEST_CODE_POINTS,
   MAX_TRANSLATION_RESPONSE_UTF8_BYTES,
   onlineConsentSchema,
   providerSchema,
@@ -45,6 +46,13 @@ describe("translationRequestSchema", () => {
         text: "a".repeat(MAX_TRANSLATION_CODE_POINTS + 1),
       }).success,
     ).toBe(false);
+  });
+
+  it("limits one translation request to its own, smaller allowance", () => {
+    const parse = (text: string) =>
+      translationRequestSchema.safeParse({ ...validRequest, text }).success;
+    expect(parse("a".repeat(MAX_TRANSLATION_REQUEST_CODE_POINTS))).toBe(true);
+    expect(parse("a".repeat(MAX_TRANSLATION_REQUEST_CODE_POINTS + 1))).toBe(false);
   });
 
   it("rejects a same-language request", () => {

@@ -64,7 +64,14 @@ describe("connection URL and redirect", () => {
     const code = "c".repeat(43);
     expect(
       parseAuthorizationRedirect(`${REDIRECT}?code=${code}&state=${state}`, REDIRECT, state),
-    ).toEqual({ code, kind: "code" });
+    ).toEqual({ code, kind: "code", onlineConsentAccepted: false });
+    expect(
+      parseAuthorizationRedirect(
+        `${REDIRECT}?code=${code}&state=${state}&online_consent_version=mymemory-primary-nvidia-backup-v2`,
+        REDIRECT,
+        state,
+      ),
+    ).toEqual({ code, kind: "code", onlineConsentAccepted: true });
     expect(
       parseAuthorizationRedirect(`${REDIRECT}?code=${code}&state=other`, REDIRECT, state),
     ).toEqual({ kind: "invalid" });

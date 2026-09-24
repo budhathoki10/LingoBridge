@@ -73,8 +73,11 @@
 ### Web dashboard and account
 
 - Provide an authenticated web dashboard as a required product surface.
-- Keep translation usable in the extension without signing in.
+- Require the extension to be connected to an authenticated dashboard account before any translation can begin.
 - Let a user connect the extension to the same account through an explicit browser authentication flow.
+- On the connection approval screen, disclose the current Online translation processors and state
+  that approving the connection also enables that disclosed Online mode on the connecting device.
+  Do not offer a separate guest Online-consent path; disconnected users must connect first.
 - Synchronize only phrases the user explicitly saves and preferences approved for sync.
 - Show an overview, searchable saved phrases, language filters, connected extension sessions, settings, export, and account deletion.
 - Show searchable saved vocabulary with delete and text-export actions, separately from phrases.

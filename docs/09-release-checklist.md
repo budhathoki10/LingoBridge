@@ -8,7 +8,7 @@
 - The store listing and onboarding explain why Selection Magic needs HTTP/HTTPS site access and that selected text is translated only after the user clicks the magic icon and accepts Online processing.
 - Unsupported and offline states are understandable.
 - The language picker matches the reviewed capability catalogue and does not advertise unsupported enhanced features.
-- Translation and local saving still work without an account; sign-in is required only for the dashboard and synchronized data.
+- Translation remains locked until the extension is connected to an authenticated dashboard account; existing local records remain readable after disconnection.
 - The dashboard exposes only deliberate saved phrases, approved preferences, connected sessions, export, and deletion—not automatic translation history.
 
 ## Package

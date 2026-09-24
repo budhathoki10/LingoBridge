@@ -123,20 +123,21 @@ function checkRateLimit(
     networkDecision.allowed ? 0 : networkDecision.retryAfterSeconds,
     installationDecision.allowed ? 0 : installationDecision.retryAfterSeconds,
   );
-  context.header("Retry-After", String(retryAfterSeconds));
-  return context.json(
-    createError(
-      "rate-limited",
-      "Too many translation requests. Wait briefly and try again.",
-      null,
-      true,
-    ),
-    429,
+  return rateLimited(
+    context,
+    retryAfterSeconds,
+    "Too many translation requests. Wait briefly and try again.",
   );
 }
 
+/** Retry-After tells the extension exactly when its Translate button can come back. */
+function rateLimited(context: Context, retryAfterSeconds: number, message: string): Response {
+  context.header("Retry-After", String(retryAfterSeconds));
+  return context.json(createError("rate-limited", message, null, true), 429);
+}
+
 type AcceptedPost =
-  | { ok: true; payload: unknown }
+  | { installationId: string; ok: true; payload: unknown }
   | { ok: false; rateLimited: boolean; response: Response };
 
 /** Content type, installation identifier, rate limits, then JSON parsing, in that order. */
@@ -171,7 +172,7 @@ async function acceptJsonPost(
   if (rateLimitResponse) return { ok: false, rateLimited: true, response: rateLimitResponse };
 
   try {
-    return { ok: true, payload: await context.req.json() };
+    return { installationId: installationId.data, ok: true, payload: await context.req.json() };
   } catch {
     return {
       ok: false,
@@ -240,6 +241,7 @@ export function createGatewayApp(dependencies: Partial<GatewayDependencies> = {}
     cors({
       allowHeaders: ["Content-Type", ANONYMOUS_INSTALLATION_HEADER],
       allowMethods: ["GET", "POST", "OPTIONS"],
+      exposeHeaders: ["Retry-After"],
       maxAge: 600,
       origin: (origin) => resolvedDependencies.security.originPolicy.corsOrigin(origin),
     }),
@@ -383,6 +385,21 @@ export function createGatewayApp(dependencies: Partial<GatewayDependencies> = {}
       }
 
       const request = parsedRequest.data;
+      // Counted only once the request is valid, and before any provider is asked.
+      const translationDecision = resolvedDependencies.rateLimiter.consume(
+        "translation",
+        accepted.installationId,
+        resolvedDependencies.security.translationRateLimit,
+      );
+      if (!translationDecision.allowed) {
+        recordRejected("rate-limited");
+        const limit = resolvedDependencies.security.translationRateLimit.limit;
+        return rateLimited(
+          context,
+          translationDecision.retryAfterSeconds,
+          `You can translate ${limit} ${limit === 1 ? "time" : "times"} a minute. Try again shortly.`,
+        );
+      }
       let capabilities: CapabilityCatalogue;
       try {
         capabilities = await resolvedDependencies.capabilityProvider.get(context.req.raw.signal);

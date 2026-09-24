@@ -196,6 +196,18 @@ services:
       - key: LINGOBRIDGE_NETWORK_RATE_LIMIT
         value: "30"
 
+      # Translations per installation per window, counted separately from the general limit
+      # above so Explain and word lookups still work after a translation. Each translation is
+      # capped at 500 characters, so this bounds one installation to about 1,000 characters a
+      # minute of MyMemory's shared quota.
+      - key: LINGOBRIDGE_TRANSLATION_RATE_LIMIT
+        value: "2"
+
+      # Going over that limit locks translation for this long from that moment, so the reader
+      # always waits the full minute rather than whatever remained of the window.
+      - key: LINGOBRIDGE_TRANSLATION_LOCKOUT_MS
+        value: "60000"
+
       # ---------------------------------------------------------------------
       # Capability catalogue cache
       #

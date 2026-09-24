@@ -48,7 +48,8 @@
 - Delete saved data and verify that local phrase records are removed.
 - Close a selection flow and verify temporary text expires.
 - Disable Selection Magic and revoke host access, then confirm no selection listener operates on newly loaded pages.
-- Translate without signing in and confirm no account or sync request is required.
+- Confirm a disconnected extension cannot start translation, offers dashboard connection, and sends no selected text.
+- Connect the extension, accept the current processor disclosure, and confirm translation becomes available.
 - Confirm that unsaved translations, temporary selections, site permissions, and sensitive-text decisions never appear in synchronized records.
 - Save one phrase and confirm that only the explicitly saved record and approved preference fields are synchronized.
 - Revoke one connected extension and confirm that its next sync fails without affecting other installations.

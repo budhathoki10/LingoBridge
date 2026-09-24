@@ -18,7 +18,7 @@ In Online mode, LingoBridge sends requests to its own gateway. The gateway uses 
 - Hear supported output and copy it in one action.
 - Save chosen phrases locally for later use.
 - Replace selected text inside an editable field only after review.
-- Connect an optional account to synchronize explicitly saved phrases and safe preferences with the dashboard.
+- Connect the extension to the dashboard before translating, then synchronize explicitly saved phrases and safe preferences.
 - Review, search, export, and delete synchronized data from the web dashboard.
 
 ## Documentation map

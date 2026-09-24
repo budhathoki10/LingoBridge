@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { PROFILE_PICTURE_ORIGIN } from "./lib/profile-picture";
 import { SESSION_COOKIE_CANDIDATES } from "./server/cookies";
 
 export const PROTECTED_PREFIXES = [
@@ -23,7 +24,7 @@ export function buildContentSecurityPolicy(nonce: string, development: boolean):
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${development ? " 'unsafe-eval'" : ""}`,
     // Development tooling injects styles without a nonce; production styles are bundled files.
     development ? "style-src 'self' 'unsafe-inline'" : "style-src 'self'",
-    "img-src 'self' data:",
+    `img-src 'self' data: ${PROFILE_PICTURE_ORIGIN}`,
     "frame-src https://www.youtube-nocookie.com",
     "font-src 'self'",
     "connect-src 'self'",

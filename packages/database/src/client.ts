@@ -25,6 +25,8 @@ export interface UserDocument {
   identityIssuer: string;
   identitySubject: string;
   lockVersion: number;
+  /** Absent on accounts that have not signed in since profile pictures were stored. */
+  pictureUrl?: string | null;
   role: "user" | "admin";
   tombstonePurgeSeq: number;
   updatedAt: Date;

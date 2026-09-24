@@ -7,7 +7,7 @@
 3. LingoBridge explains two processing choices: On-device and Online.
 4. The user can start with pasted text without granting page access.
 5. Selection Magic is available on ordinary websites immediately after installation. Chrome shows the declared site-access warning, and LingoBridge explains that selecting text sends nothing until the nearby icon is clicked.
-6. Signing in is optional. Translation and local saved phrases work without an account; sign-in is offered only for dashboard access and deliberate cross-device sync.
+6. The extension must be connected to a signed-in dashboard account before translation is enabled. Existing local phrases remain readable while disconnected.
 
 ## Enable On-device translation
 
@@ -22,12 +22,13 @@
 1. The user highlights a sentence.
 2. After the selection remains stable briefly, LingoBridge shows a small magic icon beside it.
 3. The user clicks the magic icon; selecting text alone never starts translation or sends it online.
-4. Language detection suggests a source language; the user can correct it.
-5. The user's saved preferred target language is selected automatically and can be changed or swapped.
-6. LingoBridge uses the user's privacy setting. On-device-only requests stay local; consented Online requests go to MyMemory first.
-7. The surface shows loading and then the result with Copy, Listen, and Save actions.
-8. Escape or Close dismisses it. Selecting different text replaces it rather than stacking another translator.
-9. The temporary source text expires when the surface closes or after a short timeout.
+4. If the extension is disconnected, the surface offers **Connect dashboard** and sends no translation request.
+5. After connection, language detection suggests a source language; the user can correct it.
+6. The user's saved preferred target language is selected automatically and can be changed or swapped.
+7. LingoBridge uses the user's privacy setting. On-device-only requests stay local; consented Online requests go to MyMemory first.
+8. The surface shows loading and then the result with Copy, Listen, and Save actions.
+9. Escape or Close dismisses it. Selecting different text replaces it rather than stacking another translator.
+10. The temporary source text expires when the surface closes or after a short timeout.
 
 If Chrome restricts access on a site, or the user disables Selection Magic there, LingoBridge does nothing silently until the user invokes the context menu, shortcut, or popup. Restricted browser pages such as `chrome://` pages and the Chrome Web Store cannot host the overlay.
 
@@ -44,7 +45,7 @@ If Chrome restricts access on a site, or the user disables Selection Magic there
 2. Chrome opens an interactive OAuth/OIDC sign-in flow initiated by that click.
 3. The authorization server returns a short-lived code through the extension's approved redirect URL.
 4. The extension exchanges the code with PKCE and receives a revocable, installation-specific session. Long-lived browser session secrets are never exposed to a webpage or content script.
-5. The extension shows the connected account and offers **Disconnect**. Translation remains available after disconnection.
+5. The extension shows the connected account and offers **Disconnect**. Disconnecting immediately locks translation.
 
 ## Save and synchronize a phrase
 
@@ -94,6 +95,6 @@ This flow remains disabled in version 1 unless the Phase 9 quality gate explicit
 - Provider rate limit: show when the user can retry and which provider failed.
 - Low confidence: show alternative wording and ask the user to review names, dates, and formal terms.
 - Restricted page or missing site access: keep the popup available and explain that Chrome does not allow the automatic overlay there.
-- Dashboard sign-in failure: keep translation and local saving available, preserve pending sync records, and allow a deliberate retry.
+- Dashboard sign-in failure: keep existing local records readable, preserve pending sync records, lock translation, and allow a deliberate retry.
 - Sync conflict: resolve by record revision, preserve deletion tombstones, and never duplicate an idempotent save.
-- Revoked session: stop synchronization, keep the local phrase library readable, and ask the user to reconnect.
+- Revoked session: stop translation and synchronization, keep the local phrase library readable, and ask the user to reconnect.

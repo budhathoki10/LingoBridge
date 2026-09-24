@@ -53,6 +53,12 @@ async function connectExtension(page: Page, request: APIRequestContext) {
   });
   await page.goto(`${DASHBOARD}/extension/connect?${params}`);
   await expect(page.getByRole("heading", { name: "Connect Chrome on Windows?" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Online translation" })).toBeVisible();
+  await expect(page.getByText("go to MyMemory first", { exact: false })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Privacy details" })).toHaveAttribute(
+    "href",
+    "/privacy-policy",
+  );
   const switchAccount = new URL(
     (await page.getByRole("link", { name: "Use a different account" }).getAttribute("href")) ?? "",
     DASHBOARD,
@@ -67,6 +73,9 @@ async function connectExtension(page: Page, request: APIRequestContext) {
   await page.getByRole("button", { name: "Connect extension" }).click();
   const returned = new URL((await redirect).url());
   expect(returned.searchParams.get("state")).toBe(state);
+  expect(returned.searchParams.get("online_consent_version")).toBe(
+    "mymemory-primary-nvidia-backup-v2",
+  );
   const exchange = await request.post(`${DASHBOARD}/api/v1/extension/token`, {
     data: {
       code: returned.searchParams.get("code"),

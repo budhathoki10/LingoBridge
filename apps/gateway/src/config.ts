@@ -224,6 +224,15 @@ export function loadGatewayRuntimeConfig(environment: GatewayEnvironment): Gatew
         developmentSecurityConfig.providerTimeoutMilliseconds,
       ),
       requireOrigin: translationMode === "live",
+      translationRateLimit: {
+        limit: readPositiveInteger(environment, "LINGOBRIDGE_TRANSLATION_RATE_LIMIT", 2),
+        lockoutMilliseconds: readPositiveInteger(
+          environment,
+          "LINGOBRIDGE_TRANSLATION_LOCKOUT_MS",
+          60_000,
+        ),
+        windowMilliseconds: readPositiveInteger(environment, "LINGOBRIDGE_RATE_WINDOW_MS", 60_000),
+      },
     },
     serviceVersion: environment.npm_package_version ?? "0.1.0",
     translationMode,

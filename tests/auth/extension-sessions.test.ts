@@ -140,6 +140,9 @@ describe("user-triggered connection", () => {
     expect(location.origin).toBe(`https://${EXTENSION_ID}.chromiumapp.org`);
     expect(location.searchParams.get("state")).toBe(params.get("state"));
     expect(location.searchParams.get("code")).toMatch(/^[A-Za-z0-9_-]{43}$/u);
+    expect(location.searchParams.get("online_consent_version")).toBe(
+      "mymemory-primary-nvidia-backup-v2",
+    );
     expect(await countCodes()).toBe(1);
   });
 

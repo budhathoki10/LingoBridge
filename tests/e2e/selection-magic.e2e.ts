@@ -40,6 +40,20 @@ async function extensionWorker(context: BrowserContext): Promise<Worker> {
 async function configureSelectionMagic(worker: Worker): Promise<void> {
   await worker.evaluate(async () => {
     await chrome.storage.local.set({
+      lingobridgeAccountStatus: {
+        account: { displayName: "Test user", email: "test@example.test" },
+        connection: "connected",
+      },
+      lingobridgeOnlineProviderConsent: {
+        acceptedAt: "2026-09-24T00:00:00.000Z",
+        google: false,
+        googleBackup: false,
+        myMemory: true,
+        nvidia: true,
+        nvidiaBackup: true,
+        transliteration: true,
+        version: "mymemory-primary-nvidia-backup-v2",
+      },
       lingobridgeSelectionMagic: { disabledOrigins: [], enabled: true },
       phase2PopupPreferences: {
         favouriteLanguageCodes: ["ne", "en"],
@@ -167,6 +181,28 @@ async function localLanguagePreferences(worker: Worker): Promise<{
     };
   });
 }
+
+test("a disconnected extension cannot translate selected text", async () => {
+  const context = await launchExtensionContext();
+  try {
+    const worker = await extensionWorker(context);
+    await configureSelectionMagic(worker);
+    await worker.evaluate(async () => {
+      await chrome.storage.local.remove("lingobridgeAccountStatus");
+    });
+    const translationRequests = countTranslateRequests(context);
+    const page = await context.newPage();
+    await page.goto(fixtureUrl);
+    await setAndSelect(page, "Hello, how are you?");
+    const host = page.locator(hostSelector);
+    await expect(host).toHaveAttribute("data-lingobridge-state", "icon");
+    await clickClosedShadowHost(page);
+    await expect(host).toHaveAttribute("data-lingobridge-state", "account-required");
+    expect(translationRequests.value).toBe(0);
+  } finally {
+    await context.close();
+  }
+});
 
 test("favorite targets can be pinned and switched without sending any text", async ({
   browserName: _browserName,

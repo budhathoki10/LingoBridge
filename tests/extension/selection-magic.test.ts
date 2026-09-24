@@ -6,6 +6,7 @@ import {
   detectSensitiveSelection,
   evaluateSelection,
   grantsWebpageAccess,
+  limitTranslationText,
   normalizeSelectionMagicSettings,
   originToMatchPattern,
   pageOriginFromUrl,
@@ -140,7 +141,12 @@ describe("Selection Magic eligibility", () => {
   };
 
   it("accepts a bounded visible user selection", () => {
-    expect(evaluateSelection(base)).toEqual({ eligible: true, text: base.text });
+    expect(evaluateSelection(base)).toEqual({ eligible: true, text: base.text, trimmed: false });
+  });
+
+  it("trims a long selection to one translation instead of refusing it", () => {
+    const eligibility = evaluateSelection({ ...base, text: "x".repeat(5_001) });
+    expect(eligibility).toEqual({ eligible: true, text: "x".repeat(500), trimmed: true });
   });
 
   it.each([
@@ -151,13 +157,50 @@ describe("Selection Magic eligibility", () => {
     ["password", { password: true }],
     ["unsupported", { supportedPage: false }],
     ["whitespace", { text: "   \n" }],
-    ["oversized", { text: "x".repeat(5_001) }],
   ] as const)("rejects %s selections", (reason, change) => {
     expect(evaluateSelection({ ...base, ...change })).toEqual({ eligible: false, reason });
   });
 
   it("creates a stable range fingerprint without transmitting anything", () => {
     expect(selectionFingerprint("hello", { left: 10.3, top: 20.7 })).toBe("5:hello:10:21");
+  });
+});
+
+describe("Selection Magic translation allowance", () => {
+  it("leaves a selection within the allowance untouched", () => {
+    expect(limitTranslationText("Short text.")).toEqual({ text: "Short text.", trimmed: false });
+    expect(limitTranslationText("a".repeat(500))).toEqual({
+      text: "a".repeat(500),
+      trimmed: false,
+    });
+  });
+
+  it("cuts at the last sentence end in the second half of the allowance", () => {
+    const first = `${"a".repeat(300)}.`;
+    expect(limitTranslationText(`${first} ${"b".repeat(400)}`)).toEqual({
+      text: first,
+      trimmed: true,
+    });
+  });
+
+  it("recognises Devanagari sentence ends", () => {
+    const first = `${"क".repeat(300)}।`;
+    expect(limitTranslationText(`${first} ${"ख".repeat(400)}`)).toEqual({
+      text: first,
+      trimmed: true,
+    });
+  });
+
+  it("falls back to a word break, then to a hard cut", () => {
+    const cut = limitTranslationText("word ".repeat(120));
+    expect(cut.trimmed).toBe(true);
+    expect(Array.from(cut.text).length).toBeLessThanOrEqual(500);
+    expect(cut.text.endsWith("word")).toBe(true);
+    expect(limitTranslationText("z".repeat(900)).text).toBe("z".repeat(500));
+  });
+
+  it("counts code points, so an emoji is never split in half", () => {
+    expect(limitTranslationText("😀".repeat(600)).text).toBe("😀".repeat(500));
   });
 });
 
