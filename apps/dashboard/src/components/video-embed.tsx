@@ -27,11 +27,11 @@ export function VideoEmbed() {
           type="button"
         >
           <Image
-            alt="LingoBridge translating selected text and explaining a chosen word on a webpage"
+            alt="LingoBridge showing the Nepali translation, meaning, and example for a word chosen on a webpage"
             className={styles.videoPosterImage}
             fill
             sizes="(max-width: 1200px) calc(100vw - 40px), 1180px"
-            src="/lingobridge-demo.jpg"
+            src="/lingobridge-demo-video.jpg"
           />
           <span className={styles.videoPosterShade} />
           <span className={styles.videoPlay}>

@@ -168,7 +168,7 @@ test("public landing page explains the product and links to the published extens
   await page.getByRole("button", { name: "Play the LingoBridge product demonstration" }).click();
   await expect(page.getByTitle("LingoBridge product demonstration")).toHaveAttribute(
     "src",
-    "https://www.youtube-nocookie.com/embed/T9S7SEZ6hco?rel=0&autoplay=1",
+    "https://www.youtube-nocookie.com/embed/KZHaoS9gsh0?rel=0&autoplay=1",
   );
   await page.getByText("Do I need an account to translate?").click();
   await expect(
