@@ -98,9 +98,10 @@ export default async function ConnectExtensionPage({
               <h2>Online translation</h2>
               <p className="connect-disclosure">
                 Connecting also enables Online translation on this Chrome. When you choose
-                Translate, the selected text and language pair go to MyMemory first. NVIDIA may
-                provide a supported backup; OpenRouter is used only as a Romanized Nepali backup.
-                Unsaved translations are not added to your account.{" "}
+                Translate, the selected text and language pair go first to NVIDIA Nemotron. If it
+                cannot answer, MyMemory translates, and NVIDIA Riva is tried last for supported
+                languages. OpenRouter is used only as a Romanized Nepali backup. Unsaved
+                translations are not added to your account.{" "}
                 <a href="/privacy-policy">Privacy details</a>
               </p>
             </div>

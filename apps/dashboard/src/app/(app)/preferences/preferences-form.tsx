@@ -163,7 +163,7 @@ export function PreferencesForm({
             />
             <span>
               Online
-              <small>MyMemory first, with NVIDIA backup for supported directions.</small>
+              <small>NVIDIA Nemotron first, then MyMemory, then NVIDIA Riva where supported.</small>
             </span>
           </label>
           <label className="radio">

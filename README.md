@@ -6,7 +6,7 @@ LingoBridge is a multilingual product with two user-facing surfaces: a Chrome ex
 
 The product is deliberately focused. It translates text selected by the user; it does not continuously read browsing history or automatically rewrite complete websites.
 
-In Online mode, LingoBridge sends requests to its own gateway. The gateway uses MyMemory as the primary translation service and falls back once to NVIDIA Riva Translate 4B Instruct v2 when MyMemory fails or reports exhausted quota and NVIDIA supports the requested direction. The selected provider is never called directly from the extension.
+In Online mode, LingoBridge sends requests to its own gateway. The gateway translates with NVIDIA Nemotron 3 Ultra first, then MyMemory's free public endpoint, then MyMemory through a RapidAPI subscription when one is configured, and finally NVIDIA Riva Translate 4B Instruct v2 for the directions it supports (see [ADR-009](docs/decisions/ADR-009-nemotron-first-translation.md)). No provider is ever called directly from the extension.
 
 ## Demo
 

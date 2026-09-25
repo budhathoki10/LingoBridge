@@ -32,9 +32,11 @@ flowchart TD
     R -- No --> S[Send selected text to LingoBridge gateway]
     R2 -- Cancel --> T
     R2 -- Continue --> S
-    S --> Y[MyMemory primary attempt]
+    S --> NM[NVIDIA Nemotron attempt within its time limit]
+    NM -- Usable translation --> Z
+    NM -- Failure, timeout or unusable --> Y[MyMemory free, then RapidAPI]
     Y -- Success --> G2[Display result labelled MyMemory]
-    Y -- Failure or quota --> U{Exact NVIDIA fallback pair supported?}
+    Y -- Failure or quota --> U{Exact NVIDIA Riva pair supported?}
     U -- Yes --> V[NVIDIA fallback attempt]
     V -- Success --> Z[Display result labelled NVIDIA]
     U -- No --> X[Show retry error and preserve source]
@@ -126,14 +128,19 @@ sequenceDiagram
     E->>E: Detect language, load preferred target, and check consent
     E->>G: Translation request
     G->>G: Validate request, pair, size, rate and consent
-    G->>M: Primary request with q, langpair, de and mt
+    G->>N: Nemotron translation request within its time limit
+    alt Nemotron returns a usable translation
+        N-->>G: Translation
+        G-->>E: Result with provider NVIDIA
+    end
+    G->>M: Free, then RapidAPI, request with q, langpair, de and mt
     alt MyMemory succeeds
         M-->>G: Translation
         G-->>E: Result with provider MyMemory
     else MyMemory fails or reports quota
         G->>G: Check exact NVIDIA fallback pair and consent
         alt NVIDIA fallback supported
-            G->>N: One fallback translation request
+            G->>N: Last Riva translation request
             N-->>G: Translation or failure
             G-->>E: Result with provider NVIDIA or safe error
         else No supported fallback

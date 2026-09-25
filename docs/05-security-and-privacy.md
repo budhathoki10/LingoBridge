@@ -66,7 +66,7 @@ sends one chosen word plus the already selected text, its translation, and the l
 never reads nearby webpage content, analyzes every word automatically, or persists a request unless
 the user subsequently chooses Save word.
 
-Online consent must name MyMemory as the primary processor and NVIDIA as a possible fallback processor for supported directions. It must disclose that the gateway sends its configured contact email to MyMemory as the `de` parameter. A fallback is allowed only within that disclosed consent. The result must identify the provider that actually processed the text.
+Online consent must name NVIDIA Nemotron as the first processor, MyMemory as the next, and NVIDIA Riva as the last, for supported directions (ADR-009). It must disclose that the gateway sends its configured contact email to MyMemory as the `de` parameter. A fallback is allowed only within that disclosed consent. The result must identify the provider that actually processed the text.
 
 ## Threats and controls
 
@@ -86,7 +86,7 @@ Provider credentials never appear in the extension package, source maps, logs, d
 
 The extension and gateway enforce character and byte limits. The gateway adds per-IP and anonymous-install rate limits, request timeouts, supported-pair allowlists, and a maximum response size.
 
-The fallback router uses a fixed NVIDIA capability table. It must not send Nepali requests to NVIDIA Riva Translate 4B Instruct v2, and it must permit at most one provider fallback per user request. MyMemory query URLs, including selected text and the `de` email, must never be logged.
+The translation chain uses a fixed NVIDIA capability table for Riva. It must not send Nepali requests to NVIDIA Riva Translate 4B Instruct v2. Each step runs only when the reader's consent allows it, and the whole chain shares one deadline. Nemotron answers are rejected unless they pass the gateway's translation checks. MyMemory query URLs, including selected text and the `de` email, must never be logged.
 
 The public capability endpoint contains language and feature metadata only. It exposes no provider credentials, internal account identifiers, quotas, infrastructure details, or user-specific data. The gateway rejects any translation request whose operation is absent from the active capability catalogue.
 

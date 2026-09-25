@@ -37,6 +37,8 @@ export interface GatewayRuntimeConfig {
   security: GatewaySecurityConfig;
   serviceVersion: string;
   translationMode: TranslationMode;
+  /** How long Nemotron may take on a translation before MyMemory is asked instead. */
+  translationPrimaryTimeoutMilliseconds: number;
 }
 
 function readGoogleProjectId(environment: GatewayEnvironment): string | null {
@@ -236,5 +238,10 @@ export function loadGatewayRuntimeConfig(environment: GatewayEnvironment): Gatew
     },
     serviceVersion: environment.npm_package_version ?? "0.1.0",
     translationMode,
+    translationPrimaryTimeoutMilliseconds: readPositiveInteger(
+      environment,
+      "LINGOBRIDGE_TRANSLATION_PRIMARY_TIMEOUT_MS",
+      10_000,
+    ),
   };
 }

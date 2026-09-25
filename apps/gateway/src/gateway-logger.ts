@@ -15,6 +15,8 @@ export interface GatewayRequestLog {
  */
 export interface GatewayProviderLog {
   detail: string | null;
+  /** Which MyMemory endpoint failed: the free public one or the RapidAPI subscription. */
+  endpoint?: "public" | "rapidapi";
   event: "gateway.provider";
   httpStatus: number | null;
   outcome: string;
@@ -34,6 +36,29 @@ export interface GatewayLogger {
  */
 export function logProviderFailure(event: Omit<GatewayProviderLog, "event">): void {
   console.info(JSON.stringify({ ...event, event: "gateway.provider" }));
+}
+
+/**
+ * One line per translation step, so the Render log shows which translator was called and which
+ * one answered. Content-free: the translator, its place in the order, the language pair, timing,
+ * and the adapter's own failure reason. The text being translated is never included.
+ */
+export interface GatewayTranslationStepLog {
+  durationMilliseconds?: number;
+  event: "gateway.translation";
+  /** Readable summary, written first so the line scans well in the log viewer. */
+  message: string;
+  outcome: "answered" | "calling" | "failed" | "skipped";
+  pair: string;
+  reason?: string;
+  restSeconds?: number;
+  step: number;
+  translator: string;
+}
+
+export function logTranslationStep(event: Omit<GatewayTranslationStepLog, "event">): void {
+  const { message, ...details } = event;
+  console.info(JSON.stringify({ message, event: "gateway.translation", ...details }));
 }
 
 export const consoleGatewayLogger: GatewayLogger = {

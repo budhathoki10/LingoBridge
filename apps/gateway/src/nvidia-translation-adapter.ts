@@ -1,6 +1,11 @@
 import { type TranslationRequest, translationResultSchema } from "@lingobridge/contracts";
 import { supportsNvidiaTranslationPair, toNvidiaLanguageCode } from "./nvidia-capabilities.js";
-import { type TranslationAdapter, TranslationAdapterError } from "./translation-adapter.js";
+import {
+  failureKindForStatus,
+  retryAfterSecondsFrom,
+  type TranslationAdapter,
+  TranslationAdapterError,
+} from "./translation-adapter.js";
 
 export interface NvidiaChatCompletionRequest {
   chat_template_kwargs?: { enable_thinking: boolean };
@@ -51,6 +56,7 @@ export function createNvidiaTranslationClient({
 
       if (!response.ok) {
         throw Object.assign(new Error("NVIDIA translation request failed."), {
+          retryAfterSeconds: retryAfterSecondsFrom(response),
           status: response.status,
         });
       }
@@ -60,23 +66,50 @@ export function createNvidiaTranslationClient({
   };
 }
 
-function providerError(error: unknown): TranslationAdapterError {
+/** Rest for an NVIDIA rate limit that names no wait of its own. */
+const DEFAULT_RATE_LIMIT_SECONDS = 60;
+
+/**
+ * Maps an NVIDIA client failure for any model: 429 becomes `limited` with NVIDIA's own wait,
+ * other HTTP and network failures become `outage` or `request`. Shared by Riva and Nemotron.
+ */
+export function nvidiaProviderError(error: unknown, model: string): TranslationAdapterError {
   if (error instanceof DOMException && error.name === "AbortError") {
-    return new TranslationAdapterError("timeout", "NVIDIA translation timed out.");
+    return new TranslationAdapterError("timeout", `${model} translation timed out.`);
   }
 
-  const status =
+  const rawStatus =
     error && typeof error === "object" && "status" in error
       ? Reflect.get(error, "status")
       : undefined;
-  const retryable =
-    typeof status === "number" ? [408, 409, 429, 500, 502, 503, 504].includes(status) : true;
+  const status = typeof rawStatus === "number" ? rawStatus : null;
+  const retryable = status === null || [408, 409, 429, 500, 502, 503, 504].includes(status);
+  const kind = failureKindForStatus(status);
+  const retryAfter =
+    error && typeof error === "object" && "retryAfterSeconds" in error
+      ? Reflect.get(error, "retryAfterSeconds")
+      : null;
 
   return new TranslationAdapterError(
     "provider-unavailable",
-    "NVIDIA translation is unavailable.",
+    kind === "limited"
+      ? `NVIDIA is rate-limiting ${model} requests.`
+      : `${model} translation is unavailable.`,
     retryable,
+    {
+      kind,
+      retryAfterSeconds:
+        kind === "limited"
+          ? typeof retryAfter === "number"
+            ? retryAfter
+            : DEFAULT_RATE_LIMIT_SECONDS
+          : null,
+    },
   );
+}
+
+function providerError(error: unknown): TranslationAdapterError {
+  return nvidiaProviderError(error, "NVIDIA");
 }
 
 function languageTag(sourceLanguage: string, targetLanguage: string) {

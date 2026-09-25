@@ -31,10 +31,11 @@
       <section>
         <h2>Who processes the text?</h2>
         <p>
-          The gateway sends the chosen text and language pair to MyMemory first. Every MyMemory
-          request also includes the gateway owner's configured contact email in the provider's
-          <code>de</code> parameter. If MyMemory fails or reaches its quota, NVIDIA Riva Translate
-          4B Instruct v2 is attempted once only for a supported language direction.
+          The gateway sends the chosen text and language pair to NVIDIA Nemotron 3 Ultra first.
+          If Nemotron cannot answer in time, the text goes to MyMemory, and every MyMemory request
+          also includes the gateway owner's configured contact email in the provider's
+          <code>de</code> parameter. If MyMemory also fails or reaches its quota, NVIDIA Riva
+          Translate 4B Instruct v2 is attempted only for a supported language direction.
         </p>
         <p>
           When the selected text looks like Nepali typed in English letters, the gateway first sends

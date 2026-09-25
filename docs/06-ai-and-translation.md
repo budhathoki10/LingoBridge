@@ -69,7 +69,7 @@ Use when the browser supports the source-target pair. Benefits include local pro
 
 Use LingoBridge's gateway for active-catalogue pairs absent from Chrome. If later approved, Romanized Nepali and style control also use the gateway. The gateway uses this order:
 
-1. MyMemory is the primary online translator and receives the configured contact email as `de` on every provider request. MyMemory meters its free tier per calling IP address, and a shared hosting address can exhaust the day's characters before a single LingoBridge request arrives; setting `MYMEMORY_RAPIDAPI_KEY` routes the same API through RapidAPI so the quota belongs to the subscribing account. The provider, the request contract and the `de` disclosure are unchanged, so online consent is unaffected.
+1. Since ADR-009, NVIDIA Nemotron translates first and MyMemory second. MyMemory receives the configured contact email as `de` on every provider request. MyMemory meters its free tier per calling IP address, and a shared hosting address can exhaust the day's characters before a single LingoBridge request arrives; setting `MYMEMORY_RAPIDAPI_KEY` adds a step that sends the same API through RapidAPI, asked only after the free public endpoint fails, so the subscription's quota is spent last. The provider, the request contract and the `de` disclosure are unchanged, so online consent is unaffected.
 2. NVIDIA `riva-translate-4b-instruct-v2` is attempted once after a MyMemory failure or quota response when the pair is reviewed as supported and the user accepted both providers.
 3. If NVIDIA does not support the fallback pair, return a visible failure without attempting it.
 
@@ -95,7 +95,7 @@ Free-model availability changes; re-run this comparison before changing `OPENROU
 
 ### Fallback policy
 
-LingoBridge must not silently move an On-device request to Online. It may offer the online option with a clear explanation. Online consent discloses MyMemory as primary, the configured contact email sent in `de`, and NVIDIA as a possible fallback. If fallback occurs, the result identifies NVIDIA. Any provider with materially different data handling requires renewed consent before it joins the route.
+LingoBridge must not silently move an On-device request to Online. It may offer the online option with a clear explanation. Online consent discloses NVIDIA Nemotron as the first translator, MyMemory next with the configured contact email sent in `de`, and NVIDIA Riva last for supported directions. The result identifies the provider that produced it. Any provider with materially different data handling requires renewed consent before it joins the route.
 
 ## Evaluation dataset
 

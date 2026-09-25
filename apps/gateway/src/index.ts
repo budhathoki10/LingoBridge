@@ -8,13 +8,15 @@ import { FakeExplanationAdapter } from "./fake-explanation-adapter.js";
 import { FakeTranslationAdapter } from "./fake-translation-adapter.js";
 import { FallbackExplanationAdapter } from "./fallback-explanation-adapter.js";
 import { FileCapabilityCatalogueStore } from "./file-capability-catalogue-store.js";
-import { logProviderFailure } from "./gateway-logger.js";
+import { logProviderFailure, logTranslationStep } from "./gateway-logger.js";
 import { GoogleCapabilitySource } from "./google-capability-source.js";
 import { createGoogleCloudClient } from "./google-translation-adapter.js";
 import {
   createMyMemoryClient,
+  type MyMemoryClient,
   MyMemoryTranslationAdapter,
 } from "./mymemory-translation-adapter.js";
+import { NemotronTranslationAdapter } from "./nemotron-translation-adapter.js";
 import {
   isCurrentOnlineCapabilityCatalogue,
   OnlineProviderCapabilitySource,
@@ -25,16 +27,24 @@ import {
   createNvidiaTranslationClient,
   NvidiaTranslationAdapter,
 } from "./nvidia-translation-adapter.js";
-import { MyMemoryPrimaryProviderRouter } from "./provider-router.js";
+import { createTranslationChain } from "./provider-router.js";
 
 const config = loadGatewayRuntimeConfig(process.env);
 const liveProjectId = config.translationMode === "live" ? config.googleProjectId : null;
 const googleClient = liveProjectId ? createGoogleCloudClient() : null;
-const myMemoryClient = createMyMemoryClient(config.myMemoryBaseUrl, {
+// The free public endpoint is asked before the RapidAPI subscription, so the subscription's
+// monthly allowance is spent only on days the public per-IP quota has run out.
+const myMemoryPublicClient = createMyMemoryClient(config.myMemoryBaseUrl, {
   privateKey: config.myMemoryPrivateKey,
-  rapidApiHost: config.myMemoryRapidApiHost,
-  rapidApiKey: config.myMemoryRapidApiKey,
 });
+const myMemoryRapidApiClient =
+  config.myMemoryRapidApiKey && config.myMemoryRapidApiHost
+    ? createMyMemoryClient(config.myMemoryBaseUrl, {
+        privateKey: config.myMemoryPrivateKey,
+        rapidApiHost: config.myMemoryRapidApiHost,
+        rapidApiKey: config.myMemoryRapidApiKey,
+      })
+    : null;
 const myMemoryContactEmail = config.myMemoryContactEmail;
 const nvidiaClient = config.nvidiaApiKey
   ? createNvidiaTranslationClient({
@@ -43,22 +53,68 @@ const nvidiaClient = config.nvidiaApiKey
     })
   : null;
 const operationsMetrics = new OperationalMetrics();
+/** "42s" under two minutes, "58 min" above, so rest periods read naturally in the log. */
+const formatWait = (seconds: number) =>
+  seconds < 120 ? `${seconds}s` : `${Math.round(seconds / 60)} min`;
+const myMemoryAdapter = (
+  client: MyMemoryClient,
+  contactEmail: string,
+  endpoint: "public" | "rapidapi",
+) =>
+  observeTranslationAdapter(
+    new MyMemoryTranslationAdapter(client, contactEmail, (failure) =>
+      logProviderFailure({ ...failure, endpoint, provider: "mymemory" }),
+    ),
+    "mymemory",
+    operationsMetrics,
+  );
 const translationAdapter =
   config.translationMode === "live" && nvidiaClient && myMemoryContactEmail
-    ? new MyMemoryPrimaryProviderRouter({
-        myMemory: observeTranslationAdapter(
-          new MyMemoryTranslationAdapter(myMemoryClient, myMemoryContactEmail, (failure) =>
-            logProviderFailure({ ...failure, provider: "mymemory" }),
+    ? createTranslationChain({
+        myMemoryPublic: myMemoryAdapter(myMemoryPublicClient, myMemoryContactEmail, "public"),
+        myMemoryRapidApi: myMemoryRapidApiClient
+          ? myMemoryAdapter(myMemoryRapidApiClient, myMemoryContactEmail, "rapidapi")
+          : null,
+        nemotron: observeTranslationAdapter(
+          new NemotronTranslationAdapter(
+            nvidiaClient,
+            config.explanationModel,
+            config.explanationMaxTokens,
           ),
-          "mymemory",
+          "nvidia",
           operationsMetrics,
         ),
-        nvidia: observeTranslationAdapter(
+        // Never more than half the whole translation budget, so MyMemory always gets its turn.
+        nemotronTimeoutMilliseconds: Math.min(
+          config.translationPrimaryTimeoutMilliseconds,
+          Math.floor(config.security.providerTimeoutMilliseconds / 2),
+        ),
+        onFallback: (provider, succeeded) => operationsMetrics.recordFallback(provider, succeeded),
+        onStep: ({ durationMilliseconds, label, outcome, pair, reason, restSeconds, step }) =>
+          logTranslationStep({
+            durationMilliseconds,
+            message:
+              outcome === "calling"
+                ? `Calling ${label} (step ${step})`
+                : outcome === "answered"
+                  ? `${label} answered in ${durationMilliseconds} ms`
+                  : outcome === "skipped"
+                    ? `Skipping ${label} (${reason}; retry in ${formatWait(restSeconds ?? 0)})`
+                    : `${label} failed after ${durationMilliseconds} ms (${reason})${
+                        restSeconds ? `; resting for ${formatWait(restSeconds)}` : ""
+                      }`,
+            outcome,
+            pair,
+            reason,
+            restSeconds,
+            step,
+            translator: label,
+          }),
+        riva: observeTranslationAdapter(
           new NvidiaTranslationAdapter(nvidiaClient, config.nvidiaModel, config.nvidiaMaxTokens),
           "nvidia",
           operationsMetrics,
         ),
-        onFallback: (succeeded) => operationsMetrics.recordFallback("nvidia", succeeded),
       })
     : observeTranslationAdapter(new FakeTranslationAdapter(), "fake", operationsMetrics);
 const capabilityProvider =

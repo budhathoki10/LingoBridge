@@ -5,7 +5,7 @@
 - Keep the visible product small and responsive.
 - Expose the current active provider capability catalogue without hard-coding a language count.
 - Use Chrome's on-device translation when a language pair is available.
-- Route online translations through a protected gateway with MyMemory as primary.
+- Route online translations through a protected gateway: Nemotron, then free MyMemory, then RapidAPI MyMemory, then Riva (ADR-009).
 - Use NVIDIA Riva Translate 4B Instruct v2 as a single capability-gated fallback.
 - Keep provider choice replaceable.
 - Minimize permissions and data retention.
@@ -38,7 +38,7 @@ The popup or another extension-owned document performs on-device language detect
 
 ### Translation gateway
 
-A backend endpoint handles Online mode. It validates requests, applies limits, removes unnecessary operational metadata, and calls MyMemory first. MyMemory receives the selected segment, explicit language pair, and configured contact email as its `de` parameter. Because MyMemory limits `q` to 500 UTF-8 bytes, the adapter splits longer input at safe text boundaries and preserves line separators. If MyMemory fails, reports exhausted quota, or returns an unusable response, the gateway may make one NVIDIA Riva Translate 4B Instruct v2 attempt only for a reviewed supported direction and only under the disclosed consent. Provider configuration and credentials stay on the server.
+A backend endpoint handles Online mode. It validates requests, applies limits, removes unnecessary operational metadata, and asks NVIDIA Nemotron first, under its own time limit, then MyMemory's free public endpoint, then MyMemory through RapidAPI when configured (ADR-009). MyMemory receives the selected segment, explicit language pair, and configured contact email as its `de` parameter. Because MyMemory limits `q` to 500 UTF-8 bytes, the adapter splits longer input at safe text boundaries and preserves line separators. If both MyMemory endpoints fail, report exhausted quota, or return an unusable response, the gateway makes a last NVIDIA Riva Translate 4B Instruct v2 attempt only for a reviewed supported direction and only under the disclosed consent. Provider configuration and credentials stay on the server.
 
 The extension-facing contract is a LingoBridge-owned `POST /v1/translate` endpoint. The MyMemory adapter uses its REST `get` endpoint, while the NVIDIA adapter uses the selected NIM's server-side inference endpoint. These vendor details never become part of the extension contract.
 

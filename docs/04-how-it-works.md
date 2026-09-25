@@ -25,7 +25,7 @@
 4. If the extension is disconnected, the surface offers **Connect dashboard** and sends no translation request.
 5. After connection, language detection suggests a source language; the user can correct it.
 6. The user's saved preferred target language is selected automatically and can be changed or swapped.
-7. LingoBridge uses the user's privacy setting. On-device-only requests stay local; consented Online requests go to MyMemory first.
+7. LingoBridge uses the user's privacy setting. On-device-only requests stay local; consented Online requests go to NVIDIA Nemotron first, then MyMemory.
 8. The surface shows loading and then the result with Copy, Listen, and Save actions.
 9. Escape or Close dismisses it. Selecting different text replaces it rather than stacking another translator.
 10. The temporary source text expires when the surface closes or after a short timeout.

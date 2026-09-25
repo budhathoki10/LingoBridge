@@ -31,7 +31,7 @@
 ## Privacy
 
 - A public privacy policy identifies all processed data and providers.
-- The policy names MyMemory as primary, discloses the configured contact email sent as `de`, and names NVIDIA as a possible fallback for supported directions.
+- The policy names NVIDIA Nemotron as the first translator, MyMemory next with the configured contact email sent as `de`, and NVIDIA Riva last for supported directions.
 - Store disclosures match actual network behaviour.
 - First online use requests informed consent.
 - Sensitive-text warnings prevent silent automatic transmission.

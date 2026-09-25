@@ -61,10 +61,11 @@ export default async function PrivacyPage({ searchParams }: { searchParams: Sear
             <div>
               <dt>Translation providers</dt>
               <dd>
-                MyMemory translates first and receives the gateway contact email in its request.
-                NVIDIA is attempted once as a backup only for a supported language direction.
-                Explain and word lookups use NVIDIA Nemotron, with an OpenRouter model as the
-                backup. Each result shows which provider produced it.
+                NVIDIA Nemotron translates first. If it cannot answer in time, MyMemory translates
+                and receives the gateway contact email in its request. NVIDIA Riva is tried last,
+                only for a supported language direction. Explain and word lookups use NVIDIA
+                Nemotron, with an OpenRouter model as the backup. Each result shows which provider
+                produced it.
               </dd>
             </div>
             <div>
