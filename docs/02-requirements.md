@@ -66,7 +66,7 @@
   answer within the configured primary deadline, retry once on the configured OpenRouter model, only
   if the user's explanation consent names OpenRouter. The result names the provider that answered.
 - Replace text only inside an editable field and only after the user confirms.
-- In Online mode, use MyMemory first and include the configured server-side contact email as its `de` parameter on every provider request.
+- In Online mode, translate with NVIDIA Nemotron first, then MyMemory's free public endpoint, then MyMemory through RapidAPI when configured, then NVIDIA Riva for supported directions (ADR-009). Include the configured server-side contact email as MyMemory's `de` parameter on every MyMemory request.
 - If MyMemory fails, reports exhausted quota, or returns an unusable response, attempt NVIDIA Riva Translate 4B Instruct v2 once when the requested direction is reviewed as supported and the user accepted both providers.
 - Never send an English–Nepali request to NVIDIA because the selected NVIDIA translation model does not support Nepali.
 

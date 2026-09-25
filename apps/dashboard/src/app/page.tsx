@@ -120,7 +120,7 @@ const faqs = [
   },
   {
     answer:
-      "Online translation uses MyMemory first and may use NVIDIA once as a fallback for supported directions. The result identifies the provider that produced it. Nepali is never sent to the unsupported NVIDIA translation fallback.",
+      "Online translation uses NVIDIA Nemotron first. If it cannot answer, MyMemory translates, and NVIDIA Riva is tried last for the directions it supports. The result identifies the provider that produced it.",
     question: "Who processes an Online translation?",
   },
 ] as const;

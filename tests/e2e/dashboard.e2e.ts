@@ -54,7 +54,7 @@ async function connectExtension(page: Page, request: APIRequestContext) {
   await page.goto(`${DASHBOARD}/extension/connect?${params}`);
   await expect(page.getByRole("heading", { name: "Connect Chrome on Windows?" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Online translation" })).toBeVisible();
-  await expect(page.getByText("go to MyMemory first", { exact: false })).toBeVisible();
+  await expect(page.getByText("go first to NVIDIA Nemotron", { exact: false })).toBeVisible();
   await expect(page.getByRole("link", { name: "Privacy details" })).toHaveAttribute(
     "href",
     "/privacy-policy",

@@ -1,6 +1,6 @@
 # ADR-001: Translation provider strategy
 
-Status: **Accepted; amended on 16 September 2026 for MyMemory primary and NVIDIA fallback; credentialed deployment and quality validation pending**
+Status: **Accepted; amended on 16 September 2026 for MyMemory primary and NVIDIA fallback; translation order amended again by [ADR-009](ADR-009-nemotron-first-translation.md) on 25 September 2026; credentialed deployment and quality validation pending**
 Decision date: **6 September 2026**
 
 ## Context

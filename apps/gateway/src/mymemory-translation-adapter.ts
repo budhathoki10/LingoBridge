@@ -1,7 +1,15 @@
 import { type TranslationRequest, translationResultSchema } from "@lingobridge/contracts";
-import { type TranslationAdapter, TranslationAdapterError } from "./translation-adapter.js";
+import {
+  failureKindForStatus,
+  type TranslationAdapter,
+  TranslationAdapterError,
+} from "./translation-adapter.js";
 
 const MAX_SEGMENT_BYTES = 500;
+/** Rest for a rate limit that names no wait of its own. */
+const DEFAULT_RATE_LIMIT_SECONDS = 60;
+/** Rest for an exhausted daily quota that names no reset time; it is tried again afterwards. */
+const DEFAULT_QUOTA_REST_SECONDS = 60 * 60;
 const utf8Encoder = new TextEncoder();
 
 export interface MyMemoryResponse {
@@ -90,6 +98,7 @@ export function createMyMemoryClient(
       const response = await fetch(url, { headers, signal });
       if (!response.ok) {
         throw Object.assign(new Error("MyMemory translation request failed."), {
+          retryAfterSeconds: readRetryAfterSeconds(response),
           status: response.status,
         });
       }
@@ -118,13 +127,29 @@ function providerError(error: unknown): TranslationAdapterError {
   if (error instanceof DOMException && error.name === "AbortError") {
     return new TranslationAdapterError("timeout", "MyMemory translation timed out.");
   }
-  const status = httpStatusOf(error) ?? undefined;
+  const status = httpStatusOf(error);
   const retryable =
     typeof status === "number" ? [408, 409, 429, 500, 502, 503, 504].includes(status) : true;
+  const kind = failureKindForStatus(status);
+  const retryAfter =
+    error && typeof error === "object" && "retryAfterSeconds" in error
+      ? Reflect.get(error, "retryAfterSeconds")
+      : null;
   return new TranslationAdapterError(
     "provider-unavailable",
-    "MyMemory translation is unavailable.",
+    kind === "limited"
+      ? "MyMemory is rate-limiting requests."
+      : "MyMemory translation is unavailable.",
     retryable,
+    {
+      kind,
+      retryAfterSeconds:
+        kind === "limited"
+          ? typeof retryAfter === "number"
+            ? retryAfter
+            : DEFAULT_RATE_LIMIT_SECONDS
+          : null,
+    },
   );
 }
 
@@ -236,12 +261,26 @@ export class MyMemoryTranslationAdapter implements TranslationAdapter {
             responseStatus: response.responseStatus ?? null,
             retryAfterSeconds: response.retryAfterSeconds ?? null,
           });
+          const rateLimited = Number(response.responseStatus) === 429;
           throw new TranslationAdapterError(
             "provider-unavailable",
             response.quotaFinished
               ? "MyMemory daily quota is exhausted."
-              : "MyMemory returned an unusable translation.",
+              : rateLimited
+                ? "MyMemory is rate-limiting requests."
+                : "MyMemory returned an unusable translation.",
             true,
+            response.quotaFinished
+              ? {
+                  kind: "limited",
+                  retryAfterSeconds: response.retryAfterSeconds ?? DEFAULT_QUOTA_REST_SECONDS,
+                }
+              : rateLimited
+                ? {
+                    kind: "limited",
+                    retryAfterSeconds: response.retryAfterSeconds ?? DEFAULT_RATE_LIMIT_SECONDS,
+                  }
+                : {},
           );
         }
         translated.push(`${text}${segment.separator}`);

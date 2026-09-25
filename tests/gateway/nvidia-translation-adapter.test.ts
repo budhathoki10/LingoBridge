@@ -7,7 +7,7 @@ import {
   NvidiaTranslationAdapter,
   type NvidiaTranslationClient,
 } from "../../apps/gateway/src/nvidia-translation-adapter";
-import { MyMemoryPrimaryProviderRouter } from "../../apps/gateway/src/provider-router";
+import { createTranslationChain } from "../../apps/gateway/src/provider-router";
 import { TranslationAdapterError } from "../../apps/gateway/src/translation-adapter";
 import {
   ANONYMOUS_INSTALLATION_HEADER,
@@ -109,12 +109,12 @@ describe("NvidiaTranslationAdapter", () => {
     ).rejects.toMatchObject({ code: "provider-unavailable" });
   });
 
-  it("falls back to NVIDIA only when backup consent and pair support are present", async () => {
-    const failingMyMemory = {
-      async translate() {
-        throw new TranslationAdapterError("provider-unavailable", "mymemory down", true);
+  it("reaches Riva last, only with backup consent and pair support", async () => {
+    const failing = (name: string) => ({
+      async translate(): Promise<never> {
+        throw new TranslationAdapterError("provider-unavailable", `${name} down`, true);
       },
-    };
+    });
     const nvidia = {
       async translate(request: TranslationRequest) {
         return translationResultSchema.parse({
@@ -132,7 +132,13 @@ describe("NvidiaTranslationAdapter", () => {
       myMemory: true,
       nvidiaBackup: true,
     };
-    const router = new MyMemoryPrimaryProviderRouter({ myMemory: failingMyMemory, nvidia });
+    const router = createTranslationChain({
+      myMemoryPublic: failing("public"),
+      myMemoryRapidApi: failing("rapidapi"),
+      nemotron: failing("nemotron"),
+      nemotronTimeoutMilliseconds: 1_000,
+      riva: nvidia,
+    });
 
     await expect(
       router.translate({ ...baseRequest, consent }, new AbortController().signal),
@@ -157,22 +163,26 @@ describe("NvidiaTranslationAdapter", () => {
     ).rejects.toMatchObject({ code: "provider-unavailable" });
   });
 
-  it("returns NVIDIA through the protected gateway after a MyMemory failure", async () => {
+  it("returns Riva through the protected gateway after every earlier step fails", async () => {
     const client = new RecordingNvidiaClient({
       choices: [{ message: { content: "Gracias" } }],
     });
+    const quotaExhausted = {
+      async translate(): Promise<never> {
+        throw new TranslationAdapterError("provider-unavailable", "quota", true);
+      },
+    };
     const app = createGatewayApp({
       capabilityProvider: {
         get: async () => createNvidiaCapabilityCatalogue(new Date("2026-09-08T00:00:00.000Z")),
       },
       logger: { info: () => undefined },
-      translationAdapter: new MyMemoryPrimaryProviderRouter({
-        myMemory: {
-          async translate() {
-            throw new TranslationAdapterError("provider-unavailable", "quota", true);
-          },
-        },
-        nvidia: new NvidiaTranslationAdapter(client, "nvidia/riva-translate-4b-instruct-v2", 512),
+      translationAdapter: createTranslationChain({
+        myMemoryPublic: quotaExhausted,
+        myMemoryRapidApi: quotaExhausted,
+        nemotron: quotaExhausted,
+        nemotronTimeoutMilliseconds: 1_000,
+        riva: new NvidiaTranslationAdapter(client, "nvidia/riva-translate-4b-instruct-v2", 512),
       }),
       translationMode: "live",
     });

@@ -116,10 +116,11 @@ services:
       # arrives, which surfaces as "the translation provider is temporarily
       # unavailable" for any language NVIDIA cannot cover — Nepali above all.
       #
-      # A RapidAPI subscription key moves the quota onto the subscribing account.
-      # It is the same MyMemory API and the same `de` contact email, so the online
-      # consent disclosure in docs/06-ai-and-translation.md is unchanged. Leaving
-      # it empty falls back to the public endpoint and the shared meter.
+      # A RapidAPI subscription key adds a second MyMemory step with its own quota.
+      # The free public endpoint is always asked first; the subscription is used
+      # only when the public quota is exhausted, so its monthly allowance lasts.
+      # It is the same MyMemory API and the same `de` contact email. Leaving it
+      # empty removes the step.
       - key: MYMEMORY_RAPIDAPI_KEY
         sync: false
 
@@ -168,6 +169,7 @@ services:
       # ---------------------------------------------------------------------
       # Explanation chain
       # ---------------------------------------------------------------------
+      # Also the first translation step: changing it changes who translates first.
       - key: NVIDIA_EXPLANATION_MODEL
         value: nvidia/nemotron-3-ultra-550b-a55b
       - key: NVIDIA_EXPLANATION_MAX_TOKENS
@@ -183,12 +185,17 @@ services:
       # ---------------------------------------------------------------------
       # Limits and timeouts
       # ---------------------------------------------------------------------
-      # MyMemory throttles as an address approaches its quota rather than failing
-      # outright: measured 0.4s when fresh and 10-15s when throttled. At 10000 a
-      # throttled-but-working provider was reported as an outage, so this sits
-      # above the observed ceiling. The popup shows a spinner for the difference.
+      # Total budget for one translation across every step: Nemotron, free
+      # MyMemory, MyMemory through RapidAPI, then Riva. MyMemory throttles as an
+      # address nears its quota (measured 0.4s fresh, 10-15s throttled), so the
+      # budget covers Nemotron's own limit below plus a throttled MyMemory answer.
       - key: LINGOBRIDGE_PROVIDER_TIMEOUT_MS
-        value: "18000"
+        value: "30000"
+
+      # How long Nemotron may take on a translation before free MyMemory is asked
+      # instead. Not yet measured in production; lower it if translations feel slow.
+      - key: LINGOBRIDGE_TRANSLATION_PRIMARY_TIMEOUT_MS
+        value: "10000"
       - key: LINGOBRIDGE_RATE_WINDOW_MS
         value: "60000"
       - key: LINGOBRIDGE_INSTALLATION_RATE_LIMIT

@@ -9,7 +9,7 @@ import {
   observeTranslationAdapter,
   OperationalMetrics,
 } from "../../apps/gateway/src/operational-metrics";
-import { MyMemoryPrimaryProviderRouter } from "../../apps/gateway/src/provider-router";
+import { createTranslationChain } from "../../apps/gateway/src/provider-router";
 import { TranslationAdapterError } from "../../apps/gateway/src/translation-adapter";
 import {
   ANONYMOUS_INSTALLATION_HEADER,
@@ -142,17 +142,20 @@ describe("OperationalMetrics", () => {
     expect(metrics.snapshot("live").providers).toEqual([]);
   });
 
-  it("counts NVIDIA fallback attempts and outcomes through the router", async () => {
+  it("counts fallback attempts and outcomes through the translation chain", async () => {
     const metrics = new OperationalMetrics();
-    const failingMyMemory = {
+    const failingNemotron = {
       translate: async () => {
         throw new TranslationAdapterError("provider-unavailable", "down");
       },
     };
-    const router = new MyMemoryPrimaryProviderRouter({
-      myMemory: observeTranslationAdapter(failingMyMemory, "mymemory", metrics),
-      nvidia: observeTranslationAdapter(new FakeTranslationAdapter(0), "nvidia", metrics),
-      onFallback: (succeeded) => metrics.recordFallback("nvidia", succeeded),
+    const router = createTranslationChain({
+      myMemoryPublic: observeTranslationAdapter(new FakeTranslationAdapter(0), "mymemory", metrics),
+      myMemoryRapidApi: null,
+      nemotron: observeTranslationAdapter(failingNemotron, "nvidia", metrics),
+      nemotronTimeoutMilliseconds: 1_000,
+      onFallback: (provider, succeeded) => metrics.recordFallback(provider, succeeded),
+      riva: observeTranslationAdapter(new FakeTranslationAdapter(0), "nvidia", metrics),
     });
     await router.translate(
       {
@@ -163,12 +166,12 @@ describe("OperationalMetrics", () => {
       new AbortController().signal,
     );
     const snapshot = metrics.snapshot("live");
-    expect(snapshot.providers.find((provider) => provider.provider === "nvidia")).toMatchObject({
+    expect(snapshot.providers.find((provider) => provider.provider === "mymemory")).toMatchObject({
       fallbackAttempts: 1,
       fallbackSuccesses: 1,
     });
     expect(
-      snapshot.providers.find((provider) => provider.provider === "mymemory")?.outcomes[
+      snapshot.providers.find((provider) => provider.provider === "nvidia")?.outcomes[
         "provider-error"
       ],
     ).toBe(1);
