@@ -31,6 +31,11 @@ export const metadata: Metadata = {
   title: "Understand the words in front of you",
 };
 
+// The proxy's Content-Security-Policy allows only scripts carrying that request's nonce. A page
+// prerendered at build time has no nonce on its scripts, so the browser blocked all of them and
+// nothing on the landing page ran, including Play demo. Rendering per request lets Next.js add it.
+export const dynamic = "force-dynamic";
+
 const workflow = [
   {
     body: "Install LingoBridge from the Chrome Web Store. The popup works without broad page access.",
