@@ -13,22 +13,41 @@ import {
   VocabularyIcon,
 } from "@/components/icons";
 import { LandingAnimations } from "@/components/landing-animations";
+import { StructuredData } from "@/components/structured-data";
 import { TranslationStage } from "@/components/translation-stage";
 import { VideoEmbed } from "@/components/video-embed";
 import { CHROME_WEB_STORE_URL, DEMO_VIDEO_WATCH_URL } from "@/lib/links";
+import {
+  landingStructuredData,
+  SITE_DESCRIPTION,
+  SITE_NAME,
+  SITE_TAGLINE,
+  SITE_TITLE,
+  sharedOpenGraph,
+  sharedTwitter,
+  siteOrigin,
+} from "@/lib/site";
 import styles from "./landing.module.css";
 
+const SHARE_DESCRIPTION =
+  "Select text in Chrome, click once, and read the translation beside it. Save only the phrases and vocabulary worth keeping.";
+
 export const metadata: Metadata = {
-  description:
-    "Translate selected text where you read it, then keep only the phrases and vocabulary you choose in your private LingoBridge dashboard.",
+  alternates: { canonical: "/" },
+  description: SITE_DESCRIPTION,
   openGraph: {
-    description:
-      "Translate selected text without leaving the page. Save only what matters and manage it from the LingoBridge dashboard.",
-    title: "LingoBridge | Understand the words in front of you",
-    type: "website",
+    ...sharedOpenGraph,
+    description: SHARE_DESCRIPTION,
+    title: `${SITE_NAME}: ${SITE_TAGLINE}`,
+    url: "/",
   },
   robots: { follow: true, index: true },
-  title: "Understand the words in front of you",
+  title: { absolute: SITE_TITLE },
+  twitter: {
+    ...sharedTwitter,
+    description: SHARE_DESCRIPTION,
+    title: `${SITE_NAME}: ${SITE_TAGLINE}`,
+  },
 };
 
 // The proxy's Content-Security-Policy allows only scripts carrying that request's nonce. A page
@@ -100,6 +119,16 @@ const dashboardData = [
 const faqs = [
   {
     answer:
+      "LingoBridge is a Chrome extension that translates the text you select, right beside it on the page. You can save useful phrases and vocabulary to a private dashboard, and nothing is saved unless you choose to save it.",
+    question: "What is LingoBridge?",
+  },
+  {
+    answer:
+      "LingoBridge is free to install from the Chrome Web Store. Translating and saving phrases on your device work without an account.",
+    question: "Is LingoBridge free?",
+  },
+  {
+    answer:
       "No. Translation and local phrase saving work without an account. Sign in only when you want the web dashboard and synchronization across connected extensions.",
     question: "Do I need an account to translate?",
   },
@@ -140,8 +169,10 @@ function StoreLink({ className }: { className?: string }) {
 }
 
 export default function HomePage() {
+  const origin = siteOrigin();
   return (
     <div className={styles.page} data-lb-landing-root="">
+      {origin ? <StructuredData data={landingStructuredData(origin, faqs)} /> : null}
       <LandingAnimations />
       <a className="skip-link" href="#main">
         Skip to content

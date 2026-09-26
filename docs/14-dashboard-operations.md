@@ -57,6 +57,28 @@ deployment must alert on a failed run; a successful local command does not prove
 configured. Database backups and their retention must be reviewed separately for account-deletion
 promises before release.
 
+## Search and sharing
+
+Status: **Implemented and tested locally; not yet verified on the production domain.**
+
+`LINGOBRIDGE_DASHBOARD_ORIGIN` also drives the public search and sharing routes. Canonical links,
+Open Graph and X images, `sitemap.xml`, `robots.txt`, `llms.txt`, and the landing page's JSON-LD
+all use that origin. Only `/` and `/privacy-policy` are indexable; every other page inherits
+`noindex` from the root layout. `robots.txt` allows crawling only when the request's host matches
+the configured origin, so a second site or preview serving the same build answers `Disallow: /`.
+Signed-in pages stay crawlable so crawlers see their `noindex`; only `/api/`, `/auth/`, and
+`/dev-identity/` are excluded.
+
+The web app manifest makes the dashboard installable without a service worker, so no signed-in
+data is cached for offline use. The PNG icons, maskable icons, and `favicon.ico` are generated from
+the brand mark in `@lingobridge/design-tokens/brand`; run `pnpm --filter @lingobridge/dashboard icons`
+after changing it and commit the output. Share images use the static IBM Plex Sans instances in
+`apps/dashboard/src/assets/fonts` (SIL Open Font License, included).
+
+After deployment, submit `https://YOUR_DASHBOARD_ORIGIN/sitemap.xml` in Google Search Console,
+inspect the landing page with the Rich Results Test, and check a shared link in a social preview
+debugger.
+
 ## Deployment verification
 
 With deployment credentials, verify a Google sign-in, failed-login handling, re-authentication,
