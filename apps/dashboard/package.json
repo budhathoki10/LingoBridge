@@ -5,6 +5,7 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev",
+    "icons": "node scripts/generate-icons.mjs",
     "maintenance": "node scripts/maintenance.mjs",
     "start": "next start",
     "typecheck": "tsc --noEmit"

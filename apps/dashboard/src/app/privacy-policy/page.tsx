@@ -6,15 +6,26 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Brand } from "@/components/brand";
 import { PRIVACY_POLICY_VERSION } from "@/lib/privacy";
+import { sharedOpenGraph, sharedTwitter } from "@/lib/site";
 
 // The Chrome Web Store and every visitor must reach this without signing in. It sits outside the
 // protected route prefixes in proxy.ts on purpose: "/privacy" is the signed-in account page, and
 // this public policy lives at a different path so the two never shadow each other.
+const DESCRIPTION =
+  "What LingoBridge sends, stores, and deletes, and which translation providers receive the text you choose to translate.";
+
 export const metadata: Metadata = {
-  description:
-    "What LingoBridge sends, stores, and deletes, and which translation providers receive the text you choose to translate.",
+  alternates: { canonical: "/privacy-policy" },
+  description: DESCRIPTION,
+  openGraph: {
+    ...sharedOpenGraph,
+    description: DESCRIPTION,
+    title: "LingoBridge privacy policy",
+    url: "/privacy-policy",
+  },
   robots: { follow: true, index: true },
   title: "Privacy policy",
+  twitter: { ...sharedTwitter, description: DESCRIPTION, title: "LingoBridge privacy policy" },
 };
 
 // Read at request time so the operator's contact address is configuration, not code.
