@@ -55,7 +55,10 @@ function readOrigin(value: string | undefined, production: boolean): string {
 
 /** The validated origin alone, for public routes that must not open the database. */
 export function loadDashboardOrigin(environment: DashboardEnvironment): string {
-  return readOrigin(environment.LINGOBRIDGE_DASHBOARD_ORIGIN, environment.NODE_ENV === "production");
+  return readOrigin(
+    environment.LINGOBRIDGE_DASHBOARD_ORIGIN,
+    environment.NODE_ENV === "production",
+  );
 }
 
 /**
