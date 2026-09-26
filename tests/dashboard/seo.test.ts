@@ -1,13 +1,32 @@
 import { describe, expect, it } from "vitest";
-import { CHROME_WEB_STORE_URL } from "../../apps/dashboard/src/lib/links";
+import {
+  CHROME_WEB_STORE_URL,
+  CREATOR,
+  GITHUB_REPOSITORY_URL,
+} from "../../apps/dashboard/src/lib/links";
 import {
   INDEXABLE_PATHS,
   landingStructuredData,
   robotsFor,
+  SITE_DESCRIPTION,
+  SITE_TITLE,
   serializeJsonLd,
   sitemapFor,
   siteOrigin,
 } from "../../apps/dashboard/src/lib/site";
+
+describe("landing copy", () => {
+  it("leads the title with the phrase people search for, within the length Google shows", () => {
+    expect(SITE_TITLE.startsWith("LingoBridge Chrome Extension")).toBe(true);
+    expect(SITE_TITLE.length).toBeLessThanOrEqual(60);
+  });
+
+  it("opens the description with a self-contained definition that fits a result snippet", () => {
+    expect(SITE_DESCRIPTION.startsWith("LingoBridge is a free Chrome extension")).toBe(true);
+    expect(SITE_DESCRIPTION.length).toBeLessThanOrEqual(160);
+  });
+});
+
 import { isProtectedPath, PROTECTED_PREFIXES } from "../../apps/dashboard/src/proxy";
 
 const ORIGIN = "https://lingobridge.example";
@@ -89,6 +108,23 @@ describe("landingStructuredData", () => {
   it("mirrors the visible FAQ entries", () => {
     expect(byType("FAQPage")).toMatchObject({
       mainEntity: [{ acceptedAnswer: { "@type": "Answer", text: "Yes." }, name: "Is it free?" }],
+    });
+  });
+
+  it("ties the store listing, source, and maker to one entity", () => {
+    const sameAs = [CHROME_WEB_STORE_URL, GITHUB_REPOSITORY_URL];
+    expect(byType("SoftwareApplication")).toMatchObject({
+      author: { "@id": `${ORIGIN}/#creator` },
+      sameAs,
+    });
+    expect(byType("Organization")).toMatchObject({
+      founder: { "@id": `${ORIGIN}/#creator` },
+      sameAs,
+    });
+    expect(byType("Person")).toMatchObject({
+      "@id": `${ORIGIN}/#creator`,
+      name: CREATOR.name,
+      url: CREATOR.url,
     });
   });
 

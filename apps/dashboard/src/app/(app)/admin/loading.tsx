@@ -7,7 +7,7 @@ const METRICS = ["Requests", "Success rate", "Median latency", "95th percentile"
 export default function AdminLoading() {
   return (
     <LoadingPage>
-      <PageHeader description={PAGE_COPY.admin.description} title={PAGE_COPY.admin.title} />
+      <PageHeader loading description={PAGE_COPY.admin.description} title={PAGE_COPY.admin.title} />
 
       <div aria-hidden="true" className="filter-summary">
         <SkeletonText>

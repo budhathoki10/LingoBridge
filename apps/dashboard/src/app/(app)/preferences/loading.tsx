@@ -7,6 +7,7 @@ export default function PreferencesLoading() {
   return (
     <LoadingPage>
       <PageHeader
+        loading
         description={PAGE_COPY.preferences.description}
         title={PAGE_COPY.preferences.title}
       />

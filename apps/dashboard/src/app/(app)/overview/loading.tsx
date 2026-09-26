@@ -16,6 +16,7 @@ export default function OverviewLoading() {
   return (
     <LoadingPage className="page--overview">
       <PageHeader
+        loading
         actions={
           <span aria-hidden="true" className="badge skeleton-mask">
             <span className="dot" />1 extension connected

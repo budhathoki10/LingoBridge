@@ -1425,6 +1425,21 @@
   font-size: 0.8125rem;
 }
 
+.footerCredit {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--lb-line);
+  text-underline-offset: 3px;
+  transition:
+    color 160ms ease,
+    text-decoration-color 160ms ease;
+}
+
+.footerCredit:hover {
+  color: var(--lb-ink);
+  text-decoration-color: currentColor;
+}
+
 /* ---------- Phone section rhythm (< 768px) ---------- */
 
 @media (max-width: 767px) {

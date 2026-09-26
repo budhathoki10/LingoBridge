@@ -150,7 +150,7 @@ test("public landing page explains the product and links to the published extens
     "frame-src https://www.youtube-nocookie.com",
   );
 
-  await expect(page).toHaveTitle(/Understand the words in front of you/u);
+  await expect(page).toHaveTitle("LingoBridge Chrome Extension: Translate Selected Text");
   await expect(
     page.getByRole("heading", { level: 1, name: "Understand the words in front of you." }),
   ).toBeVisible();

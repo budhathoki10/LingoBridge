@@ -1,4 +1,9 @@
-import { CHROME_WEB_STORE_URL, DEMO_VIDEO_WATCH_URL } from "@/lib/links";
+import {
+  CHROME_WEB_STORE_URL,
+  CREATOR,
+  DEMO_VIDEO_WATCH_URL,
+  GITHUB_REPOSITORY_URL,
+} from "@/lib/links";
 import { SITE_DESCRIPTION, SITE_NAME, siteOrigin } from "@/lib/site";
 
 // Read at request time so the links use the deployed origin.
@@ -17,6 +22,8 @@ export function GET(): Response {
 
 ${SITE_NAME} is a Chrome extension for translating the exact text you select, without leaving the page. Selecting text sends nothing on its own: translation starts only after you click the small Selection Magic action beside your selection, or use the popup. An optional web dashboard keeps only the phrases and vocabulary you explicitly save.
 
+Several unrelated products use the name ${SITE_NAME}. This one is the Chrome extension for translating selected text, made by ${CREATOR.name}. It is not a chat translator, a language-exchange app, or a language course.
+
 ## Key facts
 
 - Install: free from the Chrome Web Store. An account is optional; translation and saving on the device work without one.
@@ -32,6 +39,8 @@ ${SITE_NAME} is a Chrome extension for translating the exact text you select, wi
 - [Privacy policy](${link("/privacy-policy")}): what is sent, stored, and deleted, and which providers receive text
 - [Chrome Web Store listing](${CHROME_WEB_STORE_URL}): install the extension
 - [Demo video](${DEMO_VIDEO_WATCH_URL}): the workflow from selection to translation
+- [Source code](${GITHUB_REPOSITORY_URL}): the extension, gateway, and dashboard
+- [${CREATOR.name}](${CREATOR.url}): the maker
 `;
   return new Response(body, {
     headers: {
