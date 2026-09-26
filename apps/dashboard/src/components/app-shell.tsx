@@ -27,6 +27,7 @@ import {
   SignOutIcon,
   VocabularyIcon,
 } from "./icons";
+import { PendingForm } from "./pending";
 import { DashboardProviders } from "./providers";
 
 interface NavItem {
@@ -138,7 +139,7 @@ function AccountFooter({ csrfToken, user }: { csrfToken: string; user: ShellUser
         <span className="account__name">{user.displayName || "Signed in"}</span>
         {user.email ? <span className="account__email">{user.email}</span> : null}
       </span>
-      <form action="/auth/sign-out" method="post">
+      <PendingForm action="/auth/sign-out" method="post">
         <input name="csrf" type="hidden" value={csrfToken} />
         <button
           aria-label="Sign out"
@@ -148,7 +149,7 @@ function AccountFooter({ csrfToken, user }: { csrfToken: string; user: ShellUser
         >
           <SignOutIcon size={16} />
         </button>
-      </form>
+      </PendingForm>
     </div>
   );
 }
@@ -297,6 +298,12 @@ export function AppShell({
   const drawer = useRef<HTMLDialogElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const openDrawer = useCallback(() => {
+    drawer.current?.showModal();
+    setDrawerOpen(true);
+  }, []);
 
   const closeDrawer = useCallback(() => {
     if (drawer.current?.open) {
@@ -304,6 +311,17 @@ export function AppShell({
       menuButton.current?.focus();
     }
   }, []);
+
+  // A modal dialog traps focus but not scrolling, so the page behind is locked while it is open.
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const root = document.documentElement;
+    const previous = root.style.overflow;
+    root.style.overflow = "hidden";
+    return () => {
+      root.style.overflow = previous;
+    };
+  }, [drawerOpen]);
 
   // Navigating from inside the drawer closes it.
   const shownPath = useRef(pathname);
@@ -399,8 +417,19 @@ export function AppShell({
         </aside>
 
         <header className="topbar">
+          <button
+            aria-controls="navigation-drawer"
+            aria-expanded={drawerOpen}
+            aria-label="Open navigation"
+            className="button button--ghost button--icon topbar__menu"
+            onClick={openDrawer}
+            ref={menuButton}
+            type="button"
+          >
+            <MenuIcon size={18} />
+          </button>
           <Brand href="/overview" />
-          <div className="page-header__actions">
+          <div className="page-header__actions topbar__actions">
             <button
               aria-label="Search"
               className="button button--ghost button--icon"
@@ -408,16 +437,6 @@ export function AppShell({
               type="button"
             >
               <SearchIcon size={18} />
-            </button>
-            <button
-              aria-controls="navigation-drawer"
-              aria-label="Open navigation"
-              className="button button--ghost button--icon"
-              onClick={() => drawer.current?.showModal()}
-              ref={menuButton}
-              type="button"
-            >
-              <MenuIcon size={18} />
             </button>
           </div>
         </header>
@@ -431,6 +450,7 @@ export function AppShell({
             event.preventDefault();
             closeDrawer();
           }}
+          onClose={() => setDrawerOpen(false)}
           onClick={(event) => {
             if (event.target === drawer.current) closeDrawer();
           }}

@@ -16,9 +16,12 @@ let cache: { expiresAt: number; options: LanguageOption[] } | undefined;
 export async function loadTargetLanguages(gatewayUrl: string): Promise<LanguageOption[] | null> {
   if (cache && cache.expiresAt > Date.now()) return cache.options;
   try {
+    // The catalogue is public and changes rarely. Next's data cache shares it across server
+    // instances, so a fresh instance doesn't wait on a gateway that may be waking from sleep.
+    // Only successful responses are cached.
     const response = await fetch(`${gatewayUrl}${GATEWAY_ROUTES.capabilities}`, {
-      cache: "no-store",
       headers: { "X-LingoBridge-Installation-Id": "00000000-0000-4000-8000-000000000000" },
+      next: { revalidate: 600 },
       signal: AbortSignal.timeout(3_000),
     });
     if (!response.ok) return cache?.options ?? null;

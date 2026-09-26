@@ -109,20 +109,27 @@ export async function createDashboardServices(
     extensionAuth: { allowedExtensionIds: extensionAllowlist(config), database, now },
     async fetchOperationsMetrics() {
       if (!config.operationsMetricsToken) return { kind: "disabled" };
-      const healthy = await gatewayHealthy();
-      try {
-        const response = await networkFetch(`${config.gatewayUrl}${OPERATIONS_METRICS_ROUTE}`, {
-          headers: { Authorization: `Bearer ${config.operationsMetricsToken}` },
-          signal: AbortSignal.timeout(4_000),
-        });
-        if (!response.ok) return { gatewayHealthy: healthy, kind: "unavailable" };
-        const parsed = operationsMetricsSchema.safeParse(await response.json());
-        return parsed.success
-          ? { gatewayHealthy: healthy, kind: "ok", metrics: parsed.data }
-          : { gatewayHealthy: healthy, kind: "unavailable" };
-      } catch {
-        return { gatewayHealthy: healthy, kind: "unavailable" };
-      }
+      const token = config.operationsMetricsToken;
+      // Both calls go to the same gateway, so they run together rather than one after the other.
+      const [healthy, metrics] = await Promise.all([
+        gatewayHealthy(),
+        (async () => {
+          try {
+            const response = await networkFetch(`${config.gatewayUrl}${OPERATIONS_METRICS_ROUTE}`, {
+              headers: { Authorization: `Bearer ${token}` },
+              signal: AbortSignal.timeout(4_000),
+            });
+            if (!response.ok) return null;
+            const parsed = operationsMetricsSchema.safeParse(await response.json());
+            return parsed.success ? parsed.data : null;
+          } catch {
+            return null;
+          }
+        })(),
+      ]);
+      return metrics
+        ? { gatewayHealthy: healthy, kind: "ok", metrics }
+        : { gatewayHealthy: healthy, kind: "unavailable" };
     },
     now,
     rateLimiter: new MemoryRateLimiter(() => now().getTime()),

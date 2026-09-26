@@ -169,6 +169,29 @@ export function collection<Name extends CollectionName>(
   return client.db.collection<CollectionDocuments[Name] & Document>(name);
 }
 
+type ReadResults<Reads extends readonly (() => Promise<unknown>)[]> = {
+  -readonly [Index in keyof Reads]: Reads[Index] extends () => Promise<infer Result>
+    ? Result
+    : never;
+};
+
+/**
+ * Runs independent reads concurrently, so a page costs one database round trip instead of one per
+ * query. Inside a transaction every operation shares one session and must not overlap, so there
+ * the reads run in order.
+ */
+export async function readAll<const Reads extends readonly (() => Promise<unknown>)[]>(
+  client: DbClient,
+  reads: Reads,
+): Promise<ReadResults<Reads>> {
+  if (!client.session) {
+    return (await Promise.all(reads.map((read) => read()))) as ReadResults<Reads>;
+  }
+  const results: unknown[] = [];
+  for (const read of reads) results.push(await read());
+  return results as ReadResults<Reads>;
+}
+
 /** Options that bind an operation to the caller's transaction when there is one. */
 export function inSession(client: DbClient): { session?: ClientSession } {
   return client.session ? { session: client.session } : {};

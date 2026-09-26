@@ -1,13 +1,14 @@
 import "@fontsource-variable/ibm-plex-sans";
+import { sanitizeReturnPath } from "@lingobridge/auth";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { sanitizeReturnPath } from "@lingobridge/auth";
 import { Brand } from "@/components/brand";
 import { GoogleMark } from "@/components/icons";
+import { PendingLink } from "@/components/pending";
 import { getServices } from "@/server/container";
 import { getPageSession } from "@/server/page-session";
-import { SignInStage } from "./sign-in-stage";
 import styles from "./sign-in.module.css";
+import { SignInStage } from "./sign-in-stage";
 
 export const metadata: Metadata = { title: "Sign in" };
 export const dynamic = "force-dynamic";
@@ -65,13 +66,13 @@ export default async function SignInPage({ searchParams }: { searchParams: Searc
           ) : null}
 
           {/* A link, not a form: CSP form-action also applies to the redirect to the provider. */}
-          <a
+          <PendingLink
             className={isGoogle ? "button button--large" : "button button--primary button--large"}
             href={`/auth/sign-in?returnTo=${encodeURIComponent(returnTo)}`}
           >
             {isGoogle ? <GoogleMark /> : null}
             Continue with {providerName}
-          </a>
+          </PendingLink>
 
           {development ? (
             <p className="callout callout--warning">

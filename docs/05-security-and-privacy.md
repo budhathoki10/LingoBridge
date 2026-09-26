@@ -181,8 +181,10 @@ The dashboard uses its own restrictive policy, permits network access only to ap
   production, which also requires a confidential client secret, HTTPS origin, MongoDB, an exact
   extension-ID allowlist, and a server-only session secret. Credentialed Google sign-in remains a
   deployment check.
-- Protected pages re-check the database-backed session during server rendering. Dashboard
-  mutations require the same origin and a session-bound CSRF token. Phrase, preference, session,
+- Protected pages re-check the database-backed session during server rendering. Expiry,
+  revocation, and a deleted account are checked on every request in one read; the 12-hour idle
+  window slides at most once every five minutes, so a session can end up to five minutes early and
+  never later. Dashboard mutations require the same origin and a session-bound CSRF token. Phrase, preference, session,
   export, and deletion queries derive the user ID from the authenticated server session; admin
   access requires a server-derived role.
 - Chrome Identity connection requires a user click and signed-in approval. The one-minute,

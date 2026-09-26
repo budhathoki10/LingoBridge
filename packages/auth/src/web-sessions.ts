@@ -3,7 +3,8 @@ import {
   createLoginAttempt,
   createWebSession,
   type Database,
-  findUserById,
+  extendWebSessionIdle,
+  findLiveWebSession,
   findUserByIdentity,
   type LoginPurpose,
   markWebSessionReauthenticated,
@@ -246,19 +247,22 @@ export async function resolveWebSession(
 ): Promise<AuthenticatedWebSession | null> {
   if (!sessionToken || sessionToken.length > 128) return null;
   const now = dependencies.now();
-  const session = await touchWebSession(
-    dependencies.database,
-    hashToken(sessionToken),
-    AUTH_POLICY.webSessionIdleMilliseconds,
-    now,
-  );
-  if (!session) return null;
-  const user = await findUserById(dependencies.database, session.userId);
-  if (!user) return null;
+  const live = await findLiveWebSession(dependencies.database, hashToken(sessionToken), now);
+  if (!live) return null;
+  const idleFor = now.getTime() - Date.parse(live.lastSeenAt);
+  const session =
+    idleFor >= AUTH_POLICY.webSessionTouchIntervalMilliseconds
+      ? await extendWebSessionIdle(
+          dependencies.database,
+          live.session,
+          AUTH_POLICY.webSessionIdleMilliseconds,
+          now,
+        )
+      : live.session;
   return {
     csrfToken: deriveCsrfToken(dependencies.sessionSecret, sessionToken),
     session,
-    user,
+    user: live.user,
   };
 }
 

@@ -1,6 +1,12 @@
 import { type SavedWordRecord, savedWordSchema } from "@lingobridge/contracts/account";
 import type { Filter } from "mongodb";
-import { collection, type DbClient, inSession, type VocabularyDocument } from "./client.js";
+import {
+  collection,
+  type DbClient,
+  inSession,
+  readAll,
+  type VocabularyDocument,
+} from "./client.js";
 
 function toRecord(document: VocabularyDocument): SavedWordRecord {
   return savedWordSchema.parse({
@@ -60,16 +66,19 @@ export async function listSavedWordsPage(
 ): Promise<SavedWordPage> {
   const vocabulary = collection(client, "vocabulary");
   const filter = savedWordFilter(userId, options.query);
-  const total = await vocabulary.countDocuments(filter, inSession(client));
-  const documents = await vocabulary
-    .find(filter, inSession(client))
-    .sort([
-      ["savedAt", -1],
-      ["id", 1],
-    ])
-    .skip(options.offset)
-    .limit(options.limit)
-    .toArray();
+  const [total, documents] = await readAll(client, [
+    () => vocabulary.countDocuments(filter, inSession(client)),
+    () =>
+      vocabulary
+        .find(filter, inSession(client))
+        .sort([
+          ["savedAt", -1],
+          ["id", 1],
+        ])
+        .skip(options.offset)
+        .limit(options.limit)
+        .toArray(),
+  ]);
   return { total, words: documents.map(toRecord) };
 }
 

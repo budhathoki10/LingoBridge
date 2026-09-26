@@ -3,9 +3,10 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { formatDateTime } from "@/lib/format";
+import { PAGE_COPY } from "@/lib/page-copy";
 import { requirePageSession } from "@/server/page-session";
 
-export const metadata: Metadata = { title: "Operations" };
+export const metadata: Metadata = { title: PAGE_COPY.admin.title };
 
 const PROVIDER_NAMES: Record<ProviderOperations["provider"], string> = {
   fake: "Fake provider",
@@ -73,10 +74,7 @@ export default async function AdminPage() {
 
   return (
     <div className="page">
-      <PageHeader
-        description="Provider health and usage totals for this gateway instance. No selected, translated, or saved text is ever shown here."
-        title="Operations"
-      />
+      <PageHeader description={PAGE_COPY.admin.description} title={PAGE_COPY.admin.title} />
 
       {result.kind === "disabled" ? (
         <div className="empty">

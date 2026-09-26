@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   ArrowRightIcon,
   BrowserIcon,
+  ChevronRightIcon,
   ExtensionsIcon,
   PhrasesIcon,
   PreferencesIcon,
@@ -11,6 +12,7 @@ import {
 import { PageHeader } from "@/components/page-header";
 import { formatDate, formatRelative, languageName, plural, providerLabel } from "@/lib/format";
 import { CHROME_WEB_STORE_URL } from "@/lib/links";
+import { PAGE_COPY } from "@/lib/page-copy";
 import { requirePageSession } from "@/server/page-session";
 
 export const metadata: Metadata = { title: "Overview" };
@@ -33,7 +35,7 @@ export default async function OverviewPage() {
               : "Setup incomplete"}
           </span>
         }
-        description="Phrases you chose to save in the extension, and the devices allowed to sync them."
+        description={PAGE_COPY.overview.description}
         title={firstName ? `Welcome back, ${firstName}` : "Overview"}
       />
 
@@ -133,7 +135,9 @@ export default async function OverviewPage() {
         <div className="section__header">
           <h2 id="recent-title">Recently saved</h2>
           {overview.phraseCount > 0 ? (
-            <Link href="/phrases">View all {plural(overview.phraseCount, "phrase")}</Link>
+            <Link className="section__link" href="/phrases">
+              View all {plural(overview.phraseCount, "phrase")}
+            </Link>
           ) : null}
         </div>
 
@@ -169,7 +173,8 @@ export default async function OverviewPage() {
                   </span>
                 </span>
                 <span className="row__actions">
-                  <ArrowRightIcon size={16} />
+                  <ArrowRightIcon className="row__arrow" size={16} />
+                  <ChevronRightIcon className="row__chevron" size={18} />
                 </span>
               </Link>
             ))}

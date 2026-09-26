@@ -47,7 +47,8 @@
 
   /* Rhythm */
   --lb-section-y: clamp(72px, 9vw, 120px);
-  --lb-gutter: 24px;
+  /* 16px matches the dashboard's phone gutter; 768px and up restores 40px below. */
+  --lb-gutter: 16px;
   --lb-max: 1200px;
 
   min-width: 0;
@@ -138,6 +139,24 @@
 
 .page p {
   margin: 0;
+}
+
+/* Phone type scale: section titles step down to 24px and body copy to 15px so
+   a 360px screen shows a heading and its lead together. */
+@media (max-width: 767px) {
+  .page {
+    --lb-section-y: 56px;
+  }
+
+  .page h2 {
+    font-size: 1.5rem;
+    line-height: 1.2;
+    letter-spacing: -0.022em;
+  }
+
+  .page h3 {
+    font-size: 1rem;
+  }
 }
 
 /* Section lead: one consistent heading block for every section. */
@@ -355,6 +374,45 @@
   .primaryNav,
   .dashboardLink {
     display: flex;
+  }
+}
+
+/* Phones: returning users need Sign in without scrolling to the footer. The
+   install button goes compact beside it. */
+@media (max-width: 767px) {
+  .headerInner {
+    height: 56px;
+    gap: 12px;
+  }
+
+  .headerActions {
+    gap: 4px;
+  }
+
+  .dashboardLink {
+    display: flex;
+    min-height: 44px;
+    padding: 0 10px;
+    color: var(--lb-ink);
+  }
+
+  .headerCta {
+    min-height: 36px;
+    padding: 0 12px;
+    font-size: 0.8125rem;
+  }
+
+  .headerCta svg {
+    display: none;
+  }
+}
+
+/* Below 390px logo, Sign in, and the button no longer fit with breathing room.
+   The hero's full-size Add to browser sits directly underneath, so the header
+   keeps only Sign in. */
+@media (max-width: 389px) {
+  .headerCta {
+    display: none;
   }
 }
 
@@ -589,7 +647,7 @@
    to keep the fold showing that the page continues. Nothing is hidden. */
 @media (max-width: 767px) {
   .hero {
-    padding-block: 36px 40px;
+    padding-block: 28px 32px;
   }
 
   .heroInner {
@@ -597,30 +655,61 @@
   }
 
   .eyebrow {
-    margin-bottom: 14px;
+    margin-bottom: 16px;
+    font-size: 0.75rem;
+  }
+
+  /* One sentence that wraps where it fits, instead of two forced lines that
+     each break again at 360px. */
+  .page h1 {
+    font-size: clamp(1.875rem, 8.2vw, 2rem);
+    line-height: 1.15;
+    letter-spacing: -0.03em;
+  }
+
+  .page h1 > span {
+    display: inline;
   }
 
   .page .heroCopy {
-    margin-top: 16px;
-    font-size: 1rem;
+    margin-top: 14px;
+    font-size: 0.9375rem;
+    line-height: 1.5;
   }
 
   .heroActions {
-    margin-top: 22px;
+    gap: 12px;
+    margin-top: 24px;
+  }
+
+  .heroNotes {
+    margin-top: 16px;
+    font-size: 0.8125rem;
   }
 
   .stageContent {
-    gap: 14px;
-    padding: 20px;
+    gap: 12px;
+    padding: 16px;
   }
 
   .sourceLine p,
   .outputLine p {
-    font-size: 1rem;
+    font-size: 0.9375rem;
+    overflow-wrap: break-word;
+  }
+
+  /* Devanagari vowel signs sit above and below the line; 1.6 keeps them clear
+     of the neighbouring row. */
+  .outputLine p {
+    line-height: 1.6;
   }
 
   .outputLine {
-    padding-top: 14px;
+    padding-top: 12px;
+  }
+
+  .translationMarker {
+    padding-block: 6px;
   }
 
   .scriptRail {
@@ -629,88 +718,17 @@
   }
 }
 
-/* At the narrowest supported width the hero CTAs stack, which costs a whole row,
-   so the remaining space is reclaimed from padding and from the script rail —
-   the rail is aria-hidden decoration and carries no information. */
-@media (max-width: 380px) {
-  .hero {
-    padding-block: 24px;
-  }
-
-  .heroInner {
-    gap: 22px;
-  }
-
+/* Under 400px two buttons no longer sit side by side at a readable size, so they
+   stack as equal full-width targets instead of wrapping unevenly. */
+@media (max-width: 399px) {
   .heroActions {
-    margin-top: 18px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .stageContent {
-    gap: 12px;
-    padding: 16px;
-  }
-
+  /* Decoration only (aria-hidden); dropped to keep the next section above the fold. */
   .scriptRail {
     display: none;
-  }
-}
-
-@media (max-width: 340px) {
-  .headerInner {
-    height: 56px;
-  }
-
-  .headerCta {
-    min-height: 36px;
-    padding-inline: 12px;
-  }
-
-  .hero {
-    padding-block: 18px 22px;
-  }
-
-  .page h1 {
-    font-size: 2.15rem;
-    line-height: 0.98;
-  }
-
-  .page .heroCopy {
-    margin-top: 12px;
-    font-size: 0.9375rem;
-    line-height: 1.5;
-  }
-
-  .heroActions {
-    gap: 8px;
-    margin-top: 14px;
-  }
-
-  .primaryAction,
-  .secondaryAction {
-    min-height: 42px;
-  }
-
-  .heroNotes {
-    margin-top: 12px;
-  }
-
-  .heroInner {
-    gap: 14px;
-  }
-
-  .stageContent {
-    gap: 9px;
-    padding: 13px;
-  }
-
-  .sourceLine p,
-  .outputLine p {
-    font-size: 0.9375rem;
-    line-height: 1.45;
-  }
-
-  .outputLine {
-    padding-top: 10px;
   }
 }
 
@@ -1405,4 +1423,110 @@
   border-top: 1px solid var(--lb-line);
   color: var(--lb-muted);
   font-size: 0.8125rem;
+}
+
+/* ---------- Phone section rhythm (< 768px) ---------- */
+
+@media (max-width: 767px) {
+  .sectionLead {
+    margin-bottom: 28px;
+  }
+
+  .sectionLead > p {
+    margin-top: 12px;
+    font-size: 0.9375rem;
+    line-height: 1.55;
+  }
+
+  .trustStrip ul {
+    gap: 12px;
+    padding-block: 20px;
+  }
+
+  .trustStrip li {
+    font-size: 0.875rem;
+  }
+
+  .page .trustStrip svg {
+    margin-top: 1px;
+  }
+
+  .workflowItem,
+  .controlCard {
+    padding: 20px;
+  }
+
+  .workflowItem p,
+  .primaryCapability > p,
+  .capabilityCard > p,
+  .controlCard li {
+    font-size: 0.875rem;
+    line-height: 1.55;
+  }
+
+  .primaryCapability,
+  .capabilityCard {
+    padding-block: 24px;
+  }
+
+  .inlineDemo {
+    min-height: 0;
+    padding: 16px;
+  }
+
+  .inlineSource,
+  .inlineOutput {
+    font-size: 0.9375rem;
+  }
+
+  .inlineOutput {
+    overflow-wrap: break-word;
+  }
+
+  .boundaryIntro,
+  .boundaryGroup {
+    padding: 20px 16px;
+  }
+
+  .boundaryNote {
+    padding: 16px;
+    font-size: 0.8125rem;
+  }
+
+  .inlineActions {
+    margin-top: 24px;
+  }
+
+  .faqItem summary {
+    gap: 16px;
+    min-height: 56px;
+    padding: 16px 0;
+    font-size: 0.9375rem;
+  }
+
+  .faqAnswer {
+    padding: 0 0 20px;
+    font-size: 0.875rem;
+    line-height: 1.6;
+  }
+
+  .installCopy {
+    font-size: 0.9375rem;
+  }
+
+  .footerInner {
+    gap: 32px;
+    padding-block: 40px;
+  }
+
+  .footerLinks a {
+    min-height: 40px;
+  }
+}
+
+@media (max-width: 399px) {
+  .inlineActions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

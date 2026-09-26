@@ -7,7 +7,8 @@ export function PageHeader({
 }: {
   actions?: ReactNode;
   description?: ReactNode;
-  title: string;
+  /** A string, or a placeholder while the page loads. */
+  title: ReactNode;
 }) {
   return (
     <header className="page-header">

@@ -239,6 +239,23 @@ textarea {
   }
 }
 
+/* A button whose action is in flight (components/pending.tsx): a spinner leads its label. An
+   icon-only button swaps its icon for the spinner so it keeps its size. */
+.button[aria-busy="true"]::before {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  content: "";
+  animation: spin 700ms linear infinite;
+}
+
+.button--icon[aria-busy="true"] svg {
+  display: none;
+}
+
 .spinner {
   width: 14px;
   height: 14px;
@@ -525,18 +542,7 @@ textarea {
   background: var(--accent-subtle);
 }
 
-.skeleton {
-  border-radius: var(--radius-sm);
-  background: linear-gradient(
-    90deg,
-    var(--surface-sunken) 0%,
-    var(--surface-hover) 50%,
-    var(--surface-sunken) 100%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.4s ease-in-out infinite;
-}
-
+/* Loading placeholder motion; the placeholder styles live at the end of app.css. */
 @keyframes shimmer {
   from {
     background-position: 100% 0;

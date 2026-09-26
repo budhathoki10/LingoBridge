@@ -10,6 +10,7 @@ import {
   inSession,
   type PhraseDocument,
   type PreferencesDocument,
+  readAll,
   toIsoString,
   toNullableIsoString,
 } from "./client.js";
@@ -87,17 +88,20 @@ export async function listPhrases(
   }
 
   const phrases = collection(client, "phrases");
-  const total = await phrases.countDocuments(filter, inSession(client));
-  const documents = await phrases
-    .find(filter, inSession(client))
-    // Array form: sort precedence must not depend on object key order.
-    .sort([
-      ["savedAt", filters.sort === "oldest" ? 1 : -1],
-      ["id", 1],
-    ])
-    .skip(filters.offset)
-    .limit(filters.limit)
-    .toArray();
+  const [total, documents] = await readAll(client, [
+    () => phrases.countDocuments(filter, inSession(client)),
+    () =>
+      phrases
+        .find(filter, inSession(client))
+        // Array form: sort precedence must not depend on object key order.
+        .sort([
+          ["savedAt", filters.sort === "oldest" ? 1 : -1],
+          ["id", 1],
+        ])
+        .skip(filters.offset)
+        .limit(filters.limit)
+        .toArray(),
+  ]);
   return { phrases: toLivePhraseRecords(documents), total };
 }
 
