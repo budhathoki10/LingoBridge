@@ -1,10 +1,11 @@
 import { listExtensionSessions } from "@lingobridge/database";
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/page-header";
+import { PAGE_COPY } from "@/lib/page-copy";
 import { requirePageSession } from "@/server/page-session";
 import { ExtensionsList } from "./extensions-list";
 
-export const metadata: Metadata = { title: "Connected extensions" };
+export const metadata: Metadata = { title: PAGE_COPY.extensions.title };
 
 export default async function ExtensionsPage() {
   const { services, user } = await requirePageSession();
@@ -14,8 +15,8 @@ export default async function ExtensionsPage() {
   return (
     <div className="page">
       <PageHeader
-        description="Each Chrome installation you approved has its own connection. Revoking one refuses its very next sync, and its local phrases stay on that device."
-        title="Connected extensions"
+        description={PAGE_COPY.extensions.description}
+        title={PAGE_COPY.extensions.title}
       />
       <ExtensionsList
         now={now.toISOString()}

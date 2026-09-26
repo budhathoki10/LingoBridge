@@ -16,4 +16,10 @@ export const AUTH_POLICY = {
   recentAuthenticationMilliseconds: 5 * MINUTE,
   webSessionAbsoluteMilliseconds: 7 * DAY,
   webSessionIdleMilliseconds: 12 * HOUR,
+  /**
+   * The idle window slides at most this often, so most page views are a single database read
+   * instead of a read plus a write. A session can end this much earlier than the idle window,
+   * never later.
+   */
+  webSessionTouchIntervalMilliseconds: 5 * MINUTE,
 } as const;

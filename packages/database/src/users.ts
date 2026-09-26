@@ -33,7 +33,7 @@ export interface VerifiedIdentity {
   subject: string;
 }
 
-function toUser(document: UserDocument): User {
+export function toUser(document: UserDocument): User {
   return {
     createdAt: toIsoString(document.createdAt),
     deletedAt: toNullableIsoString(document.deletedAt),

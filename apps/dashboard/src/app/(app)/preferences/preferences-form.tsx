@@ -6,6 +6,7 @@ import { useId, useState } from "react";
 import { useDashboardApi, useToast } from "@/components/providers";
 import { formatDateTime, languageName } from "@/lib/format";
 import type { LanguageOption } from "@/server/languages";
+import { PREFERENCES_COPY as COPY } from "./copy";
 
 const LANGUAGE_CODE = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/u;
 
@@ -86,11 +87,9 @@ export function PreferencesForm({
       <div className="setting">
         <div className="setting__text">
           <h2>
-            <label htmlFor={ids.language}>Preferred translation language</label>
+            <label htmlFor={ids.language}>{COPY.language.title}</label>
           </h2>
-          <p id={ids.languageHelp}>
-            Selection Magic translates into this language unless you pick another.
-          </p>
+          <p id={ids.languageHelp}>{COPY.language.help}</p>
         </div>
         <div className="setting__control field">
           {languages && languages.length > 0 ? (
@@ -149,8 +148,8 @@ export function PreferencesForm({
 
       <fieldset aria-labelledby={ids.processing} className="setting">
         <div className="setting__text">
-          <h2 id={ids.processing}>Processing</h2>
-          <p>Where translation runs by default.</p>
+          <h2 id={ids.processing}>{COPY.processing.title}</h2>
+          <p>{COPY.processing.help}</p>
         </div>
         <div className="setting__control radio-group">
           <label className="radio">
@@ -162,8 +161,8 @@ export function PreferencesForm({
               value="online"
             />
             <span>
-              Online
-              <small>NVIDIA Nemotron first, then MyMemory, then NVIDIA Riva where supported.</small>
+              {COPY.processing.online.label}
+              <small>{COPY.processing.online.detail}</small>
             </span>
           </label>
           <label className="radio">
@@ -176,8 +175,8 @@ export function PreferencesForm({
               value="on-device"
             />
             <span>
-              On-device
-              <small>Not available yet. Chrome’s built-in translator doesn’t support Nepali.</small>
+              {COPY.processing.onDevice.label}
+              <small>{COPY.processing.onDevice.detail}</small>
             </span>
           </label>
         </div>
@@ -185,11 +184,8 @@ export function PreferencesForm({
 
       <div className="setting">
         <div className="setting__text">
-          <h2 id={ids.sync}>Phrase sync</h2>
-          <p>
-            When on, phrases you save in a connected extension are copied to this account. Turning
-            it off keeps existing synced phrases until you delete them.
-          </p>
+          <h2 id={ids.sync}>{COPY.sync.title}</h2>
+          <p>{COPY.sync.help}</p>
         </div>
         <div className="setting__control setting__control--end">
           <button

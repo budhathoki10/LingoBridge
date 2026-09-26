@@ -207,7 +207,7 @@ export default function HomePage() {
                 Chrome extension
               </p>
               <h1>
-                <span>Understand the words</span>
+                <span>Understand the words</span>{" "}
                 <span className={styles.heroAccent}>in front of you.</span>
               </h1>
               <p className={styles.heroCopy}>

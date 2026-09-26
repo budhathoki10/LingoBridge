@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Brand } from "@/components/brand";
 import { CheckIcon, CloseIcon } from "@/components/icons";
+import { PendingForm } from "@/components/pending";
 import { getPageSession } from "@/server/page-session";
 
 export const metadata: Metadata = { title: "Connect extension" };
@@ -106,7 +107,7 @@ export default async function ConnectExtensionPage({
               </p>
             </div>
 
-            <form action="/extension/connect/decision" className="button-row" method="post">
+            <PendingForm action="/extension/connect/decision" className="button-row" method="post">
               <input name="csrf" type="hidden" value={session.csrfToken} />
               <input name="request" type="hidden" value={params.toString()} />
               <button className="button" name="decision" type="submit" value="deny">
@@ -120,7 +121,7 @@ export default async function ConnectExtensionPage({
               >
                 Connect extension
               </button>
-            </form>
+            </PendingForm>
           </>
         ) : (
           <>

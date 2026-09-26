@@ -3,7 +3,7 @@
 import type { LivePhraseRecord } from "@lingobridge/contracts/account";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { CheckIcon, MinusIcon, SearchIcon, TrashIcon } from "@/components/icons";
+import { CheckIcon, MinusIcon, PreferencesIcon, SearchIcon, TrashIcon } from "@/components/icons";
 import { Pagination } from "@/components/pagination";
 import { useDashboardApi, useToast } from "@/components/providers";
 import { formatDate, languageName, plural, providerLabel } from "@/lib/format";
@@ -29,6 +29,53 @@ interface PhrasesViewProps {
 }
 
 const MAX_NOTE = 500;
+
+/**
+ * On phones each language is clamped to two lines. The toggle is shown only when the clamp actually
+ * cuts text off, which is measured rather than guessed from length because Devanagari and Latin
+ * text fill a line differently.
+ */
+function PhraseText({ phrase }: { phrase: LivePhraseRecord }) {
+  const [expanded, setExpanded] = useState(false);
+  const [clamped, setClamped] = useState(false);
+  const container = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    const element = container.current;
+    if (!element || expanded) return;
+    const measure = () =>
+      setClamped(
+        Array.from(element.children).some((child) => child.scrollHeight > child.clientHeight + 1),
+      );
+    measure();
+    const observer = new ResizeObserver(measure);
+    for (const child of Array.from(element.children)) observer.observe(child);
+    return () => observer.disconnect();
+  }, [expanded]);
+
+  return (
+    <>
+      <span className="row__text" data-expanded={expanded} ref={container}>
+        <span className="row__source" dir="auto" lang={phrase.sourceLanguage}>
+          {phrase.sourceText}
+        </span>
+        <span className="row__translation" dir="auto" lang={phrase.targetLanguage}>
+          {phrase.translatedText}
+        </span>
+      </span>
+      {clamped || expanded ? (
+        <button
+          aria-expanded={expanded}
+          className="row__more"
+          onClick={() => setExpanded((open) => !open)}
+          type="button"
+        >
+          {expanded ? "Show less" : "Show more"}
+        </button>
+      ) : null}
+    </>
+  );
+}
 
 function NoteEditor({
   onDone,
@@ -231,6 +278,15 @@ export function PhrasesView(props: PhrasesViewProps) {
       props.filters.to,
   );
 
+  // Phones fold the language and date filters behind a toggle; wider screens always show them.
+  const fieldFilterCount = [
+    props.filters.source,
+    props.filters.target,
+    props.filters.from,
+    props.filters.to,
+  ].filter(Boolean).length;
+  const [filtersOpen, setFiltersOpen] = useState(fieldFilterCount > 0);
+
   function toggle(index: number, shiftKey: boolean) {
     const phrase = visible[index];
     if (!phrase) return;
@@ -331,7 +387,20 @@ export function PhrasesView(props: PhrasesViewProps) {
               /
             </span>
           </div>
-          <div className="toolbar__filters">
+          <button
+            aria-controls="phrase-filters"
+            aria-expanded={filtersOpen}
+            className="button toolbar__filter-toggle"
+            onClick={() => setFiltersOpen((open) => !open)}
+            type="button"
+          >
+            <PreferencesIcon size={16} />
+            Filters
+            {fieldFilterCount > 0 ? (
+              <span className="toolbar__filter-count">{fieldFilterCount}</span>
+            ) : null}
+          </button>
+          <div className="toolbar__filters" data-open={filtersOpen} id="phrase-filters">
             <label className="filter">
               <span className="filter__label">Source</span>
               <select
@@ -482,12 +551,7 @@ export function PhrasesView(props: PhrasesViewProps) {
                     />
                   </span>
                   <div className="row__phrase">
-                    <span className="row__source" dir="auto" lang={phrase.sourceLanguage}>
-                      {phrase.sourceText}
-                    </span>
-                    <span className="row__translation" dir="auto" lang={phrase.targetLanguage}>
-                      {phrase.translatedText}
-                    </span>
+                    <PhraseText phrase={phrase} />
                     <span className="row__meta row__meta--compact">
                       <span className="lang-pair">
                         {phrase.sourceLanguage} → {phrase.targetLanguage}
@@ -499,8 +563,10 @@ export function PhrasesView(props: PhrasesViewProps) {
                       <NoteEditor
                         onDone={(updated) => {
                           setEditing(null);
-                          if (updated)
-                            setOverrides((current) => new Map(current).set(updated.id, updated));
+                          if (!updated) return;
+                          setOverrides((current) => new Map(current).set(updated.id, updated));
+                          // Clears the 30-second page cache so returning here shows the saved note.
+                          router.refresh();
                         }}
                         phrase={phrase}
                       />

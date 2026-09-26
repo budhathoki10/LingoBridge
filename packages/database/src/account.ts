@@ -11,6 +11,7 @@ import {
   type DbClient,
   type DeletionReceiptDocument,
   inSession,
+  readAll,
   toIsoString,
   toNullableIsoString,
 } from "./client.js";
@@ -238,28 +239,52 @@ export async function getAccountOverview(
 ): Promise<AccountOverview> {
   const phrases = collection(client, "phrases");
   const sessions = collection(client, "extensionSessions");
-  const phraseCount = await phrases.countDocuments({ deletedAt: null, userId }, inSession(client));
-  const activeExtensionSessions = await sessions.countDocuments(
-    { expiresAt: { $gt: now }, revokedAt: null, userId },
-    inSession(client),
+  const [phraseCount, activeExtensionSessions, lastActive, recent, preferences] = await readAll(
+    client,
+    [
+      () => phrases.countDocuments({ deletedAt: null, userId }, inSession(client)),
+      () =>
+        sessions.countDocuments(
+          { expiresAt: { $gt: now }, revokedAt: null, userId },
+          inSession(client),
+        ),
+      () =>
+        sessions.findOne(
+          { revokedAt: null, userId },
+          { ...inSession(client), projection: { lastUsedAt: 1 }, sort: { lastUsedAt: -1 } },
+        ),
+      () =>
+        phrases
+          .find({ deletedAt: null, userId }, inSession(client))
+          .sort([
+            ["savedAt", -1],
+            ["id", 1],
+          ])
+          .limit(5)
+          .toArray(),
+      () => getPreferences(client, userId),
+    ],
   );
-  const lastActive = await sessions.findOne(
-    { revokedAt: null, userId },
-    { ...inSession(client), projection: { lastUsedAt: 1 }, sort: { lastUsedAt: -1 } },
-  );
-  const recent = await phrases
-    .find({ deletedAt: null, userId }, inSession(client))
-    .sort([
-      ["savedAt", -1],
-      ["id", 1],
-    ])
-    .limit(5)
-    .toArray();
   return {
     activeExtensionSessions,
     lastExtensionActivityAt: toNullableIsoString(lastActive?.lastUsedAt ?? null),
     phraseCount,
-    preferences: await getPreferences(client, userId),
+    preferences,
     recentPhrases: toLivePhraseRecords(recent),
   };
+}
+
+export interface AccountSummary {
+  phraseCount: number;
+  preferences: SyncedPreferences;
+}
+
+/** The two values the privacy page needs, without the rest of the overview. */
+export async function getAccountSummary(client: DbClient, userId: string): Promise<AccountSummary> {
+  const [phraseCount, preferences] = await readAll(client, [
+    () =>
+      collection(client, "phrases").countDocuments({ deletedAt: null, userId }, inSession(client)),
+    () => getPreferences(client, userId),
+  ]);
+  return { phraseCount, preferences };
 }

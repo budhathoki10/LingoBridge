@@ -6,9 +6,10 @@ import {
   inSession,
   toIsoString,
   toNullableIsoString,
+  type UserDocument,
   type WebSessionDocument,
 } from "./client.js";
-import { findUserById } from "./users.js";
+import { findUserById, toUser, type User } from "./users.js";
 
 /* ---------------------------------------------------------------------------------------------
  * Sign-in attempts. The state value travels through the identity provider; the browser binding
@@ -161,6 +162,75 @@ export async function touchWebSession(
   if (!session) return null;
   if (!(await findUserById(client, session.userId))) return null;
   return toWebSession(session);
+}
+
+export interface LiveWebSession {
+  /** When the idle window last slid; used to decide whether this request slides it again. */
+  lastSeenAt: string;
+  session: WebSession;
+  user: User;
+}
+
+/**
+ * Reads a live session together with its account in one round trip. Expiry, revocation, and a
+ * deleted account are all checked here on every call; only sliding the idle window is left to
+ * {@link extendWebSessionIdle}, so a page view does not have to write.
+ */
+export async function findLiveWebSession(
+  client: DbClient,
+  tokenHash: string,
+  now: Date,
+): Promise<LiveWebSession | null> {
+  const [found] = await collection(client, "webSessions")
+    .aggregate<WebSessionDocument & { user: UserDocument[] }>(
+      [
+        {
+          $match: {
+            absoluteExpiresAt: { $gt: now },
+            idleExpiresAt: { $gt: now },
+            revokedAt: null,
+            tokenHash,
+          },
+        },
+        { $limit: 1 },
+        {
+          $lookup: {
+            as: "user",
+            foreignField: "_id",
+            from: "users",
+            localField: "userId",
+            pipeline: [{ $match: { deletedAt: null } }, { $limit: 1 }],
+          },
+        },
+      ],
+      inSession(client),
+    )
+    .toArray();
+  const user = found?.user[0];
+  if (!found || !user) return null;
+  return {
+    lastSeenAt: toIsoString(found.lastSeenAt),
+    session: toWebSession(found),
+    user: toUser(user),
+  };
+}
+
+/** Slides a live session's idle expiry forward, never past its absolute expiry. */
+export async function extendWebSessionIdle(
+  client: DbClient,
+  session: WebSession,
+  idleMilliseconds: number,
+  now: Date,
+): Promise<WebSession> {
+  const idleExpiresAt = new Date(
+    Math.min(Date.parse(session.absoluteExpiresAt), now.getTime() + idleMilliseconds),
+  );
+  await collection(client, "webSessions").updateOne(
+    { _id: session.id, revokedAt: null },
+    { $set: { idleExpiresAt, lastSeenAt: now } },
+    inSession(client),
+  );
+  return { ...session, idleExpiresAt: idleExpiresAt.toISOString() };
 }
 
 export async function markWebSessionReauthenticated(

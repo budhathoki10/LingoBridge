@@ -1,11 +1,13 @@
 import { getPreferences } from "@lingobridge/database";
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/page-header";
+import { PAGE_COPY } from "@/lib/page-copy";
 import { loadTargetLanguages } from "@/server/languages";
 import { requirePageSession } from "@/server/page-session";
+import { PREFERENCES_COPY } from "./copy";
 import { PreferencesForm } from "./preferences-form";
 
-export const metadata: Metadata = { title: "Preferences" };
+export const metadata: Metadata = { title: PAGE_COPY.preferences.title };
 
 export default async function PreferencesPage() {
   const { services, user } = await requirePageSession();
@@ -17,20 +19,16 @@ export default async function PreferencesPage() {
   return (
     <div className="page">
       <PageHeader
-        description="These settings sync to every connected extension. Settings tied to one browser stay on that device."
-        title="Preferences"
+        description={PAGE_COPY.preferences.description}
+        title={PAGE_COPY.preferences.title}
       />
       <PreferencesForm initial={preferences} languages={languages} />
       <section aria-labelledby="device-only" className="card">
         <div className="card__header">
-          <h2 id="device-only">Kept on each device</h2>
+          <h2 id="device-only">{PREFERENCES_COPY.deviceOnly.title}</h2>
         </div>
         <div className="card__body">
-          <p className="muted">
-            Website access for Selection Magic, disabled websites, sensitive-text confirmations, and
-            Online consent never leave the browser where you chose them. Change them from the
-            extension popup on that device.
-          </p>
+          <p className="muted">{PREFERENCES_COPY.deviceOnly.body}</p>
         </div>
       </section>
     </div>

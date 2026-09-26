@@ -7,6 +7,7 @@ import { DownloadIcon } from "@/components/icons";
 import { useDashboardApi, useToast } from "@/components/providers";
 import { plural } from "@/lib/format";
 import { ACCOUNT_DELETION_CONFIRMATION, DELETE_ALL_CONFIRMATION } from "@/lib/privacy";
+import { PRIVACY_COPY as COPY, deletePhrasesDescription } from "./copy";
 
 type Pending = "delete-phrases" | "stop-sync" | "delete-account" | null;
 
@@ -99,31 +100,24 @@ export function PrivacyActions({
     <>
       <section aria-labelledby="data-title" className="card">
         <div className="card__header">
-          <h2 id="data-title">Your data</h2>
+          <h2 id="data-title">{COPY.dataTitle}</h2>
         </div>
         <div className="setting">
           <div className="setting__text">
-            <h3>Download account data</h3>
-            <p>
-              Your account details, preferences, saved phrases and words, and connected-extension
-              history in a readable text file.
-            </p>
+            <h3>{COPY.download.title}</h3>
+            <p>{COPY.download.body}</p>
           </div>
           <div className="setting__control setting__control--end">
             <a className="button" href="/api/dashboard/export?scope=account">
               <DownloadIcon size={16} />
-              Download
+              {COPY.download.action}
             </a>
           </div>
         </div>
         <div className="setting">
           <div className="setting__text">
-            <h3>Phrase sync</h3>
-            <p>
-              {phraseSyncEnabled
-                ? "Connected extensions upload phrases you save. Turn this off to keep new phrases only on each device."
-                : "Off. New phrases stay only on the device where you saved them."}
-            </p>
+            <h3>{COPY.sync.title}</h3>
+            <p>{phraseSyncEnabled ? COPY.sync.on : COPY.sync.off}</p>
           </div>
           <div className="setting__control setting__control--end">
             <button className="button" onClick={() => open("stop-sync")} type="button">
@@ -133,12 +127,8 @@ export function PrivacyActions({
         </div>
         <div className="setting">
           <div className="setting__text">
-            <h3>Delete synced phrases</h3>
-            <p>
-              {phraseCount === 0
-                ? "No synced phrases are stored."
-                : `Removes ${plural(phraseCount, "phrase")} from this account and from connected extensions at their next sync.`}
-            </p>
+            <h3>{COPY.deletePhrases.title}</h3>
+            <p>{deletePhrasesDescription(phraseCount)}</p>
           </div>
           <div className="setting__control setting__control--end">
             <button
@@ -147,7 +137,7 @@ export function PrivacyActions({
               onClick={() => open("delete-phrases")}
               type="button"
             >
-              Delete all phrases
+              {COPY.deletePhrases.action}
             </button>
           </div>
         </div>
@@ -155,14 +145,10 @@ export function PrivacyActions({
 
       <section aria-labelledby="delete-account-title" className="card" id="delete-account">
         <div className="card__header">
-          <h2 id="delete-account-title">Delete account</h2>
+          <h2 id="delete-account-title">{COPY.deleteAccount.title}</h2>
         </div>
         <div className="card__body section">
-          <p className="muted">
-            Deletes every synced phrase and preference, disconnects every extension, and signs you
-            out. Phrases saved inside the extension on each device are not touched; each device asks
-            whether to keep them.
-          </p>
+          <p className="muted">{COPY.deleteAccount.body}</p>
           {reauthProblem === "mismatch" ? (
             <p className="callout callout--danger" role="alert">
               You confirmed with a different account. Sign in with the account you want to delete.
@@ -184,14 +170,12 @@ export function PrivacyActions({
               </button>
             ) : (
               <a className="button" href="/auth/reauthenticate?returnTo=/privacy%23delete-account">
-                Confirm it’s you to continue
+                {COPY.deleteAccount.confirmIdentity}
               </a>
             )}
           </div>
           {recentlyAuthenticated ? null : (
-            <p className="field__hint">
-              For your protection, deleting an account needs a sign-in from the last 5 minutes.
-            </p>
+            <p className="field__hint">{COPY.deleteAccount.reauthHint}</p>
           )}
         </div>
       </section>

@@ -369,6 +369,40 @@ describe("dashboard sessions", () => {
     expect(await resolveWebSession(dashboard.services.webAuth, token)).toBeNull();
   });
 
+  it("slide the idle window at most once per touch interval", async () => {
+    const { cookies } = await signInThroughHandlers(dashboard, "touch@example.test");
+    const token = readCookie(cookies, cookieNames(false).session);
+    const stored = () => dashboard.database.db.collection("webSessions").findOne({});
+    const signedIn = await stored();
+
+    // A page view inside the interval is a read only: nothing about the session is written.
+    dashboard.clock.advance(AUTH_POLICY.webSessionTouchIntervalMilliseconds - 1_000);
+    expect(await resolveWebSession(dashboard.services.webAuth, token)).not.toBeNull();
+    expect((await stored())?.lastSeenAt).toEqual(signedIn?.lastSeenAt);
+    expect((await stored())?.idleExpiresAt).toEqual(signedIn?.idleExpiresAt);
+
+    // Past the interval the idle window slides forward from now.
+    dashboard.clock.advance(2_000);
+    const auth = await resolveWebSession(dashboard.services.webAuth, token);
+    const now = dashboard.services.now().getTime();
+    expect((await stored())?.lastSeenAt).toEqual(new Date(now));
+    expect((await stored())?.idleExpiresAt).toEqual(
+      new Date(now + AUTH_POLICY.webSessionIdleMilliseconds),
+    );
+    expect(auth?.session.idleExpiresAt).toBe(
+      new Date(now + AUTH_POLICY.webSessionIdleMilliseconds).toISOString(),
+    );
+  });
+
+  it("reject a live session whose account was deleted", async () => {
+    const { cookies } = await signInThroughHandlers(dashboard, "gone@example.test");
+    const token = readCookie(cookies, cookieNames(false).session);
+    await dashboard.database.db
+      .collection("users")
+      .updateOne({ email: "gone@example.test" }, { $set: { deletedAt: dashboard.services.now() } });
+    expect(await resolveWebSession(dashboard.services.webAuth, token)).toBeNull();
+  });
+
   it("expire at the absolute limit even when used continuously", async () => {
     const { cookies } = await signInThroughHandlers(dashboard, "absolute@example.test");
     const token = readCookie(cookies, cookieNames(false).session);

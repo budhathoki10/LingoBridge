@@ -2,10 +2,11 @@ import { countSavedWords, listSavedWordsPage } from "@lingobridge/database";
 import type { Metadata } from "next";
 import { DownloadIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
+import { PAGE_COPY } from "@/lib/page-copy";
 import { requirePageSession } from "@/server/page-session";
 import { VocabularyView } from "./vocabulary-view";
 
-export const metadata: Metadata = { title: "My vocabulary" };
+export const metadata: Metadata = { title: PAGE_COPY.vocabulary.title };
 
 const PAGE_SIZE = 25;
 
@@ -39,8 +40,8 @@ export default async function VocabularyPage({ searchParams }: { searchParams: S
             </a>
           ) : null
         }
-        description="Words you explicitly saved after requesting word-level understanding."
-        title="My vocabulary"
+        description={PAGE_COPY.vocabulary.description}
+        title={PAGE_COPY.vocabulary.title}
       />
       <VocabularyView
         page={page}

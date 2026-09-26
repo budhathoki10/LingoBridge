@@ -1,11 +1,12 @@
 import { listPhrases, summarizePhraseLanguages } from "@lingobridge/database";
 import type { Metadata } from "next";
-import { PageHeader } from "@/components/page-header";
 import { DownloadIcon } from "@/components/icons";
+import { PageHeader } from "@/components/page-header";
+import { PAGE_COPY } from "@/lib/page-copy";
 import { requirePageSession } from "@/server/page-session";
 import { PhrasesView } from "./phrases-view";
 
-export const metadata: Metadata = { title: "Saved phrases" };
+export const metadata: Metadata = { title: PAGE_COPY.phrases.title };
 
 const PAGE_SIZE = 25;
 
@@ -62,8 +63,8 @@ export default async function PhrasesPage({ searchParams }: { searchParams: Sear
             </a>
           ) : null
         }
-        description="Only phrases you explicitly saved in the extension. Translations you didn’t save are never stored."
-        title="Saved phrases"
+        description={PAGE_COPY.phrases.description}
+        title={PAGE_COPY.phrases.title}
       />
       <PhrasesView
         filters={filters}

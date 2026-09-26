@@ -128,6 +128,12 @@ export const ArrowRightIcon = (props: IconProps) => (
   </Icon>
 );
 
+export const ChevronRightIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="m9.5 6 6 6-6 6" />
+  </Icon>
+);
+
 export const BrowserIcon = (props: IconProps) => (
   <Icon {...props}>
     <rect height="15" rx="2" width="17" x="3.5" y="4.5" />
