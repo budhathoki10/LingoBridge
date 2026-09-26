@@ -53,6 +53,11 @@ function readOrigin(value: string | undefined, production: boolean): string {
   return url.origin;
 }
 
+/** The validated origin alone, for public routes that must not open the database. */
+export function loadDashboardOrigin(environment: DashboardEnvironment): string {
+  return readOrigin(environment.LINGOBRIDGE_DASHBOARD_ORIGIN, environment.NODE_ENV === "production");
+}
+
 /**
  * Configuration comes only from the environment. Production refuses every development shortcut:
  * the local identity provider, the embedded database, generated secrets, and a wildcard extension
