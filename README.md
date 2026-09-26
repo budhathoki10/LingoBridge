@@ -1,5 +1,9 @@
 # LingoBridge — Context-Aware Text Translator
 
+**[Website](https://lingobridge.kushalbudhathoki.com.np) · [Install from the Chrome Web Store](https://chromewebstore.google.com/detail/lingobridge/ioekknfcfhcohnjfhiodgielimgeobdf) · [Demo video](https://youtu.be/KZHaoS9gsh0)**
+
+LingoBridge is a free Chrome extension that translates the text you select, right beside it on the page, including English to Nepali.
+
 Status: **Phase 0 through Phase 5, Phase 7, and Phase 8 implementation and focused automated verification are complete locally. Phase 6 is deferred; Phase 9 has not started. Credentialed provider and Google sign-in smoke tests remain deployment evidence.**
 
 LingoBridge is a multilingual product with two user-facing surfaces: a Chrome extension for translation where users browse and a web dashboard for saved phrases, preferences, connected extension sessions, export, and account control. LingoBridge exposes the complete reviewed MyMemory compatibility catalogue. English–Nepali receives deeper evaluation, but it is not the complete product boundary.

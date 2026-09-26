@@ -16,7 +16,7 @@ import { LandingAnimations } from "@/components/landing-animations";
 import { StructuredData } from "@/components/structured-data";
 import { TranslationStage } from "@/components/translation-stage";
 import { VideoEmbed } from "@/components/video-embed";
-import { CHROME_WEB_STORE_URL, DEMO_VIDEO_WATCH_URL } from "@/lib/links";
+import { CHROME_WEB_STORE_URL, CREATOR, DEMO_VIDEO_WATCH_URL } from "@/lib/links";
 import {
   landingStructuredData,
   SITE_DESCRIPTION,
@@ -119,8 +119,14 @@ const dashboardData = [
 const faqs = [
   {
     answer:
-      "LingoBridge is a Chrome extension that translates the text you select, right beside it on the page. You can save useful phrases and vocabulary to a private dashboard, and nothing is saved unless you choose to save it.",
+      "LingoBridge is a free Chrome extension that translates the text you select, right beside it on the page, including English to Nepali. You can save useful phrases and vocabulary to a private dashboard, and nothing is saved unless you choose to save it.",
     question: "What is LingoBridge?",
+  },
+  {
+    // Several unrelated apps share the name; this answer says which one this site is about.
+    answer:
+      "No. LingoBridge for Chrome translates the text you select on a web page. It does not translate chat conversations automatically or match you with language partners, and it is not related to other apps or projects named LingoBridge.",
+    question: "Is LingoBridge a chat translator or a language-exchange app?",
   },
   {
     answer:
@@ -211,8 +217,8 @@ export default function HomePage() {
                 <span className={styles.heroAccent}>in front of you.</span>
               </h1>
               <p className={styles.heroCopy}>
-                Select text, click the nearby action, and translate without leaving the page. Save
-                only the phrases and vocabulary worth keeping.
+                LingoBridge is a free Chrome extension that translates the text you select, right
+                beside it on the page. Save only the phrases and vocabulary worth keeping.
               </p>
               <div className={styles.heroActions}>
                 <StoreLink className={styles.primaryAction} />
@@ -535,7 +541,12 @@ export default function HomePage() {
           </div>
         </div>
         <div className={styles.footerBottom}>
-          <span>LingoBridge</span>
+          <span>
+            LingoBridge by{" "}
+            <a className={styles.footerCredit} href={CREATOR.url} rel="author">
+              {CREATOR.name}
+            </a>
+          </span>
           <span>Built for deliberate translation.</span>
         </div>
       </footer>
