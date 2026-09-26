@@ -17,6 +17,7 @@ export default function PhrasesLoading() {
   return (
     <LoadingPage>
       <PageHeader
+        loading
         actions={
           <span aria-hidden="true" className="button skeleton-mask">
             <DownloadIcon size={16} />

@@ -8,7 +8,11 @@ import { StoredDataCard } from "./stored-data";
 export default function PrivacyLoading() {
   return (
     <LoadingPage>
-      <PageHeader description={PAGE_COPY.privacy.description} title={PAGE_COPY.privacy.title} />
+      <PageHeader
+        loading
+        description={PAGE_COPY.privacy.description}
+        title={PAGE_COPY.privacy.title}
+      />
 
       <section aria-hidden="true" className="card">
         <div className="card__header">

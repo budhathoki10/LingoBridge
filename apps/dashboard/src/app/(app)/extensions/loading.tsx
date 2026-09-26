@@ -7,6 +7,7 @@ export default function ExtensionsLoading() {
   return (
     <LoadingPage>
       <PageHeader
+        loading
         description={PAGE_COPY.extensions.description}
         title={PAGE_COPY.extensions.title}
       />
