@@ -29,6 +29,8 @@ Rules:
 - Translate the whole text faithfully and naturally. Do not summarize, add, or leave anything out.
 - Keep personal names, brand names, URLs, email addresses, numbers, emoji, and line breaks.
 - Write digits as 0-9.
+- Use the named target language, not another language that shares its writing system. In particular,
+  Nepali must use Nepali vocabulary and grammar, never Hindi or a Hindi-Nepali mixture.
 - No romanization, notes, alternatives, or explanations.
 
 Reply with one JSON object and nothing else: {"translation": string, "sourceLanguage": string}
@@ -86,6 +88,53 @@ const TARGET_SCRIPTS: Record<string, RegExp> = {
 /** At least this share of the letters must be in the target's script. */
 const MIN_TARGET_SCRIPT_SHARE = 0.5;
 
+/**
+ * Strong Hindi-only signals that Nemotron has used when asked for Nepali. The two languages share
+ * Devanagari, so the script check alone cannot tell them apart. Requiring two signals avoids
+ * rejecting an isolated quoted word or vocabulary shared by both languages.
+ */
+const HINDI_SIGNALS = new Set([
+  "आप",
+  "आपका",
+  "आपकी",
+  "आपके",
+  "आपको",
+  "और",
+  "करना",
+  "करने",
+  "करता",
+  "करती",
+  "करते",
+  "कहाँ",
+  "कैसे",
+  "क्यों",
+  "क्या",
+  "चाहिए",
+  "तुम",
+  "तुम्हारा",
+  "तुम्हारी",
+  "तुम्हारे",
+  "तुम्हें",
+  "था",
+  "थी",
+  "थे",
+  "नहीं",
+  "मैं",
+  "मुझे",
+  "मेरा",
+  "मेरी",
+  "मेरे",
+  "यह",
+  "वह",
+  "सकता",
+  "सकती",
+  "सकते",
+  "है",
+  "हैं",
+]);
+
+const HINDI_PHRASES = ["के लिए", "के साथ", "रूप से"];
+
 function baseLanguage(code: string): string {
   return code.split("-")[0]?.toLowerCase() ?? code.toLowerCase();
 }
@@ -104,6 +153,16 @@ function comparable(text: string): string {
   return text.normalize("NFKC").replace(/\s+/gu, " ").trim().toLowerCase();
 }
 
+function hasStrongHindiSignals(text: string): boolean {
+  const normalized = text.normalize("NFKC");
+  const words = normalized.match(/[\p{Script=Devanagari}\p{M}]+/gu) ?? [];
+  let signalCount = words.filter((word) => HINDI_SIGNALS.has(word)).length;
+  for (const phrase of HINDI_PHRASES) {
+    if (normalized.includes(phrase)) signalCount += 2;
+  }
+  return signalCount >= 2;
+}
+
 /**
  * Rejects answers that are not a translation: empty, the source sent back, far too long (an
  * answer or an explanation), or mostly in the wrong script.
@@ -119,6 +178,7 @@ export function isPlausibleTranslation(
   const translationLength = Array.from(translation.trim()).length;
   if (translationLength > sourceLength * 4 + 40) return false;
   if (sourceLength >= 40 && translationLength < sourceLength * 0.15) return false;
+  if (baseLanguage(targetLanguage) === "ne" && hasStrongHindiSignals(translation)) return false;
   const script = TARGET_SCRIPTS[baseLanguage(targetLanguage)];
   return !script || scriptShare(translation, script) >= MIN_TARGET_SCRIPT_SHARE;
 }
