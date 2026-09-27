@@ -105,6 +105,10 @@ describe("NemotronTranslationAdapter", () => {
       "explains instead of translating",
       `{"translation": "${"तपाईंको नाम के हो भन्ने प्रश्न हो। ".repeat(12)}"}`,
     ],
+    [
+      "returns Hindi mixed into a Nepali translation",
+      '{"translation": "यदि आप विशेष रूप से क्लाउड कोड के साथ डीपसीक प्रयोग करने का प्रयास कर रहे हैं।"}',
+    ],
     ["replies without JSON", "तपाईंको नाम के हो?"],
     ["replies with an empty translation", '{"translation": "  "}'],
   ])("rejects an answer that %s", async (_label, reply) => {
@@ -164,6 +168,28 @@ describe("isPlausibleTranslation", () => {
   it("allows a brand name inside the target script", () => {
     expect(
       isPlausibleTranslation("Open Google Chrome now.", "अहिले Google Chrome खोल्नुहोस्।", "ne"),
+    ).toBe(true);
+  });
+
+  it("distinguishes Hindi from Nepali even though both use Devanagari", () => {
+    const source =
+      "If you're trying to use DeepSeek V4.1 Flash with Claude Code, I can show you its exact Windows configuration.";
+    const mixedHindiNepali =
+      "यदि आप विशेष रूप से क्लाउड कोड के साथ डीपसीक V4.1 फ्लैश प्रयोग गर्न खोज्नुभएको छ, म तपाईंलाई यसको सटीक विन्डोज कन्फिगरेसन देखाउन सक्छु।";
+    const nepali =
+      "यदि तपाईं क्लाउड कोडसँग डीपसीक V4.1 फ्ल्यास प्रयोग गर्न खोज्दै हुनुहुन्छ भने, म तपाईंलाई यसको ठ्याक्कै विन्डोज कन्फिगरेसन देखाउन सक्छु।";
+
+    expect(isPlausibleTranslation(source, mixedHindiNepali, "ne")).toBe(false);
+    expect(isPlausibleTranslation(source, nepali, "ne")).toBe(true);
+  });
+
+  it("allows one quoted Hindi word inside otherwise Nepali text", () => {
+    expect(
+      isPlausibleTranslation(
+        'Do you know what the Hindi word "aap" means?',
+        'तपाईंलाई हिन्दी शब्द "आप" को अर्थ थाहा छ?',
+        "ne",
+      ),
     ).toBe(true);
   });
 });

@@ -22,7 +22,8 @@ Translate in this order, skipping any step the reader's consent or the language 
 1. **NVIDIA Nemotron 3 Ultra** (`NVIDIA_EXPLANATION_MODEL`), for every direction, with a strict
    translation-engine prompt, reasoning off, temperature 0, and JSON output. The gateway rejects an
    empty answer, the source sent back, an answer far longer than the source, or one mostly outside
-   the target language's script. Nemotron gets its own time limit
+   the target language's script. Because Nepali and Hindi share Devanagari, it also rejects strong
+   Hindi grammar signals in a requested Nepali result. Nemotron gets its own time limit
    (`LINGOBRIDGE_TRANSLATION_PRIMARY_TIMEOUT_MS`, default 10 seconds, capped at half the overall
    budget) so a slow answer hands over instead of failing the request.
 2. **MyMemory, free public endpoint**, with the `de` contact email.
