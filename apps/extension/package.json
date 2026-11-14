@@ -5,7 +5,7 @@
   "scripts": {
     "build": "wxt build",
     "dev": "wxt",
-    "prepare": "wxt prepare || exit 0",
+    "prepare": "node -e \"process.exit(require('node:fs').existsSync('../../packages/contracts/dist/index.js') ? 0 : 1)\" && wxt prepare || exit 0",
     "typecheck": "wxt prepare && tsc --noEmit"
   },
   "dependencies": {
