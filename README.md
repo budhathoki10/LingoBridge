@@ -4,7 +4,9 @@
 
 LingoBridge is a free Chrome extension that translates the text you select, right beside it on the page, including English to Nepali.
 
-Status: **Phase 0 through Phase 5, Phase 7, and Phase 8 implementation and focused automated verification are complete locally. Phase 6 is deferred; Phase 9 has not started. Credentialed provider and Google sign-in smoke tests remain deployment evidence.**
+![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-4285F4?style=flat-square&logo=googlechrome&logoColor=white) ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white) ![pnpm](https://img.shields.io/badge/pnpm-monorepo-F69220?style=flat-square&logo=pnpm&logoColor=white)
+
+**Status:** live on the Chrome Web Store. Detailed build phases are tracked in the [build plan](docs/07-build-plan.md).
 
 LingoBridge is a multilingual product with two user-facing surfaces: a Chrome extension for translation where users browse and a web dashboard for saved phrases, preferences, connected extension sessions, export, and account control. LingoBridge exposes the complete reviewed MyMemory compatibility catalogue. English–Nepali receives deeper evaluation, but it is not the complete product boundary.
 
